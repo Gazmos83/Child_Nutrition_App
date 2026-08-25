@@ -16,3 +16,7 @@ wheels/
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
+
+# Session summaries and logs
+*_Summary.md
+*.session.log
