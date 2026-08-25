@@ -1,1 +1,1 @@
-"""Database engine, session management, and declarative base."""
+"""Database and persistence layer."""
