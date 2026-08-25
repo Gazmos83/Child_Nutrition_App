@@ -1,0 +1,86 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+
+context: |
+  Child Nutrition AI App — Turing College Project 2. A RAG + tool-calling chatbot
+  specialized in child nutrition (newborns through ~4 years). 7-day MVP deadline.
+  NOT a medical device: every recommendation ships with a "not medical advice,
+  consult a pediatrician" disclaimer.
+
+  Stack:
+  - Frontend: Next.js, React, TypeScript, Tailwind, shadcn/ui, TanStack Query
+  - Backend: Python 3.14, FastAPI, Pydantic, SQLAlchemy, Alembic
+  - LLM: LangChain via OpenRouter (OpenAI-compatible SDK) — never a raw OpenAI key
+  - Vector DB: Milvus Lite behind a vector-store abstraction
+  - App DB: PostgreSQL (authoritative for users, child profiles, meals, conversations)
+  - Tooling: uv (Python, uv.lock authoritative), pnpm (frontend). Deps only via
+    `uv add` / `pnpm add`; run Python via `uv run`. Never pip install, never
+    hand-edit a lockfile.
+
+  Architecture principle: deterministic code -> RAG -> tools -> lightweight routing.
+  No LangGraph orchestration in MVP. The LLM extracts structured inputs but never
+  generates nutrient numbers — all quantities come from lookup-table-driven Python.
+
+  Hard rules (non-negotiable):
+  1. Age is stored and reasoned in MONTHS, never years.
+  2. Allergies and diet preference are enum/controlled-vocabulary fields, never free text.
+  3. Doctor's recommendation OVERRIDES general nutrient targets on conflict; flag the
+     conflict in the UI, never silently blend.
+  4. Every meal plan passes a hard-coded infant-safety filter (no honey <12 months, no
+     choking hazards, no unpasteurized products) that runs independently of the
+     RAG/LLM pipeline and cannot be bypassed by the model.
+  5. Knowledge base comes from recognized pediatric guidelines (WHO, AAP, national
+     infant dietary guidelines); cite source + publication date on every RAG answer.
+  6. No LLM-executed SQL. All data access goes through validated, auth-scoped app code.
+  7. All tool/API inputs validated with Pydantic before use.
+  8. Log every meal-plan recommendation with its full input snapshot for auditability.
+  9. Every user-scoped read and write is bound to the authenticated user's identity —
+     User A must never reach User B's data. Auth ships before deployment.
+
+  7-day plan: D1 architecture + setup + PostgreSQL · D2 Milvus ingestion + re-runnable
+  update job · D3 basic + advanced RAG · D4 deterministic tools + safety filter +
+  doctor's-note override · D5 intent router + Next.js UI · D6 RAGAs A/B eval + security
+  + logging · D7 deploy + polish.
+
+rules:
+  proposal:
+    - Label scope explicitly [MVP] or [Stretch]; never silently expand MVP scope.
+    - State which of the 7 days the change belongs to.
+    - Include a "Non-goals" section naming what is deliberately deferred.
+  tasks:
+    - Break tasks into chunks of at most 2 hours.
+    - Every task touching user-scoped data must state its authorization boundary.
+    - Prefer verifiable tasks — name the command or test that proves completion.
+  design:
+    - Record architectural decisions as explicit decisions with rationale, not as
+      open questions left for later.
