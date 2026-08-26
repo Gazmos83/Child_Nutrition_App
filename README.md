@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development. The architecture, data-model constraints, and safety rules are settled — see [`CLAUDE.md`](./CLAUDE.md) — but application code is not yet implemented. The repo currently holds project scaffolding only.
+> **Status:** early development (Day 3 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, and the basic/advanced RAG pipeline behind `POST /api/ask` are implemented. Deterministic tools, routing, auth, and the UI follow on Days 4–7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -75,12 +75,51 @@ Python dependencies are managed with [uv](https://docs.astral.sh/uv/) (Python 3.
 
 ```bash
 uv sync                  # create/refresh .venv from uv.lock
-uv run main.py           # run the current entry point
 uv add <package>         # add a dependency
 uv add --dev <package>   # add a dev-only dependency
+uv run pytest            # unit tests (offline); add -m integration for live tests
+uv run ruff check .      # lint
 ```
 
 Always add dependencies through the package manager (`uv add`, `pnpm add`) and run Python via `uv run`. Never `pip install` into `.venv`, and never hand-edit a lockfile.
+
+### Configuration
+
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it). `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` returns 503 naming the missing setting.
+
+### Knowledge base
+
+The corpus lives in `knowledge-base/` as hand-condensed Markdown summaries of recognized pediatric guidelines (WHO, AAP, CDC, USDA/HHS, NIH, FDA/EPA). `knowledge-base/manifest.yaml` carries each document's citation metadata — source title, publication year, topic, authority, and the age range in months it applies to.
+
+```bash
+uv run scripts/ingest.py     # embed new/changed documents into milvus.db (idempotent)
+```
+
+Ingestion is incremental: it hashes every document, compares against what `milvus.db` already holds, and re-embeds only new or changed files, replacing each document's chunks as a unit. Re-running with no changes embeds nothing.
+
+**To add a source:** drop a `.md` file in `knowledge-base/` (use `## Section` headings — chunks record the nearest heading for citations), add a manifest entry (`file, source, year, topic, authority, age_min_months, age_max_months, url`), and re-run `uv run scripts/ingest.py`. Changing `EMBEDDING_MODEL` requires deleting `milvus.db` and re-ingesting; the store refuses to search a collection built with a different model.
+
+### Asking a question
+
+```bash
+uv run uvicorn backend.main:app --reload
+```
+
+JSON (used by tests and evaluation):
+
+```bash
+curl -s localhost:8000/api/ask -H 'content-type: application/json' \
+  -d '{"question": "How much iron does a 9-month-old need?", "strategy": "advanced", "stream": false}'
+```
+
+Server-sent events (used by the UI): `token` events carry answer fragments, one `citations` event carries citations + retrieval metadata + disclaimer, then `done` (or `error`).
+
+```bash
+curl -N localhost:8000/api/ask -H 'content-type: application/json' \
+  -d '{"question": "When can babies have honey?"}'
+```
+
+`strategy` is `basic` (single query, top-K) or `advanced` (age extraction → metadata filter → query translation → multi-query fusion → dedup; the default). Both share the same prompt, so Day 6's A/B evaluation compares retrieval alone. Every response carries citations with source and year and a fixed not-medical-advice disclaimer; when nothing in the knowledge base is relevant, the endpoint returns a fixed explanation instead of calling the model.
 
 Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-version breaks from the 0.x/2.x APIs most tutorials still use. Check the current docs rather than pattern-matching from older examples.
 
