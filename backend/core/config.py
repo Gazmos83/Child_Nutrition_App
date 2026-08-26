@@ -7,6 +7,12 @@ That matters for two reasons:
   boot and report an unhealthy database instead of crashing on startup.
 - Tests need to construct ``Settings`` with explicit values, without a developer's
   local ``.env`` leaking in.
+
+Two settings classes live here on purpose (Day 3 design.md Decision 11). ``Settings``
+requires ``DATABASE_URL`` because the application database is mandatory. ``RAGSettings``
+requires nothing: the RAG pipeline, its tests, and the ingestion script never touch
+PostgreSQL, and the app must boot -- and ``/health`` must answer -- with no LLM or vector
+store configured at all.
 """
 
 from functools import lru_cache
@@ -20,6 +26,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # to the default synchronous driver and fail with an unhelpful error at first query.
 _ASYNC_SCHEME = "postgresql+asyncpg"
 _NORMALIZABLE_SCHEMES = ("postgresql://", "postgres://")
+
+# OpenRouter's OpenAI-compatible endpoint. Both the chat model and the embedding model go
+# through it (CLAUDE.md: never call OpenAI directly with a raw key).
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 class Settings(BaseSettings):
@@ -74,3 +84,73 @@ def get_settings() -> Settings:
         pydantic.ValidationError: if DATABASE_URL is missing or malformed.
     """
     return Settings()  # type: ignore[call-arg]  # values come from the environment
+
+
+class RAGSettings(BaseSettings):
+    """Settings for the knowledge base, embeddings, and the RAG pipeline.
+
+    Every field has a default or is optional, so this always constructs. Code that needs
+    the provider checks ``openrouter_api_key`` and fails with a message naming it.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    openrouter_api_key: str | None = Field(
+        default=None,
+        description="OpenRouter API key. Required to embed, ingest, or answer questions.",
+    )
+    openrouter_model: str = Field(
+        default="openai/gpt-4o-mini",
+        description="OpenRouter model id used for query translation and answer generation.",
+    )
+    embedding_model: str = Field(
+        default="openai/text-embedding-3-small",
+        description=(
+            "OpenRouter embedding model id. Ingestion and search must use the same model; "
+            "the collection records which one built it."
+        ),
+    )
+    milvus_db_path: str = Field(
+        default="milvus.db",
+        description="Path to the Milvus Lite database file.",
+    )
+    corpus_dir: str = Field(
+        default="knowledge-base",
+        description="Directory holding the Markdown corpus and manifest.yaml.",
+    )
+    rag_min_similarity: float = Field(
+        default=0.45,
+        ge=-1.0,
+        le=1.0,
+        description=(
+            "Cosine-similarity floor. Passages below it are dropped; if none remain the "
+            "pipeline returns the no-answer message without calling the model."
+        ),
+    )
+    rag_context_char_budget: int = Field(
+        default=6000,
+        ge=500,
+        description="Maximum characters of retrieved context placed in the answer prompt.",
+    )
+
+    @field_validator("openrouter_api_key")
+    @classmethod
+    def _blank_key_is_absent(cls, value: str | None) -> str | None:
+        """Treat ``OPENROUTER_API_KEY=`` (present but empty) the same as unset."""
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+@lru_cache(maxsize=1)
+def get_rag_settings() -> RAGSettings:
+    """Return the process-wide RAG settings, constructing them on first use.
+
+    Never raises for missing configuration: every field is optional or defaulted.
+    """
+    return RAGSettings()

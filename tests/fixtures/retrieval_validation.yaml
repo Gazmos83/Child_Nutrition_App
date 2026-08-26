@@ -1,0 +1,34 @@
+# Retrieval validation set (Day 3 task 3.4). Each question names the document_id(s) of
+# which at least one must appear in the top-3 search results. Reused on Day 6 as the
+# seed of the RAGAs test set.
+cases:
+  - question: How much iron does an 8-month-old need each day?
+    expected: [aap-iron-deficiency-2010, nih-dri-micronutrients]
+  - question: When should I start giving my baby solid foods?
+    expected: [cdc-introducing-solid-foods, who-complementary-feeding-2023, dga-2020-2025-birth-to-24-months]
+  - question: Which foods are choking hazards for toddlers?
+    expected: [aap-choking-prevention-2010]
+  - question: Is honey safe for my 9 month old?
+    expected: [cdc-honey-and-infant-botulism]
+  - question: When can my baby start drinking cow's milk?
+    expected: [aap-healthy-beverages-milk-2019, aap-iron-deficiency-2010, cdc-introducing-solid-foods]
+  - question: Can I give my 10-month-old apple juice?
+    expected: [aap-fruit-juice-2017, aap-healthy-beverages-milk-2019]
+  - question: Does a breastfed newborn need vitamin D drops?
+    expected: [aap-vitamin-d-2008]
+  - question: When should I introduce peanut butter to reduce allergy risk?
+    expected: [aap-allergenic-foods-2019]
+  - question: How much protein does a 2 year old need per day?
+    expected: [nih-dri-energy-and-protein]
+  - question: What do the percentiles on my child's growth chart mean?
+    expected: [cdc-growth-charts-and-bmi, who-child-growth-standards-2006]
+  - question: Which fish are safe for young children and which have too much mercury?
+    expected: [fda-epa-fish-advice-2021]
+  - question: How much water should a toddler drink?
+    expected: [aap-hydration-and-water, aap-healthy-beverages-milk-2019]
+  - question: How long should I breastfeed exclusively?
+    expected: [who-breastfeeding-recommendations, dga-2020-2025-birth-to-24-months]
+  - question: Can a vegan diet be healthy for a toddler?
+    expected: [aap-vegetarian-and-vegan-diets]
+  - question: Is unpasteurized milk or soft cheese safe for a toddler?
+    expected: [cdc-food-safety-unpasteurized-and-storage]

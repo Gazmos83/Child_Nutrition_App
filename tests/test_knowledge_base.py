@@ -199,7 +199,7 @@ class TestDocumentInterface:
             date=2021,
             topic="infant nutrition",
             authority="American Academy of Pediatrics",
-            page_ref="page 42",
+            section="page 42",
             document_id="aap-2021",
             score=0.95,
         )
@@ -219,7 +219,6 @@ class TestKnowledgeStoreInterface:
 
     def test_knowledge_store_has_required_methods(self) -> None:
         """KnowledgeStore declares search, upsert, delete, count."""
-        from abc import abstractmethod
 
         assert hasattr(KnowledgeStore, "search")
         assert hasattr(KnowledgeStore, "upsert")
@@ -255,3 +254,85 @@ class TestValidationBaseline:
         for source in sources:
             assert isinstance(source, str)
             assert len(source) > 5
+
+
+class TestManifest:
+    """Day 3 task 3.2: manifest.yaml is the source of document metadata."""
+
+    MANIFEST = """
+documents:
+  - file: who-cf.md
+    source: WHO Complementary Feeding Guidance
+    year: 2023
+    topic: complementary feeding
+    authority: WHO
+    age_min_months: 6
+    age_max_months: 23
+    url: https://www.who.int/example
+"""
+
+    def test_manifest_metadata_reaches_documents(self, tmp_path: Path) -> None:
+        (tmp_path / "manifest.yaml").write_text(self.MANIFEST)
+        (tmp_path / "who-cf.md").write_text("## Starting solids\nAt 6 months...")
+        docs = load_corpus(tmp_path)
+        assert len(docs) == 1
+        doc = docs[0]
+        assert doc["source"] == "WHO Complementary Feeding Guidance"
+        assert doc["date"] == 2023
+        assert doc["authority"] == "WHO"
+        assert (doc["age_min_months"], doc["age_max_months"]) == (6, 23)
+        assert doc["document_id"] == "who-cf"
+
+    def test_unlisted_document_gets_defaults_with_warning(self, tmp_path: Path, caplog) -> None:
+        (tmp_path / "manifest.yaml").write_text(self.MANIFEST)
+        (tmp_path / "who-cf.md").write_text("listed")
+        (tmp_path / "stray-notes.md").write_text("unlisted")
+        with caplog.at_level("WARNING"):
+            docs = load_corpus(tmp_path)
+        stray = next(d for d in docs if d["document_id"] == "stray-notes")
+        assert stray["source"] == "stray-notes"
+        assert (stray["age_min_months"], stray["age_max_months"]) == (0, 60)
+        assert stray["authority"] is None
+        assert any(
+            "stray-notes.md" in r.message and "not listed" in r.message for r in caplog.records
+        )
+
+    def test_manifest_entry_with_missing_file_is_logged_and_skipped(
+        self, tmp_path: Path, caplog
+    ) -> None:
+        (tmp_path / "manifest.yaml").write_text(
+            self.MANIFEST + "  - file: gone.md\n    source: Gone\n    authority: AAP\n"
+        )
+        (tmp_path / "who-cf.md").write_text("listed")
+        with caplog.at_level("ERROR"):
+            docs = load_corpus(tmp_path)
+        assert [d["document_id"] for d in docs] == ["who-cf"]
+        assert any("gone.md" in r.message and r.levelname == "ERROR" for r in caplog.records)
+
+    def test_invalid_manifest_is_an_error(self, tmp_path: Path) -> None:
+        (tmp_path / "manifest.yaml").write_text(
+            "documents:\n  - file: a.md\n    source: A\n    authority: Mayo Clinic\n"
+        )
+        (tmp_path / "a.md").write_text("x")
+        with pytest.raises(ValueError, match="manifest.yaml"):
+            load_corpus(tmp_path)
+
+    def test_age_bounds_must_be_ordered_and_in_range(self, tmp_path: Path) -> None:
+        (tmp_path / "manifest.yaml").write_text(
+            "documents:\n  - file: a.md\n    source: A\n    authority: WHO\n"
+            "    age_min_months: 24\n    age_max_months: 12\n"
+        )
+        with pytest.raises(ValueError, match="exceeds"):
+            load_corpus(tmp_path)
+
+    def test_nested_paths_make_stable_ids(self, tmp_path: Path) -> None:
+        from backend.knowledge.loaders import document_id_for
+
+        assert document_id_for("guidelines/who-iron.md") == "guidelines-who-iron"
+        assert document_id_for("who-iron.md") == "who-iron"
+
+    def test_manifest_itself_is_not_loaded_as_a_document(self, tmp_path: Path) -> None:
+        (tmp_path / "manifest.yaml").write_text("documents: []\n")
+        (tmp_path / "a.txt").write_text("hello")
+        docs = load_corpus(tmp_path)
+        assert [d["filename"] for d in docs] == ["a.txt"]

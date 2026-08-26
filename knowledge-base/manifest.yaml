@@ -1,0 +1,190 @@
+# Knowledge-base manifest: provenance for every document in this directory.
+#
+# Every entry is the citation shown to users (hard rule 5), so `source` and `year` must
+# be accurate. Documents are hand-condensed paraphrases of the named guideline, not
+# copies. `age_min_months`/`age_max_months` (0-60) drive the age filter in advanced RAG:
+# use the range the guidance actually applies to, and 0-60 for general guidance.
+#
+# authority must be one of: WHO | AAP | CDC | USDA/HHS | NIH | FDA/EPA
+#
+# To add a document: drop the .md file here, add an entry, run `uv run scripts/ingest.py`.
+documents:
+  - file: who-complementary-feeding-2023.md
+    source: "WHO Guideline for Complementary Feeding of Infants and Young Children 6–23 Months of Age"
+    year: 2023
+    topic: complementary feeding
+    authority: WHO
+    age_min_months: 6
+    age_max_months: 23
+    url: https://www.who.int/publications/i/item/9789240081864
+
+  - file: who-breastfeeding-recommendations.md
+    source: "WHO/UNICEF Infant and Young Child Feeding Recommendations"
+    year: 2021
+    topic: breastfeeding
+    authority: WHO
+    age_min_months: 0
+    age_max_months: 24
+    url: https://www.who.int/health-topics/breastfeeding
+
+  - file: who-child-growth-standards-2006.md
+    source: "WHO Child Growth Standards"
+    year: 2006
+    topic: growth standards
+    authority: WHO
+    age_min_months: 0
+    age_max_months: 60
+    url: https://www.who.int/tools/child-growth-standards
+
+  - file: aap-iron-deficiency-2010.md
+    source: "AAP Clinical Report: Diagnosis and Prevention of Iron Deficiency and Iron-Deficiency Anemia in Infants and Young Children (0–3 Years)"
+    year: 2010
+    topic: iron
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 36
+    url: https://publications.aap.org/pediatrics/article/126/5/1040/65343
+
+  - file: aap-vitamin-d-2008.md
+    source: "AAP Clinical Report: Prevention of Rickets and Vitamin D Deficiency in Infants, Children, and Adolescents"
+    year: 2008
+    topic: vitamin D
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 60
+    url: https://publications.aap.org/pediatrics/article/122/5/1142/71723
+
+  - file: aap-fruit-juice-2017.md
+    source: "AAP Policy Statement: Fruit Juice in Infants, Children, and Adolescents"
+    year: 2017
+    topic: juice and sugary drinks
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 60
+    url: https://publications.aap.org/pediatrics/article/139/6/e20170967/38754
+
+  - file: aap-healthy-beverages-milk-2019.md
+    source: "Healthy Beverage Consumption in Early Childhood: Consensus Recommendations (endorsed by AAP, AAPD, AND, AHA)"
+    year: 2019
+    topic: milk and beverages
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 60
+    url: https://healthyeatingresearch.org/research/consensus-statement-healthy-beverage-consumption-in-early-childhood-recommendations-from-key-national-health-and-nutrition-organizations/
+
+  - file: aap-allergenic-foods-2019.md
+    source: "AAP Clinical Report: The Effects of Early Nutritional Interventions on the Development of Atopic Disease in Infants and Children"
+    year: 2019
+    topic: food allergy prevention
+    authority: AAP
+    age_min_months: 4
+    age_max_months: 12
+    url: https://publications.aap.org/pediatrics/article/143/4/e20190281/37226
+
+  - file: aap-choking-prevention-2010.md
+    source: "AAP Policy Statement: Prevention of Choking Among Children"
+    year: 2010
+    topic: choking hazards
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 48
+    url: https://publications.aap.org/pediatrics/article/125/3/601/72729
+
+  - file: cdc-honey-and-infant-botulism.md
+    source: "CDC Botulism Prevention: Infant Botulism"
+    year: 2024
+    topic: honey and infant botulism
+    authority: CDC
+    age_min_months: 0
+    age_max_months: 12
+    url: https://www.cdc.gov/botulism/prevention/index.html
+
+  - file: cdc-introducing-solid-foods.md
+    source: "CDC Infant and Toddler Nutrition: When, What, and How to Introduce Solid Foods"
+    year: 2024
+    topic: introducing solids
+    authority: CDC
+    age_min_months: 4
+    age_max_months: 24
+    url: https://www.cdc.gov/infant-toddler-nutrition/foods-and-drinks/when-to-introduce-solid-foods.html
+
+  - file: dga-2020-2025-birth-to-24-months.md
+    source: "Dietary Guidelines for Americans 2020–2025, Chapter 2: Infants and Toddlers"
+    year: 2020
+    topic: infant and toddler dietary pattern
+    authority: USDA/HHS
+    age_min_months: 0
+    age_max_months: 24
+    url: https://www.dietaryguidelines.gov/sites/default/files/2020-12/Dietary_Guidelines_for_Americans_2020-2025.pdf
+
+  - file: dga-2020-2025-children-2-to-4.md
+    source: "Dietary Guidelines for Americans 2020–2025, Chapter 3: Children and Adolescents (ages 2 through 4)"
+    year: 2020
+    topic: preschooler dietary pattern
+    authority: USDA/HHS
+    age_min_months: 24
+    age_max_months: 60
+    url: https://www.dietaryguidelines.gov/sites/default/files/2020-12/Dietary_Guidelines_for_Americans_2020-2025.pdf
+
+  - file: nih-dri-energy-and-protein.md
+    source: "Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (NASEM), as summarized by NIH Office of Dietary Supplements"
+    year: 2005
+    topic: energy and protein requirements
+    authority: NIH
+    age_min_months: 0
+    age_max_months: 60
+    url: https://ods.od.nih.gov/HealthInformation/nutrientrecommendations.aspx
+
+  - file: nih-dri-micronutrients.md
+    source: "Dietary Reference Intakes for vitamins and minerals (NASEM), as summarized by NIH Office of Dietary Supplements"
+    year: 2011
+    topic: micronutrient requirements
+    authority: NIH
+    age_min_months: 0
+    age_max_months: 60
+    url: https://ods.od.nih.gov/HealthInformation/nutrientrecommendations.aspx
+
+  - file: fda-epa-fish-advice-2021.md
+    source: "FDA/EPA Advice About Eating Fish: For Those Who Might Become or Are Pregnant or Breastfeeding and Children Ages 1–11 Years"
+    year: 2021
+    topic: fish and mercury
+    authority: FDA/EPA
+    age_min_months: 6
+    age_max_months: 60
+    url: https://www.fda.gov/food/consumers/advice-about-eating-fish
+
+  - file: cdc-food-safety-unpasteurized-and-storage.md
+    source: "CDC Food Safety for Infants and Young Children: Unpasteurized Products, Formula Preparation, and Breast Milk Storage"
+    year: 2024
+    topic: food safety
+    authority: CDC
+    age_min_months: 0
+    age_max_months: 60
+    url: https://www.cdc.gov/breastfeeding-special-circumstances/hcp/handling-breastmilk/
+
+  - file: aap-hydration-and-water.md
+    source: "Healthy Beverage Consumption in Early Childhood: Water and Hydration (Consensus Recommendations endorsed by AAP)"
+    year: 2019
+    topic: hydration
+    authority: AAP
+    age_min_months: 6
+    age_max_months: 60
+    url: https://healthyeatingresearch.org/research/consensus-statement-healthy-beverage-consumption-in-early-childhood-recommendations-from-key-national-health-and-nutrition-organizations/
+
+  - file: aap-vegetarian-and-vegan-diets.md
+    source: "AAP Pediatric Nutrition (8th ed.) and Academy of Nutrition and Dietetics Position: Vegetarian Diets — guidance for infants and young children"
+    year: 2020
+    topic: vegetarian and vegan diets
+    authority: AAP
+    age_min_months: 0
+    age_max_months: 60
+    url: https://publications.aap.org/aapbooks/book/604/Pediatric-Nutrition
+
+  - file: cdc-growth-charts-and-bmi.md
+    source: "CDC Growth Charts: Using WHO and CDC Charts for Children Birth to 5 Years"
+    year: 2022
+    topic: growth monitoring and BMI
+    authority: CDC
+    age_min_months: 0
+    age_max_months: 60
+    url: https://www.cdc.gov/growthcharts/who-growth-charts.htm

@@ -13,7 +13,8 @@ dependencies = [
     "langchain-openai>=0.0.1",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.15.0",
-    "pymilvus>=2.4.0",
+    "pymilvus[milvus-lite]>=2.4.0",
+    "pyyaml>=6.0.3",
     "requests>=2.34.2",
     "sqlalchemy>=2.0.52",
     "uvicorn[standard]>=0.52.4",
@@ -47,5 +48,5 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers"
 markers = [
-    "integration: requires a live PostgreSQL database (DATABASE_URL must be set)",
+    "integration: requires live external services (PostgreSQL, OpenRouter, a populated milvus.db)",
 ]

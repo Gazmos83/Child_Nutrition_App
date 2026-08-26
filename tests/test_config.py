@@ -84,3 +84,77 @@ class TestSettingsCaching:
             assert get_settings() is get_settings()
         finally:
             get_settings.cache_clear()
+
+
+class TestRAGSettings:
+    """Day 3 task 1.2 / design.md Decision 11: RAG configuration is independent of the
+    application database and always constructs."""
+
+    RAG_ENV = (
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_MODEL",
+        "EMBEDDING_MODEL",
+        "MILVUS_DB_PATH",
+        "CORPUS_DIR",
+        "RAG_MIN_SIMILARITY",
+        "RAG_CONTEXT_CHAR_BUDGET",
+    )
+
+    @pytest.fixture(autouse=True)
+    def _clear_rag_env(self, monkeypatch) -> None:
+        for name in self.RAG_ENV:
+            monkeypatch.delenv(name, raising=False)
+
+    def test_defaults(self) -> None:
+        from backend.core.config import RAGSettings
+
+        settings = RAGSettings(_env_file=None)
+        assert settings.openrouter_api_key is None
+        assert settings.openrouter_model == "openai/gpt-4o-mini"
+        assert settings.embedding_model == "openai/text-embedding-3-small"
+        assert settings.milvus_db_path == "milvus.db"
+        assert settings.corpus_dir == "knowledge-base"
+        assert settings.rag_min_similarity == pytest.approx(0.45)
+        assert settings.rag_context_char_budget == 6000
+
+    def test_blank_key_is_treated_as_absent(self) -> None:
+        from backend.core.config import RAGSettings
+
+        assert RAGSettings(openrouter_api_key="   ", _env_file=None).openrouter_api_key is None
+        assert RAGSettings(openrouter_api_key=" k ", _env_file=None).openrouter_api_key == "k"
+
+    def test_env_overrides(self, monkeypatch) -> None:
+        from backend.core.config import RAGSettings
+
+        monkeypatch.setenv("OPENROUTER_MODEL", "openai/gpt-4.1-mini")
+        monkeypatch.setenv("RAG_MIN_SIMILARITY", "0.42")
+        settings = RAGSettings(_env_file=None)
+        assert settings.openrouter_model == "openai/gpt-4.1-mini"
+        assert settings.rag_min_similarity == pytest.approx(0.42)
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("rag_min_similarity", 1.5), ("rag_min_similarity", -2), ("rag_context_char_budget", 10)],
+    )
+    def test_out_of_range_values_are_rejected(self, field: str, value) -> None:
+        from backend.core.config import RAGSettings
+
+        with pytest.raises(ValidationError):
+            RAGSettings(_env_file=None, **{field: value})
+
+    def test_constructs_without_database_url(self, monkeypatch) -> None:
+        """The whole point of a second settings class."""
+        from backend.core.config import RAGSettings, get_rag_settings
+
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setattr(
+            "backend.core.config.RAGSettings.model_config",
+            {"env_file": None, "env_file_encoding": "utf-8", "extra": "ignore"},
+        )
+        get_rag_settings.cache_clear()
+        try:
+            settings = get_rag_settings()
+            assert isinstance(settings, RAGSettings)
+            assert get_rag_settings() is settings
+        finally:
+            get_rag_settings.cache_clear()
