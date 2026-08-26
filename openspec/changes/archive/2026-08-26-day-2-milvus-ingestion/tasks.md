@@ -55,4 +55,4 @@
 
 - [x] 9.1 Verify `milvus.db` is `.gitignored` so it's never committed (it's data, not code); update `.gitignore` if needed
 - [x] 9.2 Verify Day 1's PostgreSQL schema and app still work; run `GET /health` and verify it still reports database status correctly
-- [ ] 9.3 Final commit: code, corpus manifest, tests; verify `git status` shows all expected files and nothing unexpected
+- [x] 9.3 (done in commit 7d099dd, Day 2 close-out) Final commit: code, corpus manifest, tests; verify `git status` shows all expected files and nothing unexpected
