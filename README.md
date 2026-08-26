@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development (Day 3 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, and the basic/advanced RAG pipeline behind `POST /api/ask` are implemented. Deterministic tools, routing, auth, and the UI follow on Days 4–7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+> **Status:** early development (Day 4 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, and the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation) are implemented. Routing, auth, and the UI follow on Days 5–7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -122,6 +122,38 @@ curl -N localhost:8000/api/ask -H 'content-type: application/json' \
 `strategy` is `basic` (single query, top-K) or `advanced` (age extraction → metadata filter → query translation → multi-query fusion → dedup; the default). Both share the same prompt, so Day 6's A/B evaluation compares retrieval alone. Every response carries citations with source and year and a fixed not-medical-advice disclaimer; when nothing in the knowledge base is relevant, the endpoint returns a fixed explanation instead of calling the model.
 
 Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-version breaks from the 0.x/2.x APIs most tutorials still use. Check the current docs rather than pattern-matching from older examples.
+
+## Deterministic tools (Day 4)
+
+Six tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
+model for a number. `backend/tools/langchain_tools.py::build_tools(chat_model)` exposes
+them as LangChain `StructuredTool`s for Day 5's router; nothing calls them from an
+endpoint yet.
+
+| Tool | What it does | Source of the numbers |
+|---|---|---|
+| `calculate_bmi` | weight / height² | CDC definition |
+| `calculate_calorie_target` | Estimated Energy Requirement by age band; height + activity from 36 months | 2005 DRI EER equations |
+| `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
+| `lookup_food` | one row of the food table: nutrients, allergens, safety flags, minimum age, source | `nutrition-data/foods.yaml` |
+| `calculate_meal_nutrition` | sums foods × servings; unknown ids reported, never dropped | `nutrition-data/foods.yaml` |
+| `generate_meal_plan` | targets → doctor's-note override → diet filter → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log | all of the above |
+
+`nutrition-data/foods.yaml` is a hand-curated, validated table (~55 infant/toddler foods,
+USDA FoodData Central figures per serving) carrying the "big nine" allergens and the
+choking-hazard / honey / unpasteurised flags the safety filter reads. The whole file is
+rejected if any entry is invalid. The safety filter (`backend/nutrition/safety.py`) has no
+switch that disables a rule and runs on both the candidates and the finished plan.
+
+A doctor's note is extracted by the chat model into a bounded structure (nutrient ∈
+calories/protein/iron, direction, value, unit) and applied by plain Python: on conflict the
+note wins and the conflict is an explicit field; if extraction fails, the plan is still
+generated and the note is flagged as not applied. Every `generate_meal_plan` call emits one
+JSON line on the `backend.tools.audit` logger with the full input snapshot.
+
+```bash
+uv run pytest tests/test_nutrition_*.py tests/test_tools_*.py tests/test_schemas_tools.py
+```
 
 ## Project docs
 

@@ -1,0 +1,1024 @@
+# Food-composition table for the deterministic nutrient tools (Day 4).
+#
+# Every nutrient number a meal plan reports is a sum over rows in this file; the language
+# model never computes or guesses one. Values are rounded typical figures per the stated
+# serving, taken from USDA FoodData Central unless an entry names its own `source`.
+# Serving sizes are infant/toddler portions, not adult ones.
+#
+# Safety metadata drives the hard-coded infant-safety filter (hard rule 4):
+#   allergens               - the regulatory "big nine" (backend.models.enums.Allergen)
+#   choking_hazard          - on the AAP Prevention of Choking (2010) high-risk list for <4 y
+#   contains_honey          - excluded under 12 months (CDC infant botulism guidance)
+#   commonly_unpasteurized  - excluded at every age (CDC food-safety guidance for <5 y)
+#   min_age_months          - 0 only for breast milk and formula; every solid is >= 6
+#                             (WHO/AAP complementary feeding from about 6 months); cow's
+#                             milk as a drink and juice are 12 (AAP/DGA)
+#
+# Unsafe foods are deliberately present, flagged, so the filter is exercised against real
+# entries rather than trusted to work on an empty set.
+#
+# Validation: backend/nutrition/foods.py rejects the whole file on any invalid entry.
+
+version: "2026-08-26.1"
+source: "USDA FoodData Central, SR Legacy and Foundation Foods (values rounded, per stated serving)"
+
+foods:
+  # ---- Milk feeds (the only foods under 6 months) ---------------------------------------
+  - id: breast_milk
+    name: Breast milk
+    category: milk_feed
+    serving_size: 100
+    serving_unit: ml
+    calories: 70
+    protein_g: 1.0
+    fat_g: 4.2
+    carbohydrate_g: 7.0
+    iron_mg: 0.03
+    calcium_mg: 32
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 0
+    source: "Mature human milk reference composition (Institute of Medicine DRI 2005, Table 2-1)"
+
+  - id: infant_formula_iron_fortified
+    name: Infant formula, iron-fortified, prepared
+    category: milk_feed
+    serving_size: 100
+    serving_unit: ml
+    calories: 67
+    protein_g: 1.4
+    fat_g: 3.6
+    carbohydrate_g: 7.4
+    iron_mg: 1.2
+    calcium_mg: 53
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 0
+    source: "Typical cow's-milk-based iron-fortified formula label (20 kcal/fl oz)"
+
+  # ---- Dairy ---------------------------------------------------------------------------
+  - id: whole_cows_milk
+    name: Whole cow's milk (as a drink)
+    category: dairy
+    serving_size: 100
+    serving_unit: ml
+    calories: 61
+    protein_g: 3.2
+    fat_g: 3.3
+    carbohydrate_g: 4.8
+    iron_mg: 0.03
+    calcium_mg: 113
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 12
+    notes: Not as a drink before 12 months (AAP; DGA 2020-2025).
+
+  - id: plain_whole_yogurt
+    name: Plain whole-milk yoghurt
+    category: dairy
+    serving_size: 100
+    serving_unit: g
+    calories: 61
+    protein_g: 3.5
+    fat_g: 3.3
+    carbohydrate_g: 4.7
+    iron_mg: 0.05
+    calcium_mg: 121
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: cheddar_cheese_grated
+    name: Cheddar cheese, grated
+    category: dairy
+    serving_size: 20
+    serving_unit: g
+    calories: 81
+    protein_g: 4.6
+    fat_g: 6.7
+    carbohydrate_g: 0.6
+    iron_mg: 0.03
+    calcium_mg: 142
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: Grated or thinly sliced; cheese chunks are a choking hazard.
+
+  - id: cottage_cheese
+    name: Cottage cheese
+    category: dairy
+    serving_size: 50
+    serving_unit: g
+    calories: 49
+    protein_g: 5.5
+    fat_g: 2.2
+    carbohydrate_g: 1.7
+    iron_mg: 0.04
+    calcium_mg: 42
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Egg -----------------------------------------------------------------------------
+  - id: egg_scrambled
+    name: Egg, cooked until firm and mashed
+    category: egg
+    serving_size: 50
+    serving_unit: g
+    calories: 78
+    protein_g: 6.3
+    fat_g: 5.3
+    carbohydrate_g: 0.6
+    iron_mg: 0.6
+    calcium_mg: 25
+    allergens: [egg]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Meat and poultry -----------------------------------------------------------------
+  - id: chicken_breast_shredded
+    name: Chicken breast, cooked and finely shredded
+    category: poultry
+    serving_size: 30
+    serving_unit: g
+    calories: 50
+    protein_g: 9.3
+    fat_g: 1.1
+    carbohydrate_g: 0
+    iron_mg: 0.3
+    calcium_mg: 4
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: turkey_ground_cooked
+    name: Ground turkey, cooked through
+    category: poultry
+    serving_size: 30
+    serving_unit: g
+    calories: 60
+    protein_g: 8.1
+    fat_g: 2.9
+    carbohydrate_g: 0
+    iron_mg: 0.5
+    calcium_mg: 6
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: beef_ground_cooked
+    name: Lean ground beef, cooked through
+    category: meat
+    serving_size: 30
+    serving_unit: g
+    calories: 65
+    protein_g: 7.8
+    fat_g: 3.6
+    carbohydrate_g: 0
+    iron_mg: 0.8
+    calcium_mg: 3
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: pork_tenderloin_cooked
+    name: Pork tenderloin, cooked and finely chopped
+    category: meat
+    serving_size: 30
+    serving_unit: g
+    calories: 43
+    protein_g: 7.8
+    fat_g: 1.1
+    carbohydrate_g: 0
+    iron_mg: 0.3
+    calcium_mg: 2
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Fish and shellfish (low-mercury choices) -------------------------------------------
+  - id: salmon_cooked
+    name: Salmon, cooked and flaked
+    category: fish
+    serving_size: 30
+    serving_unit: g
+    calories: 62
+    protein_g: 6.8
+    fat_g: 3.7
+    carbohydrate_g: 0
+    iron_mg: 0.1
+    calcium_mg: 4
+    allergens: [fish]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: cod_cooked
+    name: Cod, cooked and flaked
+    category: fish
+    serving_size: 30
+    serving_unit: g
+    calories: 32
+    protein_g: 6.9
+    fat_g: 0.3
+    carbohydrate_g: 0
+    iron_mg: 0.1
+    calcium_mg: 4
+    allergens: [fish]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: sardines_canned
+    name: Sardines, canned in water, mashed
+    category: fish
+    serving_size: 30
+    serving_unit: g
+    calories: 62
+    protein_g: 7.4
+    fat_g: 3.4
+    carbohydrate_g: 0
+    iron_mg: 0.9
+    calcium_mg: 115
+    allergens: [fish]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: shrimp_cooked_chopped
+    name: Shrimp, cooked and finely chopped
+    category: shellfish
+    serving_size: 30
+    serving_unit: g
+    calories: 30
+    protein_g: 6.8
+    fat_g: 0.4
+    carbohydrate_g: 0.3
+    iron_mg: 0.2
+    calcium_mg: 21
+    allergens: [shellfish]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Legumes and soy ------------------------------------------------------------------
+  - id: lentils_cooked
+    name: Lentils, cooked soft
+    category: legume
+    serving_size: 50
+    serving_unit: g
+    calories: 58
+    protein_g: 4.5
+    fat_g: 0.2
+    carbohydrate_g: 10.0
+    iron_mg: 1.7
+    calcium_mg: 9
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: chickpeas_mashed
+    name: Chickpeas, cooked and mashed
+    category: legume
+    serving_size: 50
+    serving_unit: g
+    calories: 82
+    protein_g: 4.4
+    fat_g: 1.3
+    carbohydrate_g: 13.7
+    iron_mg: 1.4
+    calcium_mg: 25
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: Whole chickpeas are round and firm; serve mashed.
+
+  - id: hummus
+    name: Hummus
+    category: legume
+    serving_size: 30
+    serving_unit: g
+    calories: 50
+    protein_g: 2.4
+    fat_g: 2.9
+    carbohydrate_g: 4.3
+    iron_mg: 0.7
+    calcium_mg: 11
+    allergens: [sesame]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: black_beans_mashed
+    name: Black beans, cooked and mashed
+    category: legume
+    serving_size: 50
+    serving_unit: g
+    calories: 66
+    protein_g: 4.4
+    fat_g: 0.3
+    carbohydrate_g: 11.8
+    iron_mg: 1.0
+    calcium_mg: 14
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: tofu_firm
+    name: Tofu, firm (calcium-set), mashed
+    category: legume
+    serving_size: 50
+    serving_unit: g
+    calories: 72
+    protein_g: 8.0
+    fat_g: 4.0
+    carbohydrate_g: 1.5
+    iron_mg: 1.3
+    calcium_mg: 170
+    allergens: [soy]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: edamame_mashed
+    name: Edamame, cooked and mashed
+    category: legume
+    serving_size: 40
+    serving_unit: g
+    calories: 48
+    protein_g: 4.5
+    fat_g: 2.0
+    carbohydrate_g: 3.6
+    iron_mg: 0.9
+    calcium_mg: 25
+    allergens: [soy]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Grains ---------------------------------------------------------------------------
+  - id: infant_cereal_iron_fortified
+    name: Iron-fortified infant oat cereal, dry
+    category: grain
+    serving_size: 15
+    serving_unit: g
+    calories: 60
+    protein_g: 1.5
+    fat_g: 0.5
+    carbohydrate_g: 13.0
+    iron_mg: 5.0
+    calcium_mg: 100
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    source: "Typical iron-fortified infant oat cereal label (about 45% of the 11 mg infant DV per 15 g)"
+
+  - id: oatmeal_cooked
+    name: Oatmeal, cooked with water
+    category: grain
+    serving_size: 100
+    serving_unit: g
+    calories: 71
+    protein_g: 2.5
+    fat_g: 1.5
+    carbohydrate_g: 12.0
+    iron_mg: 0.9
+    calcium_mg: 9
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: brown_rice_cooked
+    name: Brown rice, cooked soft
+    category: grain
+    serving_size: 50
+    serving_unit: g
+    calories: 56
+    protein_g: 1.3
+    fat_g: 0.4
+    carbohydrate_g: 11.7
+    iron_mg: 0.3
+    calcium_mg: 2
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: whole_wheat_bread
+    name: Whole-wheat bread (toast strips)
+    category: grain
+    serving_size: 28
+    serving_unit: g
+    calories: 69
+    protein_g: 3.6
+    fat_g: 1.1
+    carbohydrate_g: 11.6
+    iron_mg: 0.7
+    calcium_mg: 30
+    allergens: [wheat]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: whole_wheat_pasta_cooked
+    name: Whole-wheat pasta, cooked soft and cut small
+    category: grain
+    serving_size: 50
+    serving_unit: g
+    calories: 62
+    protein_g: 2.7
+    fat_g: 0.4
+    carbohydrate_g: 13.0
+    iron_mg: 0.7
+    calcium_mg: 8
+    allergens: [wheat]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: quinoa_cooked
+    name: Quinoa, cooked
+    category: grain
+    serving_size: 50
+    serving_unit: g
+    calories: 60
+    protein_g: 2.2
+    fat_g: 1.0
+    carbohydrate_g: 10.6
+    iron_mg: 0.7
+    calcium_mg: 8
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Vegetables -----------------------------------------------------------------------
+  - id: sweet_potato_mashed
+    name: Sweet potato, cooked and mashed
+    category: vegetable
+    serving_size: 60
+    serving_unit: g
+    calories: 54
+    protein_g: 1.2
+    fat_g: 0.1
+    carbohydrate_g: 12.4
+    iron_mg: 0.4
+    calcium_mg: 23
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: carrot_cooked_mashed
+    name: Carrot, cooked soft and mashed
+    category: vegetable
+    serving_size: 50
+    serving_unit: g
+    calories: 18
+    protein_g: 0.4
+    fat_g: 0.1
+    carbohydrate_g: 4.1
+    iron_mg: 0.2
+    calcium_mg: 15
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: peas_mashed
+    name: Green peas, cooked and mashed
+    category: vegetable
+    serving_size: 50
+    serving_unit: g
+    calories: 42
+    protein_g: 2.7
+    fat_g: 0.2
+    carbohydrate_g: 7.8
+    iron_mg: 0.8
+    calcium_mg: 14
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: Whole raw peas are a choking hazard; serve cooked and mashed.
+
+  - id: spinach_cooked
+    name: Spinach, cooked and finely chopped
+    category: vegetable
+    serving_size: 40
+    serving_unit: g
+    calories: 9
+    protein_g: 1.2
+    fat_g: 0.1
+    carbohydrate_g: 1.5
+    iron_mg: 1.4
+    calcium_mg: 54
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: broccoli_cooked
+    name: Broccoli, cooked soft
+    category: vegetable
+    serving_size: 50
+    serving_unit: g
+    calories: 18
+    protein_g: 1.2
+    fat_g: 0.2
+    carbohydrate_g: 3.6
+    iron_mg: 0.3
+    calcium_mg: 20
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: butternut_squash_mashed
+    name: Butternut squash, cooked and mashed
+    category: vegetable
+    serving_size: 60
+    serving_unit: g
+    calories: 24
+    protein_g: 0.5
+    fat_g: 0.05
+    carbohydrate_g: 6.3
+    iron_mg: 0.4
+    calcium_mg: 25
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: green_beans_cooked_chopped
+    name: Green beans, cooked soft and chopped
+    category: vegetable
+    serving_size: 50
+    serving_unit: g
+    calories: 18
+    protein_g: 1.0
+    fat_g: 0.1
+    carbohydrate_g: 4.0
+    iron_mg: 0.3
+    calcium_mg: 28
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Fruit ----------------------------------------------------------------------------
+  - id: avocado
+    name: Avocado, mashed
+    category: fruit
+    serving_size: 30
+    serving_unit: g
+    calories: 48
+    protein_g: 0.6
+    fat_g: 4.4
+    carbohydrate_g: 2.6
+    iron_mg: 0.2
+    calcium_mg: 4
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: banana_mashed
+    name: Banana, mashed
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 45
+    protein_g: 0.5
+    fat_g: 0.2
+    carbohydrate_g: 11.4
+    iron_mg: 0.1
+    calcium_mg: 2.5
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: apple_cooked
+    name: Apple, cooked soft or finely grated
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 27
+    protein_g: 0.1
+    fat_g: 0.1
+    carbohydrate_g: 7.2
+    iron_mg: 0.1
+    calcium_mg: 3
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: pear_ripe_mashed
+    name: Pear, ripe and mashed
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 29
+    protein_g: 0.2
+    fat_g: 0.1
+    carbohydrate_g: 7.6
+    iron_mg: 0.1
+    calcium_mg: 4.5
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: strawberries_sliced
+    name: Strawberries, thinly sliced
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 16
+    protein_g: 0.3
+    fat_g: 0.2
+    carbohydrate_g: 3.8
+    iron_mg: 0.2
+    calcium_mg: 8
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: blueberries_mashed
+    name: Blueberries, mashed or flattened
+    category: fruit
+    serving_size: 40
+    serving_unit: g
+    calories: 23
+    protein_g: 0.3
+    fat_g: 0.1
+    carbohydrate_g: 5.8
+    iron_mg: 0.1
+    calcium_mg: 2
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: Whole blueberries are small and round; flatten or mash for infants.
+
+  - id: mango
+    name: Mango, ripe and diced small
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 30
+    protein_g: 0.4
+    fat_g: 0.2
+    carbohydrate_g: 7.5
+    iron_mg: 0.1
+    calcium_mg: 5.5
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: peach_ripe
+    name: Peach, ripe and diced small
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 20
+    protein_g: 0.5
+    fat_g: 0.1
+    carbohydrate_g: 4.8
+    iron_mg: 0.1
+    calcium_mg: 3
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Nuts and seeds (spread thin or soaked; never whole) ---------------------------------
+  - id: peanut_butter_thinned
+    name: Peanut butter, thinned or spread thin
+    category: nut_seed
+    serving_size: 15
+    serving_unit: g
+    calories: 94
+    protein_g: 3.6
+    fat_g: 8.0
+    carbohydrate_g: 3.4
+    iron_mg: 0.3
+    calcium_mg: 7
+    allergens: [peanut]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: A spoonful of thick nut butter is a choking hazard; thin into puree or spread thin.
+
+  - id: almond_butter_thinned
+    name: Almond butter, thinned or spread thin
+    category: nut_seed
+    serving_size: 15
+    serving_unit: g
+    calories: 98
+    protein_g: 3.4
+    fat_g: 8.9
+    carbohydrate_g: 3.0
+    iron_mg: 0.5
+    calcium_mg: 55
+    allergens: [tree_nut]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: chia_seeds_soaked
+    name: Chia seeds, soaked to a gel
+    category: nut_seed
+    serving_size: 10
+    serving_unit: g
+    calories: 49
+    protein_g: 1.7
+    fat_g: 3.1
+    carbohydrate_g: 4.2
+    iron_mg: 0.8
+    calcium_mg: 63
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  - id: tahini
+    name: Tahini (sesame paste), thinned
+    category: nut_seed
+    serving_size: 15
+    serving_unit: g
+    calories: 89
+    protein_g: 2.6
+    fat_g: 8.1
+    carbohydrate_g: 3.2
+    iron_mg: 1.3
+    calcium_mg: 64
+    allergens: [sesame]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Fats -----------------------------------------------------------------------------
+  - id: olive_oil
+    name: Olive oil
+    category: fat_oil
+    serving_size: 5
+    serving_unit: ml
+    calories: 40
+    protein_g: 0
+    fat_g: 4.5
+    carbohydrate_g: 0
+    iron_mg: 0
+    calcium_mg: 0
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+
+  # ---- Flagged-unsafe entries (present so the filter is tested against real rows) -----------
+  - id: honey
+    name: Honey
+    category: sweetener
+    serving_size: 7
+    serving_unit: g
+    calories: 21
+    protein_g: 0
+    fat_g: 0
+    carbohydrate_g: 5.8
+    iron_mg: 0.03
+    calcium_mg: 0.4
+    allergens: []
+    choking_hazard: false
+    contains_honey: true
+    commonly_unpasteurized: false
+    min_age_months: 12
+    notes: Never under 12 months (infant botulism); DGA advises no added sugars under 2 years.
+
+  - id: whole_grapes
+    name: Grapes, whole
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 35
+    protein_g: 0.4
+    fat_g: 0.1
+    carbohydrate_g: 9.0
+    iron_mg: 0.2
+    calcium_mg: 5
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list. Quartered lengthwise grapes are a different food.
+
+  - id: whole_nuts
+    name: Nuts, whole
+    category: nut_seed
+    serving_size: 15
+    serving_unit: g
+    calories: 90
+    protein_g: 2.7
+    fat_g: 8.1
+    carbohydrate_g: 3.3
+    iron_mg: 0.5
+    calcium_mg: 15
+    allergens: [tree_nut, peanut]
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list.
+
+  - id: popcorn
+    name: Popcorn
+    category: grain
+    serving_size: 8
+    serving_unit: g
+    calories: 31
+    protein_g: 1.0
+    fat_g: 0.4
+    carbohydrate_g: 6.2
+    iron_mg: 0.3
+    calcium_mg: 0.8
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list.
+
+  - id: hot_dog
+    name: Hot dog
+    category: meat
+    serving_size: 45
+    serving_unit: g
+    calories: 137
+    protein_g: 5.1
+    fat_g: 12.4
+    carbohydrate_g: 1.2
+    iron_mg: 0.5
+    calcium_mg: 5
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list (whole or coin-cut).
+
+  - id: hard_candy
+    name: Hard candy
+    category: sweetener
+    serving_size: 6
+    serving_unit: g
+    calories: 24
+    protein_g: 0
+    fat_g: 0
+    carbohydrate_g: 6.0
+    iron_mg: 0
+    calcium_mg: 0
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list.
+
+  - id: raw_carrot_sticks
+    name: Raw carrot sticks
+    category: vegetable
+    serving_size: 30
+    serving_unit: g
+    calories: 12
+    protein_g: 0.3
+    fat_g: 0.1
+    carbohydrate_g: 2.9
+    iron_mg: 0.1
+    calcium_mg: 10
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list (raw hard vegetables). Cooked soft carrot is a different food.
+
+  - id: raw_apple_chunks
+    name: Raw apple chunks
+    category: fruit
+    serving_size: 50
+    serving_unit: g
+    calories: 26
+    protein_g: 0.1
+    fat_g: 0.1
+    carbohydrate_g: 6.9
+    iron_mg: 0.1
+    calcium_mg: 3
+    allergens: []
+    choking_hazard: true
+    contains_honey: false
+    commonly_unpasteurized: false
+    min_age_months: 6
+    notes: AAP choking list (hard fruit pieces). Cooked or grated apple is a different food.
+
+  - id: raw_milk_soft_cheese
+    name: Soft cheese made from raw (unpasteurised) milk
+    category: dairy
+    serving_size: 20
+    serving_unit: g
+    calories: 66
+    protein_g: 4.2
+    fat_g: 5.4
+    carbohydrate_g: 0.1
+    iron_mg: 0.1
+    calcium_mg: 100
+    allergens: [milk]
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: true
+    min_age_months: 6
+    notes: CDC food-safety guidance for children under 5.
+
+  - id: unpasteurized_juice
+    name: Fresh-pressed (unpasteurised) apple juice
+    category: fruit
+    serving_size: 100
+    serving_unit: ml
+    calories: 46
+    protein_g: 0.1
+    fat_g: 0.1
+    carbohydrate_g: 11.3
+    iron_mg: 0.1
+    calcium_mg: 8
+    allergens: []
+    choking_hazard: false
+    contains_honey: false
+    commonly_unpasteurized: true
+    min_age_months: 12
+    notes: CDC food-safety guidance; AAP advises no juice before 12 months.
