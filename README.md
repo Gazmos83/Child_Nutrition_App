@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development (Day 4 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, and the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation) are implemented. Routing, auth, and the UI follow on Days 5–7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+> **Status:** early development (Day 5 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, and the Next.js chat UI are implemented. The child's details are entered in the UI and travel with each request — auth and saved profiles follow on Day 6, deployment on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -79,13 +79,17 @@ uv add <package>         # add a dependency
 uv add --dev <package>   # add a dev-only dependency
 uv run pytest            # unit tests (offline); add -m integration for live tests
 uv run ruff check .      # lint
+
+pnpm install             # frontend deps (pnpm workspace; `frontend/` is the only package)
+pnpm -C frontend dev     # Next.js dev server on :3000, proxying /api/* to the backend
+pnpm -C frontend lint && pnpm -C frontend typecheck && pnpm -C frontend test
 ```
 
 Always add dependencies through the package manager (`uv add`, `pnpm add`) and run Python via `uv run`. Never `pip install` into `.venv`, and never hand-edit a lockfile.
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it). `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` returns 503 naming the missing setting.
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it). `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
 
 ### Knowledge base
 
@@ -127,8 +131,7 @@ Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-ve
 
 Six tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
 model for a number. `backend/tools/langchain_tools.py::build_tools(chat_model)` exposes
-them as LangChain `StructuredTool`s for Day 5's router; nothing calls them from an
-endpoint yet.
+them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 
 | Tool | What it does | Source of the numbers |
 |---|---|---|
@@ -153,6 +156,55 @@ JSON line on the `backend.tools.audit` logger with the full input snapshot.
 
 ```bash
 uv run pytest tests/test_nutrition_*.py tests/test_tools_*.py tests/test_schemas_tools.py
+```
+
+## Chat, routing, and the UI (Day 5)
+
+`POST /api/chat` is the routed assistant. One model call with the six tools plus a
+`search_guidelines` pseudo-tool bound decides the path — the model's tool calls *are* the
+routing decision — and plain Python executes it: `rag` (knowledge base only, delegating to
+the Day 3 pipeline unchanged), `tool` (deterministic tools only), or `hybrid` (both). The
+model's own free text is never returned; every answer is composed from retrieved context
+blocks and/or validated tool results. At most four tool calls per message, one round, no
+agent loop.
+
+The child's details (age in **months**, weight, sex, optional height, diet preference,
+allergies from the controlled vocabulary, doctor's note, activity level) come from the side
+panel in the UI and travel in the request body. They are **authoritative**: any
+profile-backed argument the model proposes is replaced by the request's value and the tool
+activity says so (`used_context`). Nothing is persisted and no identity is taken — Day 6
+swaps this seam for auth-scoped profiles.
+
+```bash
+curl -N localhost:8000/api/chat -H 'content-type: application/json' -d '{
+  "message": "How much protein does my child need?",
+  "child": {"age_months": 8, "weight_kg": 8.5, "sex": "female", "allergies": ["peanut"],
+            "diet_preference": "omnivore", "activity_level": "low_active"},
+  "history": []
+}'
+```
+
+Server-sent events, in order: one `route` (intent + planned capabilities), one `tool` per
+invocation (name, status, validated args, `used_context`, result or a parent-facing
+error), `token`s, one `final` (citations with source + year, retrieval statistics,
+disclaimer, tool summary), then `done` — or a terminal `error`. `"stream": false` returns
+the same content as JSON (`answer, intent, tools, citations, retrieval, disclaimer`). A
+failed tool (unknown food, missing height, …) becomes an error entry and the answer still
+completes. Every routing decision is logged on `backend.chat.router` with intent, tools,
+retrieval statistics, and latency.
+
+The UI (`frontend/`, Next.js App Router + Tailwind + shadcn/ui + TanStack Query) is one
+screen: the child-details panel and the chat. Each assistant message shows the intent, one
+chip per tool (expandable to arguments and result), a structured meal-plan card when
+`generate_meal_plan` ran — with an unmissable banner when the doctor's note overrode a
+target — the answer with `[n]` citation markers, a numbered Sources list with publication
+year, and the not-medical-advice disclaimer. All parent-facing copy lives in
+`frontend/src/lib/copy.ts` and `backend/chat/copy.py` (warm by default; direct about
+safety and errors).
+
+```bash
+uv run pytest tests/test_chat_*.py tests/test_api_chat.py tests/test_schemas_chat.py
+pnpm -C frontend test
 ```
 
 ## Project docs

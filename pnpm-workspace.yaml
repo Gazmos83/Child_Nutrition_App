@@ -1,0 +1,7 @@
+packages:
+  - frontend
+
+# Build scripts pnpm may run (create-next-app's defaults; neither is needed here).
+allowBuilds:
+  sharp: false
+  unrs-resolver: false

@@ -35,7 +35,9 @@ class RagResponse:
 
 
 @dataclass
-class _Prepared:
+class RetrievedContext:
+    """Retrieval + context construction for one question, without generation (Day 5 seam)."""
+
     result: RetrievalResult
     kept: list[Document]
     context: str
@@ -66,7 +68,7 @@ class RagPipeline:
         except KeyError:
             raise ValueError(f"Unknown strategy {strategy!r}") from None
 
-    async def _prepare(self, question: str, strategy: Strategy) -> _Prepared:
+    async def retrieve(self, question: str, strategy: Strategy) -> RetrievedContext:
         result = await self._retriever(strategy).retrieve(question)
         scores = [c.score for c in result.chunks if c.score is not None]
         top_score = max(scores) if scores else None
@@ -90,7 +92,7 @@ class RagPipeline:
             len(citations),
             top_score if top_score is not None else float("nan"),
         )
-        return _Prepared(result, kept, context, citations, top_score)
+        return RetrievedContext(result, kept, context, citations, top_score)
 
     def messages(self, question: str, context: str) -> list[BaseMessage]:
         """The exact prompt sent to the model -- identical for every strategy."""
@@ -99,7 +101,7 @@ class RagPipeline:
             HumanMessage(content=build_user_prompt(question, context)),
         ]
 
-    def _meta(self, prepared: _Prepared, strategy: Strategy) -> RetrievalMeta:
+    def retrieval_meta(self, prepared: RetrievedContext, strategy: Strategy) -> RetrievalMeta:
         return RetrievalMeta(
             strategy=strategy,
             queries=prepared.result.queries,
@@ -110,19 +112,19 @@ class RagPipeline:
             top_score=prepared.top_score,
         )
 
-    def _no_answer(self, prepared: _Prepared, strategy: Strategy) -> RagResponse:
+    def _no_answer(self, prepared: RetrievedContext, strategy: Strategy) -> RagResponse:
         return RagResponse(
             answer=NO_ANSWER_MESSAGE,
             citations=[],
             disclaimer=DISCLAIMER,
             strategy=strategy,
-            retrieval=self._meta(prepared, strategy),
+            retrieval=self.retrieval_meta(prepared, strategy),
         )
 
     # -- public API ---------------------------------------------------------------------
 
     async def answer(self, question: str, strategy: Strategy = "advanced") -> RagResponse:
-        prepared = await self._prepare(question, strategy)
+        prepared = await self.retrieve(question, strategy)
         if not prepared.citations:
             return self._no_answer(prepared, strategy)
         reply = await self.chat_model.ainvoke(self.messages(question, prepared.context))
@@ -131,7 +133,7 @@ class RagPipeline:
             citations=prepared.citations,
             disclaimer=DISCLAIMER,
             strategy=strategy,
-            retrieval=self._meta(prepared, strategy),
+            retrieval=self.retrieval_meta(prepared, strategy),
         )
 
     async def stream(
@@ -141,7 +143,7 @@ class RagPipeline:
 
         The no-answer message is yielded as a single fragment so clients see one shape.
         """
-        prepared = await self._prepare(question, strategy)
+        prepared = await self.retrieve(question, strategy)
         if not prepared.citations:
             response = self._no_answer(prepared, strategy)
             yield response.answer
@@ -158,5 +160,5 @@ class RagPipeline:
             citations=prepared.citations,
             disclaimer=DISCLAIMER,
             strategy=strategy,
-            retrieval=self._meta(prepared, strategy),
+            retrieval=self.retrieval_meta(prepared, strategy),
         )

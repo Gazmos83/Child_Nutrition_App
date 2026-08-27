@@ -86,10 +86,11 @@ COVERAGE_GROUPS: tuple[tuple[str, frozenset[FoodCategory]], ...] = (
 )
 SOLID_SLOTS: tuple[MealSlot, ...] = ("breakfast", "lunch", "dinner", "snack")
 
+# Parent-facing headline for the no-safe-plan outcome; the exclusions carry the "why"
+# and the UI adds the "worth checking" list (Day 5 design.md Decision 13).
 NO_SAFE_PLAN_MESSAGE = (
-    "No safe meal plan could be generated: every food in the table was excluded by the "
-    "infant-safety filter, the child's recorded allergies, or the diet preference. Please "
-    "consult your pediatrician about suitable foods for your child."
+    "We couldn't build a safe plan with these details — here's why, and what you might "
+    "want to check"
 )
 
 

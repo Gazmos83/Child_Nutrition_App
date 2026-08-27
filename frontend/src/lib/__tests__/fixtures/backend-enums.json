@@ -1,0 +1,30 @@
+{
+  "sex": [
+    "male",
+    "female"
+  ],
+  "diet_preference": [
+    "omnivore",
+    "vegetarian",
+    "pescatarian",
+    "vegan"
+  ],
+  "allergen": [
+    "milk",
+    "egg",
+    "peanut",
+    "tree_nut",
+    "soy",
+    "wheat",
+    "fish",
+    "shellfish",
+    "sesame"
+  ],
+  "activity_level": [
+    "sedentary",
+    "low_active",
+    "active",
+    "very_active"
+  ],
+  "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs."
+}

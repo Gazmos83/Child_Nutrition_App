@@ -4,7 +4,6 @@ Not user-scoped: reads no child profile, persists nothing, takes no identity. St
 uses hand-formatted server-sent events over ``StreamingResponse`` (design Decision 10).
 """
 
-import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
@@ -12,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from backend.api.sse import sse
 from backend.rag.llm import get_pipeline
 from backend.rag.pipeline import RagPipeline, RagResponse
 from backend.schemas.rag import AskRequest, AskResponse
@@ -37,11 +37,6 @@ def to_ask_response(response: RagResponse) -> AskResponse:
         strategy=response.strategy,
         retrieval=response.retrieval,
     )
-
-
-def sse(event: str, data: object) -> str:
-    """One server-sent event frame."""
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 async def _event_stream(pipeline: RagPipeline, request: AskRequest) -> AsyncIterator[str]:
