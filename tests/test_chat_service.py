@@ -1,6 +1,7 @@
 """Tool execution and answer composition (Day 5 tasks 3.3, 4.1)."""
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -268,3 +269,96 @@ class TestStream:
         assert response.answer == ANSWER and response.intent == "rag"
         assert response.citations[0].source == "Iron Source" and response.tools == []
         assert response.disclaimer == DISCLAIMER and response.retrieval.kept == 1
+
+
+# -- Change 2: implicit gap detection before a plan (task 4.2) --------------------------------
+
+
+def cereal_entry(days_ago: int, grams: float = 100) -> dict:
+    when = (datetime.now(UTC) - timedelta(days=days_ago)).replace(hour=12, minute=0, second=0)
+    return {
+        "fed_at": when.isoformat(),
+        "feeding_type": "solid",
+        "food_id": "infant_cereal_iron_fortified",
+        "quantity": grams,
+        "unit": "g",
+    }
+
+
+class TestImplicitGapDetection:
+    async def test_plan_over_a_log_runs_detection_first_and_passes_the_report(self, tools) -> None:
+        request = ChatRequest.model_validate(
+            {
+                "message": "plan the rest of today",
+                "child": CHILD,
+                "feeding_log": [
+                    cereal_entry(1),
+                    cereal_entry(2),
+                    cereal_entry(3),
+                    cereal_entry(0, 15),
+                ],
+            }
+        )
+        activities = await run_tools(
+            decision(PlannedCall(name="generate_meal_plan", args={})), request, tools
+        )
+        assert [a.name for a in activities] == ["detect_nutrient_gaps", "generate_meal_plan"]
+        gaps, plan = activities
+        assert gaps.status == "ok" and gaps.result["confidence"] == "medium"
+        assert plan.status == "ok"
+        assert plan.args["gaps"] == gaps.result
+        assert "gaps" in plan.used_context and "logged_today" in plan.used_context
+        assert len(plan.args["logged_today"]) == 1
+        assert plan.result["already_logged"]["calories"] == 60.0
+
+    async def test_empty_log_means_no_detection_and_no_gaps_argument(self, tools) -> None:
+        request = ChatRequest.model_validate({"message": "plan", "child": CHILD})
+        activities = await run_tools(
+            decision(PlannedCall(name="generate_meal_plan", args={"gaps": {"status": "ok"}})),
+            request,
+            tools,
+        )
+        [plan] = activities
+        assert plan.status == "ok" and "gaps" not in plan.args
+        assert plan.result["adjustments"] == [] and plan.result["already_logged"] is None
+
+    async def test_model_planned_detection_is_reused_not_duplicated(self, tools) -> None:
+        request = ChatRequest.model_validate(
+            {"message": "m", "child": CHILD, "feeding_log": [cereal_entry(1)]}
+        )
+        activities = await run_tools(
+            decision(
+                PlannedCall(name="generate_meal_plan", args={}),
+                PlannedCall(name="detect_nutrient_gaps", args={}),
+            ),
+            request,
+            tools,
+        )
+        assert [a.name for a in activities] == ["detect_nutrient_gaps", "generate_meal_plan"]
+        assert activities[1].args["gaps"] == activities[0].result
+
+    async def test_stream_emits_the_implicit_activity_before_tokens(self) -> None:
+        service, _ = make_service(
+            [
+                AIMessage(content="", tool_calls=[call("generate_meal_plan")]),
+                "Here is the rest of the day.",
+            ]
+        )
+        events = await collect(
+            service,
+            ChatRequest.model_validate(
+                {
+                    "message": "plan the rest of today",
+                    "child": CHILD,
+                    "feeding_log": [cereal_entry(0, 15)],
+                }
+            ),
+        )
+        names = [e for e, _ in events]
+        assert names[0] == "route" and names[1] == "tool" and names[2] == "tool"
+        assert [d["name"] for e, d in events if e == "tool"] == [
+            "detect_nutrient_gaps",
+            "generate_meal_plan",
+        ]
+        assert names.index("token") > names.index("tool")
+        assert names[-1] == "done"

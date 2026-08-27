@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ToolActivity } from "../api-types";
-import { applyEvent, emptyAssistantMessage, reduceAssistant } from "../chat-reducer";
+import { applyEvent, emptyAssistantMessage, loggedFeedingFrom, reduceAssistant } from "../chat-reducer";
 
 const okTool: ToolActivity = {
   name: "calculate_bmi",
@@ -102,5 +102,35 @@ describe("chat reducer", () => {
     });
     expect(m.status).toBe("error");
     expect(m.error).toContain("chef");
+  });
+});
+
+describe("loggedFeedingFrom", () => {
+  const logged = {
+    entry: { id: "e1", fed_at: "2026-08-27T08:00:00Z", feeding_type: "formula", food_id: null, quantity: 150, unit: "ml" },
+    food_id: "infant_formula_iron_fortified",
+    food_name: "Infant formula",
+    quantified: true,
+    nutrients: { calories: 100.5, protein_g: 2.1, fat_g: 5.4, carbohydrate_g: 11.1, iron_mg: 1.8, calcium_mg: 79.5 },
+    source: "label",
+  };
+
+  it("extracts a successful log_feeding result", () => {
+    const event = {
+      event: "tool" as const,
+      data: { ...okTool, name: "log_feeding", result: logged as unknown as Record<string, unknown> },
+    };
+    expect(loggedFeedingFrom(event)?.entry.id).toBe("e1");
+  });
+
+  it("ignores other tools, failures, and malformed results", () => {
+    expect(loggedFeedingFrom({ event: "tool", data: okTool })).toBeNull();
+    expect(
+      loggedFeedingFrom({ event: "tool", data: { ...failedTool, name: "log_feeding" } }),
+    ).toBeNull();
+    expect(
+      loggedFeedingFrom({ event: "tool", data: { ...okTool, name: "log_feeding", result: { entry: {} } } }),
+    ).toBeNull();
+    expect(loggedFeedingFrom({ event: "done", data: {} })).toBeNull();
   });
 });

@@ -92,10 +92,17 @@ class TestNoUserScopedRoutesExposed:
     """Task 6.4 / design.md Risk 6: authorization lands on Day 6, so nothing user-scoped
     may be reachable before then."""
 
-    def test_documented_surface_is_health_ask_and_chat(self) -> None:
-        # Day 3 adds /api/ask and Day 5 adds /api/chat; both are deliberately not
-        # user-scoped (ask-api and chat-api specs): child details travel in the body.
-        assert set(app.openapi()["paths"]) == {"/health", "/api/ask", "/api/chat"}
+    def test_documented_surface_is_health_and_the_stateless_api(self) -> None:
+        # Day 3 adds /api/ask, Day 5 adds /api/chat, /api/feedings, /api/foods; none is
+        # user-scoped (ask-api, chat-api, feeding-log specs): child details and the
+        # feeding log travel in the body, and nothing is stored.
+        assert set(app.openapi()["paths"]) == {
+            "/health",
+            "/api/ask",
+            "/api/chat",
+            "/api/feedings",
+            "/api/foods",
+        }
 
     def test_only_builtin_docs_routes_are_top_level(self) -> None:
         top_level = {r.path for r in app.routes if getattr(r, "path", None) is not None}
@@ -109,9 +116,9 @@ class TestNoUserScopedRoutesExposed:
         with TestClient(app) as client:
             assert client.get(path).status_code == 404
 
-    def test_api_router_exposes_only_ask_and_chat(self) -> None:
+    def test_api_router_exposes_only_the_stateless_routes(self) -> None:
         from backend.api.router import api_router
 
         assert api_router.prefix == "/api"
         api_paths = {p for p in app.openapi()["paths"] if p.startswith("/api/")}
-        assert api_paths == {"/api/ask", "/api/chat"}
+        assert api_paths == {"/api/ask", "/api/chat", "/api/feedings", "/api/foods"}

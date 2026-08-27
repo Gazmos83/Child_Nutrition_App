@@ -1,21 +1,30 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
-import { UNIT_FOR_NUTRIENT, type MealPlanResult, type MealSlot, type PlannedItem } from "@/lib/api-types";
+import {
+  UNIT_FOR_NUTRIENT,
+  type MealPlanResult,
+  type MealSlot,
+  type OverrideOutcome,
+  type PlannedItem,
+} from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 
 const SLOT_ORDER: MealSlot[] = ["milk feed", "breakfast", "lunch", "dinner", "snack"];
 
 export function MealPlanCard({ plan }: { plan: MealPlanResult }) {
   const noSafePlan = plan.outcome === "no_safe_plan";
+  const targetsMet = plan.outcome === "targets_met";
+  const title = noSafePlan ? plan.message : targetsMet ? copy.PLAN_TARGETS_MET_TITLE : copy.PLAN_TITLE;
   return (
     <Card className="mt-3" data-testid="meal-plan-card" data-outcome={plan.outcome}>
       <CardHeader>
-        <CardTitle>{noSafePlan ? plan.message : copy.PLAN_TITLE}</CardTitle>
+        <CardTitle>{title}</CardTitle>
         {!noSafePlan && <p className="text-sm text-muted-foreground">{plan.message}</p>}
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        {plan.override.conflict && <OverrideBanner plan={plan} />}
-        {noSafePlan ? (
+        {plan.override.conflict && <OverrideBanner override={plan.override} />}
+        <LogLines plan={plan} />
+        {targetsMet ? null : noSafePlan ? (
           <>
             <Section title={copy.NO_SAFE_PLAN_WHY}>
               <Exclusions plan={plan} />
@@ -33,7 +42,7 @@ export function MealPlanCard({ plan }: { plan: MealPlanResult }) {
             <Section title={copy.PLAN_ITEMS_TITLE}>
               <Items items={plan.items} />
             </Section>
-            <Section title={copy.PLAN_COVERAGE_TITLE}>
+            <Section title={plan.already_logged ? copy.PLAN_REST_OF_DAY : copy.PLAN_COVERAGE_TITLE}>
               <Coverage plan={plan} />
             </Section>
             <Section title={copy.PLAN_EXCLUDED_TITLE}>
@@ -55,8 +64,31 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function OverrideBanner({ plan }: { plan: MealPlanResult }) {
-  const { nutrient, applied_value, general_value } = plan.override;
+/** What the feeding log changed about this plan (change 2): shown on plan and targets_met. */
+function LogLines({ plan }: { plan: MealPlanResult }) {
+  if (plan.adjustments.length === 0 && !plan.already_logged) return null;
+  return (
+    <div className="space-y-1 text-muted-foreground" data-testid="log-lines">
+      {plan.adjustments.map((a) => (
+        <p key={`${a.nutrient}-${a.action}`} data-testid="adjustment" title={a.detail}>
+          {copy.adjustedFor(a.nutrient, a.window_days)}
+        </p>
+      ))}
+      {plan.already_logged && (
+        <p data-testid="already-logged">
+          {copy.alreadyLogged(
+            plan.already_logged.calories,
+            plan.already_logged.protein_g,
+            plan.already_logged.iron_mg,
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function OverrideBanner({ override }: { override: OverrideOutcome }) {
+  const { nutrient, applied_value, general_value } = override;
   if (!nutrient || applied_value === null || general_value === null) return null;
   return (
     <div
@@ -92,11 +124,15 @@ function Items({ items }: { items: PlannedItem[] }) {
   );
 }
 
+/** Coverage is against what the plan set out to cover: the full day, or what remained of it
+ * after today's log (full-day target minus intake, floored at 0 — mirrors the backend). */
 function Coverage({ plan }: { plan: MealPlanResult }) {
+  const logged = plan.already_logged;
+  const remaining = (target: number, eaten: number) => (logged ? Math.max(0, target - eaten) : target);
   const rows: { key: "calories" | "protein" | "iron"; target: number }[] = [
-    { key: "calories", target: plan.targets.calories.calories },
-    { key: "protein", target: plan.targets.protein.protein_g },
-    { key: "iron", target: plan.targets.iron.iron_mg },
+    { key: "calories", target: remaining(plan.targets.calories.calories, logged?.calories ?? 0) },
+    { key: "protein", target: remaining(plan.targets.protein.protein_g, logged?.protein_g ?? 0) },
+    { key: "iron", target: remaining(plan.targets.iron.iron_mg, logged?.iron_mg ?? 0) },
   ];
   return (
     <ul className="space-y-2">

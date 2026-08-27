@@ -17,7 +17,10 @@ from backend.schemas.tools import (
     _WEIGHT,
     HEIGHT_REQUIRED_FROM_MONTHS,
     MAX_HEIGHT_CM,
+    MAX_LOG_ENTRIES,
     ActivityLevel,
+    FeedingEntry,
+    TimeZoneName,
 )
 
 MAX_MESSAGE_CHARS = 2000
@@ -78,6 +81,10 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     child: ChildContext | None = None
     history: list[ChatTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS)
+    # Change 2: the feeding log is client-held until Day 6 and travels with every message,
+    # bounded; log-backed tool arguments are filled from it, never from the model.
+    feeding_log: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
+    timezone: TimeZoneName = "UTC"
     strategy: Strategy = "advanced"
     stream: bool = True
 

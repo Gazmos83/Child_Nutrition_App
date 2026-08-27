@@ -53,6 +53,8 @@ const BASE: MealPlanResult = {
   message: "A one-day plan with 1 foods chosen for iron and variety.",
   disclaimer: "This is general information…",
   food_table_version: "2026-08-26.1",
+  adjustments: [],
+  already_logged: null,
 };
 
 describe("MealPlanCard", () => {
@@ -92,5 +94,48 @@ describe("MealPlanCard", () => {
     expect(screen.getByTestId("exclusions")).toHaveTextContent("peanut");
     expect(screen.queryByText(copy.PLAN_ITEMS_TITLE)).toBeNull();
     expect(screen.queryByTestId("override-banner")).toBeNull();
+  });
+
+  it("shows what the feeding log changed: adjustment and already-logged lines", () => {
+    render(
+      <MealPlanCard
+        plan={{
+          ...BASE,
+          adjustments: [
+            { nutrient: "iron", action: "prioritised", confidence: "medium", window_days: 3, detail: "3-day average 6.2 mg" },
+          ],
+          already_logged: { calories: 310, protein_g: 8, fat_g: 10, carbohydrate_g: 40, iron_mg: 2.1, calcium_mg: 120 },
+        }}
+      />,
+    );
+    expect(screen.getByTestId("adjustment")).toHaveTextContent(copy.adjustedFor("iron", 3));
+    expect(screen.getByTestId("already-logged")).toHaveTextContent(copy.alreadyLogged(310, 8, 2.1));
+    expect(screen.getByText(copy.PLAN_REST_OF_DAY)).toBeInTheDocument();
+    // Coverage is shown against what remained of the day, not the full-day targets.
+    expect(screen.getByText("95% of 340 kcal")).toBeInTheDocument();
+    expect(screen.getByText("97% of 1.4 g")).toBeInTheDocument();
+    expect(screen.getByText("93% of 8.9 mg")).toBeInTheDocument();
+  });
+
+  it("targets met: says today is covered, shows the message, and lists no items", () => {
+    const message = "Today's already covered — what you've logged meets the day's targets. Nothing more to plan; enjoy the rest of it";
+    render(
+      <MealPlanCard
+        plan={{
+          ...BASE,
+          outcome: "targets_met",
+          items: [],
+          message,
+          override: { ...BASE.override, conflict: false, source: "general_target" },
+          already_logged: { calories: 640, protein_g: 9, fat_g: 20, carbohydrate_g: 70, iron_mg: 10, calcium_mg: 300 },
+        }}
+      />,
+    );
+    expect(screen.getByText(copy.PLAN_TARGETS_MET_TITLE)).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByTestId("already-logged")).toHaveTextContent("640 kcal");
+    expect(screen.queryByText(copy.PLAN_ITEMS_TITLE)).toBeNull();
+    expect(screen.queryByText(copy.PLAN_COVERAGE_TITLE)).toBeNull();
+    expect(screen.getByTestId("meal-plan-card")).toHaveAttribute("data-outcome", "targets_met");
   });
 });

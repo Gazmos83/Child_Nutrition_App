@@ -1,8 +1,11 @@
 """LangChain ``StructuredTool`` wrappers for Day 5's router (design.md Decision 10).
 
 Each tool's ``args_schema`` is the Pydantic input model, so the model's arguments are
-validated before any function runs (hard rule 7). The five pure tools are synchronous;
-``generate_meal_plan`` is coroutine-only because note extraction awaits the chat model.
+validated before any function runs (hard rule 7). The pure tools are synchronous;
+``generate_meal_plan``, ``get_remaining_targets``, and ``detect_nutrient_gaps`` are
+coroutine-only because target resolution may await the chat model for a doctor's note.
+Log-backed arguments (``entries``, ``logged_today``, ``timezone``) are filled from the
+request by ``resolve_context``, never typed out by the model (change 2 design Decision 9).
 """
 
 from langchain_core.language_models import BaseChatModel
@@ -11,17 +14,24 @@ from langchain_core.tools import StructuredTool
 from backend.schemas.tools import (
     BmiInput,
     CalorieTargetInput,
+    DailyNutritionInput,
+    FeedingEntry,
     FoodLookupInput,
+    GapDetectionRequest,
     MealNutritionInput,
     MealPlanRequest,
     ProteinTargetInput,
+    RemainingTargetsInput,
 )
 from backend.tools import nutrient_tools
+from backend.tools.feeding_log import get_daily_nutrition, get_remaining_targets, log_feeding
 from backend.tools.meal_plan import generate_meal_plan
+from backend.tools.nutrient_gaps import detect_nutrient_gaps
 
 
 def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
-    """The six Day 4 tools. ``chat_model`` is used only for doctor's-note extraction."""
+    """The six Day 4 tools plus the four feeding-log tools. ``chat_model`` is used only for
+    doctor's-note extraction."""
 
     def bmi(**kwargs):
         return nutrient_tools.calculate_bmi(BmiInput(**kwargs))
@@ -40,6 +50,18 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
 
     async def meal_plan(**kwargs):
         return await generate_meal_plan(MealPlanRequest(**kwargs), chat_model)
+
+    def feeding(**kwargs):
+        return log_feeding(FeedingEntry(**kwargs))
+
+    def daily_nutrition(**kwargs):
+        return get_daily_nutrition(DailyNutritionInput(**kwargs))
+
+    async def remaining_targets(**kwargs):
+        return await get_remaining_targets(RemainingTargetsInput(**kwargs), chat_model)
+
+    async def nutrient_gaps(**kwargs):
+        return await detect_nutrient_gaps(GapDetectionRequest(**kwargs), chat_model)
 
     return [
         StructuredTool.from_function(
@@ -97,8 +119,53 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
                 "diet preference, recorded allergies, optional height (required from 36 "
                 "months) and optional doctor's note. Applies the infant-safety filter and "
                 "reports targets, totals, exclusions, any doctor's-note override, and a "
-                "not-medical-advice disclaimer."
+                "not-medical-advice disclaimer. When the parent has logged feeds, today's "
+                "intake is subtracted so the plan covers the rest of the day, and a "
+                "nutrient-gap report steers which foods are favoured."
             ),
             args_schema=MealPlanRequest,
+        ),
+        StructuredTool.from_function(
+            func=feeding,
+            name="log_feeding",
+            description=(
+                "Record one feed the child actually had: time, type (breastmilk, formula, "
+                "solid, water), food from the table for solids, quantity and unit. Returns "
+                "the entry with an id and its table-derived nutrients. Breast milk may be "
+                "logged without a quantity. Nothing is stored yet; the parent's browser keeps "
+                "the log."
+            ),
+            args_schema=FeedingEntry,
+        ),
+        StructuredTool.from_function(
+            func=daily_nutrition,
+            name="get_daily_nutrition",
+            description=(
+                "Total nutrients the child has had on one local day from the feeding log "
+                "(default: today). Use when the parent asks what the child has had so far."
+            ),
+            args_schema=DailyNutritionInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=remaining_targets,
+            name="get_remaining_targets",
+            description=(
+                "The child's daily calorie, protein, and iron targets minus what the feeding "
+                "log says was eaten on that day (default: today), floored at zero; a doctor's "
+                "note is honoured. Use when the parent asks what is still needed today."
+            ),
+            args_schema=RemainingTargetsInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=nutrient_gaps,
+            name="detect_nutrient_gaps",
+            description=(
+                "Compare logged intake over the last days with the child's targets: a "
+                "rolling-window report per nutrient (below, adequate, above) whose confidence "
+                "grows with the number of complete days logged. Use when the parent asks "
+                "whether intake has been enough lately or whether anything has been falling "
+                "short."
+            ),
+            args_schema=GapDetectionRequest,
         ),
     ]

@@ -1,6 +1,6 @@
 // Wire types for POST /api/chat, mirrored from backend/schemas/chat.py, rag.py, tools.py.
 
-import type { ActivityLevel, Allergen, DietPreference, Sex } from "./enums";
+import type { ActivityLevel, Allergen, DietPreference, FeedingType, Sex } from "./enums";
 
 export type Strategy = "basic" | "advanced";
 export type Intent = "rag" | "tool" | "hybrid";
@@ -26,8 +26,105 @@ export interface ChatRequest {
   message: string;
   child?: ChildContext | null;
   history?: ChatTurn[];
+  /** Change 2: the client-held log (entries only) and the browser's IANA time zone. */
+  feeding_log?: FeedingEntry[];
+  timezone?: string;
   strategy?: Strategy;
   stream?: boolean;
+}
+
+// -- feeding log (backend/schemas/tools.py; feeding-log spec) ------------------------------
+
+export type FeedingUnit = "ml" | "g";
+
+export interface FeedingEntry {
+  id?: string | null;
+  fed_at: string;
+  feeding_type: FeedingType;
+  food_id?: string | null;
+  quantity?: number | null;
+  unit: FeedingUnit;
+}
+
+export interface LoggedFeeding {
+  entry: FeedingEntry & { id: string };
+  food_id: string | null;
+  food_name: string | null;
+  quantified: boolean;
+  nutrients: NutrientTotals;
+  source: string;
+}
+
+export interface FoodSummary {
+  id: string;
+  name: string;
+  category: string;
+  serving_size: number;
+  serving_unit: string;
+  min_age_months: number;
+}
+
+export type GapNutrient = "calories" | "protein" | "iron";
+export type GapFlag = "below" | "adequate" | "above";
+export type GapConfidence = "low" | "medium" | "high";
+
+export interface NutrientGap {
+  nutrient: GapNutrient;
+  unit: "kcal" | "g" | "mg";
+  average: number;
+  target: number;
+  ratio: number;
+  flag: GapFlag;
+  target_source: string;
+  target_band: string;
+}
+
+export interface NutrientGapReport {
+  status: "ok" | "insufficient_data";
+  confidence: GapConfidence | null;
+  directional: boolean;
+  days_logged: number;
+  window_days: number;
+  partial_days: number;
+  as_of: string;
+  gaps: NutrientGap[];
+  targets: NutrientTargets;
+  note_extraction: NoteExtraction | null;
+  override: OverrideOutcome | null;
+}
+
+export interface Adjustment {
+  nutrient: GapNutrient;
+  action: string;
+  confidence: GapConfidence | null;
+  window_days: number | null;
+  detail: string;
+}
+
+export function isNutrientGapReport(value: unknown): value is NutrientGapReport {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.status === "ok" || v.status === "insufficient_data") &&
+    Array.isArray(v.gaps) &&
+    typeof v.days_logged === "number" &&
+    typeof v.as_of === "string"
+  );
+}
+
+export function isLoggedFeeding(value: unknown): value is LoggedFeeding {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  const entry = v.entry as Record<string, unknown> | undefined;
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    typeof entry.id === "string" &&
+    typeof entry.fed_at === "string" &&
+    typeof v.nutrients === "object" &&
+    v.nutrients !== null &&
+    typeof v.quantified === "boolean"
+  );
 }
 
 export interface Citation {
@@ -154,8 +251,10 @@ export interface Exclusion {
   reasons: string[];
 }
 
+export type MealPlanOutcome = "plan" | "no_safe_plan" | "targets_met";
+
 export interface MealPlanResult {
-  outcome: "plan" | "no_safe_plan";
+  outcome: MealPlanOutcome;
   items: PlannedItem[];
   totals: NutrientTotals;
   targets: NutrientTargets;
@@ -166,6 +265,8 @@ export interface MealPlanResult {
   message: string;
   disclaimer: string;
   food_table_version: string;
+  adjustments: Adjustment[];
+  already_logged: NutrientTotals | null;
 }
 
 export const UNIT_FOR_NUTRIENT: Record<OverridableNutrient, string> = {
@@ -178,7 +279,7 @@ export function isMealPlanResult(value: unknown): value is MealPlanResult {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
-    (v.outcome === "plan" || v.outcome === "no_safe_plan") &&
+    (v.outcome === "plan" || v.outcome === "no_safe_plan" || v.outcome === "targets_met") &&
     Array.isArray(v.items) &&
     typeof v.override === "object" &&
     typeof v.message === "string"

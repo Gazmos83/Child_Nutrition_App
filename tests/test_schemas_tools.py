@@ -1,16 +1,22 @@
 """Tool input validation rejects bad input before any calculation (task 1.1; hard rule 7)."""
 
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
-from backend.models.enums import Sex
+from backend.models.enums import FeedingType, Sex
 from backend.schemas.tools import (
     BmiInput,
     CalorieTargetInput,
+    DailyNutritionInput,
     DoctorsNoteOverride,
+    FeedingEntry,
+    GapDetectionRequest,
     MealItem,
     MealPlanRequest,
     ProteinTargetInput,
+    RemainingTargetsInput,
 )
 
 
@@ -110,3 +116,83 @@ class TestMealPlanRequestNormalisation:
     def test_meal_item_servings_positive(self) -> None:
         with pytest.raises(ValidationError):
             MealItem(food_id="banana", servings=0)
+
+
+class TestFeedingEntry:
+    """Change 2 task 1.2: shape rules for logged feeds (feeding-log spec)."""
+
+    AT = datetime(2026, 8, 27, 9, 30, tzinfo=UTC)
+
+    def test_breastmilk_accepted_without_quantity(self) -> None:
+        entry = FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.BREASTMILK)
+        assert entry.quantity is None and entry.food_id is None and entry.unit == "ml"
+
+    def test_formula_without_quantity_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="quantity is required for a formula feed"):
+            FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.FORMULA)
+
+    def test_solid_without_food_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="food_id is required for a solid feed"):
+            FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.SOLID, quantity=30, unit="g")
+
+    def test_water_with_food_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="water has no food_id"):
+            FeedingEntry(
+                fed_at=self.AT, feeding_type=FeedingType.WATER, food_id="banana", quantity=50
+            )
+
+    @pytest.mark.parametrize("quantity", [0, -10])
+    def test_non_positive_quantity_rejected(self, quantity: float) -> None:
+        with pytest.raises(ValidationError):
+            FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.FORMULA, quantity=quantity)
+
+    def test_unit_outside_ml_or_g_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            FeedingEntry(
+                fed_at=self.AT,
+                feeding_type=FeedingType.SOLID,
+                food_id="banana",
+                quantity=1,
+                unit="kg",  # type: ignore[arg-type]
+            )
+
+    def test_milk_feed_in_grams_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="formula is measured in ml"):
+            FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.FORMULA, quantity=150, unit="g")
+
+    def test_naive_datetime_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            FeedingEntry(fed_at=datetime(2026, 8, 27, 9, 30), feeding_type=FeedingType.BREASTMILK)
+
+    def test_off_vocabulary_feeding_type_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            FeedingEntry(fed_at=self.AT, feeding_type="bottle", quantity=100)  # type: ignore[arg-type]
+
+    def test_unknown_field_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.WATER, quantity=50, kcal=3)  # type: ignore[call-arg]
+
+
+class TestLogInputs:
+    AT = datetime(2026, 8, 27, 9, 30, tzinfo=UTC)
+
+    def test_bad_timezone_rejected_everywhere(self) -> None:
+        for model in (DailyNutritionInput, RemainingTargetsInput, GapDetectionRequest):
+            with pytest.raises(ValidationError, match="Mars/Olympus"):
+                model.model_validate(
+                    {"age_months": 8, "weight_kg": 8.5, "sex": "female", "timezone": "Mars/Olympus"}
+                )
+
+    def test_valid_timezone_and_default(self) -> None:
+        assert DailyNutritionInput(timezone="Asia/Tokyo").timezone == "Asia/Tokyo"
+        assert DailyNutritionInput().timezone == "UTC"
+
+    def test_log_bounded_to_200_entries(self) -> None:
+        entry = FeedingEntry(fed_at=self.AT, feeding_type=FeedingType.BREASTMILK)
+        assert len(DailyNutritionInput(entries=[entry] * 200).entries) == 200
+        with pytest.raises(ValidationError):
+            DailyNutritionInput(entries=[entry] * 201)
+
+    def test_gap_request_needs_height_from_36_months(self) -> None:
+        with pytest.raises(ValidationError, match="height_cm is required from 36 months"):
+            GapDetectionRequest(age_months=40, weight_kg=15, sex=Sex.MALE)

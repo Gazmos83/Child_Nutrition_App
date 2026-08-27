@@ -1,0 +1,3402 @@
+[
+ {
+  "request": {
+   "age_months": 9,
+   "sex": "female",
+   "weight_kg": 8.8
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.92,
+    "iron": 1.23,
+    "protein": 1.68
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: about half of daily energy at 6–11 months (WHO)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 5.0
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 5 foods chosen for iron and variety. Totals: about 646 kcal of a 705 kcal target, 17.8 g protein of 10.6 g, and 13.5 mg iron of 11.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "7–12 months",
+     "calories": 705,
+     "formula": "EER = (89 × 8.8 kg − 100) + 22",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "7–12 months",
+     "iron_mg": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "7–12 months",
+     "grams_per_kg": 1.2,
+     "protein_g": 10.6,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 548.0,
+    "calories": 646.0,
+    "carbohydrate_g": 79.8,
+    "fat_g": 30.0,
+    "iron_mg": 13.5,
+    "protein_g": 17.8
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 4,
+   "sex": "female",
+   "weight_kg": 6.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.98,
+    "iron": 0.67,
+    "protein": 0.76
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cheddar_cheese_grated",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cottage_cheese",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "egg_scrambled",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chicken_breast_shredded",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "turkey_ground_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "beef_ground_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "pork_tenderloin_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "salmon_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cod_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "sardines_canned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "shrimp_cooked_chopped",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "lentils_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chickpeas_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hummus",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "black_beans_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "tofu_firm",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "edamame_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "oatmeal_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "brown_rice_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_wheat_bread",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_wheat_pasta_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "quinoa_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "sweet_potato_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "carrot_cooked_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peas_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "spinach_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "broccoli_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "butternut_squash_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "green_beans_cooked_chopped",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "avocado",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "banana_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "apple_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "pear_ripe_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "strawberries_sliced",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "blueberries_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "mango",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peach_ripe",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chia_seeds_soaked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "tahini",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "olive_oil",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: sole food before 6 months (WHO/AAP)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 7.5
+    }
+   ],
+   "message": "Before about 6 months, breast milk or iron-fortified formula is the only food a baby needs; this plan is milk feeds only. Totals: about 525 kcal of a 534 kcal target, 7.5 g protein of 9.9 g, and 0.2 mg iron of 0.3 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "4–6 months",
+     "calories": 534,
+     "formula": "EER = (89 × 6.5 kg − 100) + 56",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "0–6 months",
+     "iron_mg": 0.3,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "0–6 months",
+     "grams_per_kg": 1.52,
+     "protein_g": 9.9,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 240.0,
+    "calories": 525.0,
+    "carbohydrate_g": 52.5,
+    "fat_g": 31.5,
+    "iron_mg": 0.2,
+    "protein_g": 7.5
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 0,
+   "sex": "male",
+   "weight_kg": 3.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 1.0,
+    "iron": 0.67,
+    "protein": 1.04
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cheddar_cheese_grated",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cottage_cheese",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "egg_scrambled",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chicken_breast_shredded",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "turkey_ground_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "beef_ground_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "pork_tenderloin_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "salmon_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "cod_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "sardines_canned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "shrimp_cooked_chopped",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "lentils_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chickpeas_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hummus",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "black_beans_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "tofu_firm",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "edamame_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "oatmeal_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "brown_rice_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_wheat_bread",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_wheat_pasta_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "quinoa_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "sweet_potato_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "carrot_cooked_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peas_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "spinach_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "broccoli_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "butternut_squash_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "green_beans_cooked_chopped",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "avocado",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "banana_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "apple_cooked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "pear_ripe_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "strawberries_sliced",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "blueberries_mashed",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "mango",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peach_ripe",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "chia_seeds_soaked",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "tahini",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "olive_oil",
+     "reasons": [
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 6 months"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: sole food before 6 months (WHO/AAP)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 5.5
+    }
+   ],
+   "message": "Before about 6 months, breast milk or iron-fortified formula is the only food a baby needs; this plan is milk feeds only. Totals: about 385 kcal of a 386 kcal target, 5.5 g protein of 5.3 g, and 0.2 mg iron of 0.3 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "0–3 months",
+     "calories": 386,
+     "formula": "EER = (89 × 3.5 kg − 100) + 175",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "0–6 months",
+     "iron_mg": 0.3,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "0–6 months",
+     "grams_per_kg": 1.52,
+     "protein_g": 5.3,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 176.0,
+    "calories": 385.0,
+    "carbohydrate_g": 38.5,
+    "fat_g": 23.1,
+    "iron_mg": 0.2,
+    "protein_g": 5.5
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 6,
+   "sex": "female",
+   "weight_kg": 7.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 1.04,
+    "iron": 30.0,
+    "protein": 1.68
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: about half of daily energy at 6–11 months (WHO)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 4.5
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "lunch",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 6 foods chosen for iron and variety. Totals: about 649 kcal of a 624 kcal target, 19.2 g protein of 11.4 g, and 9.0 mg iron of 0.3 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "4–6 months",
+     "calories": 624,
+     "formula": "EER = (89 × 7.5 kg − 100) + 56",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "0–6 months",
+     "iron_mg": 0.3,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "0–6 months",
+     "grams_per_kg": 1.52,
+     "protein_g": 11.4,
+     "reference_type": "AI",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 487.0,
+    "calories": 649.0,
+    "carbohydrate_g": 66.3,
+    "fat_g": 36.3,
+    "iron_mg": 9.0,
+    "protein_g": 19.2
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 8,
+   "sex": "female",
+   "weight_kg": 8.0
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.96,
+    "iron": 1.23,
+    "protein": 1.8
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: about half of daily energy at 6–11 months (WHO)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 4.5
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 5 foods chosen for iron and variety. Totals: about 611 kcal of a 634 kcal target, 17.3 g protein of 9.6 g, and 13.5 mg iron of 11.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "7–12 months",
+     "calories": 634,
+     "formula": "EER = (89 × 8 kg − 100) + 22",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "7–12 months",
+     "iron_mg": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "7–12 months",
+     "grams_per_kg": 1.2,
+     "protein_g": 9.6,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 532.0,
+    "calories": 611.0,
+    "carbohydrate_g": 76.3,
+    "fat_g": 27.9,
+    "iron_mg": 13.5,
+    "protein_g": 17.3
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 11,
+   "sex": "male",
+   "weight_kg": 9.2
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.92,
+    "iron": 1.23,
+    "protein": 1.66
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: about half of daily energy at 6–11 months (WHO)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 5.5
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 5 foods chosen for iron and variety. Totals: about 681 kcal of a 741 kcal target, 18.3 g protein of 11.0 g, and 13.5 mg iron of 11.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "7–12 months",
+     "calories": 741,
+     "formula": "EER = (89 × 9.2 kg − 100) + 22",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "7–12 months",
+     "iron_mg": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "7–12 months",
+     "grams_per_kg": 1.2,
+     "protein_g": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 564.0,
+    "calories": 681.0,
+    "carbohydrate_g": 83.3,
+    "fat_g": 32.1,
+    "iron_mg": 13.5,
+    "protein_g": 18.3
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 15,
+   "sex": "female",
+   "weight_kg": 10.2
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.97,
+    "iron": 1.69,
+    "protein": 2.93
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "lunch",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "meal": "dinner",
+     "name": "Peanut butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "tahini",
+     "meal": "snack",
+     "name": "Tahini (sesame paste), thinned",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 807 kcal of a 828 kcal target, 31.3 g protein of 10.7 g, and 11.8 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "13–35 months",
+     "calories": 828,
+     "formula": "EER = (89 × 10.2 kg − 100) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 10.7,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 531.0,
+    "calories": 807.0,
+    "carbohydrate_g": 50.8,
+    "fat_g": 59.3,
+    "iron_mg": 11.8,
+    "protein_g": 31.3
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 18,
+   "allergies": [
+    "peanut"
+   ],
+   "sex": "female",
+   "weight_kg": 10.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.93,
+    "iron": 1.99,
+    "protein": 2.83
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "peanut_butter_thinned",
+     "reasons": [
+      "contains recorded allergen: peanut"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "contains recorded allergen: peanut"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "lunch",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "tahini",
+     "meal": "dinner",
+     "name": "Tahini (sesame paste), thinned",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "chickpeas_mashed",
+     "meal": "snack",
+     "name": "Chickpeas, cooked and mashed",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 790 kcal of a 854 kcal target, 31.1 g protein of 11.0 g, and 13.9 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "13–35 months",
+     "calories": 854,
+     "formula": "EER = (89 × 10.5 kg − 100) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 606.0,
+    "calories": 790.0,
+    "carbohydrate_g": 60.9,
+    "fat_g": 52.7,
+    "iron_mg": 13.9,
+    "protein_g": 31.1
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 20,
+   "diet_preference": "vegan",
+   "sex": "male",
+   "weight_kg": 11.0
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.9,
+    "iron": 1.81,
+    "protein": 2.78
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "cheddar_cheese_grated",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "cottage_cheese",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "egg_scrambled",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "chicken_breast_shredded",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "turkey_ground_cooked",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "beef_ground_cooked",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "pork_tenderloin_cooked",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "salmon_cooked",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "cod_cooked",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "sardines_canned",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "shrimp_cooked_chopped",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "not part of a vegan diet"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "black_beans_mashed",
+     "meal": "breakfast",
+     "name": "Black beans, cooked and mashed",
+     "reason": "fills protein shortfall",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "lunch",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "meal": "dinner",
+     "name": "Peanut butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "tahini",
+     "meal": "snack",
+     "name": "Tahini (sesame paste), thinned",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 812 kcal of a 899 kcal target, 32.2 g protein of 11.6 g, and 12.7 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "13–35 months",
+     "calories": 899,
+     "formula": "EER = (89 × 11 kg − 100) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 11.6,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 424.0,
+    "calories": 812.0,
+    "carbohydrate_g": 57.9,
+    "fat_g": 56.3,
+    "iron_mg": 12.7,
+    "protein_g": 32.2
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 24,
+   "sex": "female",
+   "weight_kg": 12.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.9,
+    "iron": 1.64,
+    "protein": 2.9
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "quinoa_cooked",
+     "meal": "lunch",
+     "name": "Quinoa, cooked",
+     "reason": "fills protein shortfall",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "dinner",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "meal": "snack",
+     "name": "Peanut butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 933 kcal of a 1032 kcal target, 38.0 g protein of 13.1 g, and 11.5 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "13–35 months",
+     "calories": 1032,
+     "formula": "EER = (89 × 12.5 kg − 100) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 13.1,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 603.0,
+    "calories": 933.0,
+    "carbohydrate_g": 66.3,
+    "fat_g": 63.5,
+    "iron_mg": 11.5,
+    "protein_g": 38.0
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 30,
+   "sex": "male",
+   "weight_kg": 13.0
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.91,
+    "iron": 1.66,
+    "protein": 3.04
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "hummus",
+     "meal": "lunch",
+     "name": "Hummus",
+     "reason": "fills protein shortfall",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "dinner",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "meal": "snack",
+     "name": "Peanut butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 984 kcal of a 1077 kcal target, 41.7 g protein of 13.7 g, and 11.6 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "13–35 months",
+     "calories": 1077,
+     "formula": "EER = (89 × 13 kg − 100) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 13.7,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 727.0,
+    "calories": 984.0,
+    "carbohydrate_g": 64.7,
+    "fat_g": 68.7,
+    "iron_mg": 11.6,
+    "protein_g": 41.7
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 36,
+   "height_cm": 96.0,
+   "sex": "female",
+   "weight_kg": 14.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.94,
+    "iron": 2.69,
+    "protein": 3.55
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "black_beans_mashed",
+     "meal": "lunch",
+     "name": "Black beans, cooked and mashed",
+     "reason": "fills protein shortfall",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "dinner",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "meal": "snack",
+     "name": "Peanut butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 1192 kcal of a 1271 kcal target, 54.0 g protein of 15.2 g, and 18.8 mg iron of 7.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": "low_active",
+     "band": "3–8 years",
+     "calories": 1271,
+     "formula": "EER = 135.3 − 30.8 × 3.00 y + 1.16 × (10.0 × 14.5 kg + 934 × 0.96 m) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "1–3 years",
+     "iron_mg": 7.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "1–3 years",
+     "grams_per_kg": 1.05,
+     "protein_g": 15.2,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 858.0,
+    "calories": 1192.0,
+    "carbohydrate_g": 108.8,
+    "fat_g": 67.2,
+    "iron_mg": 18.8,
+    "protein_g": 54.0
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 48,
+   "height_cm": 102.0,
+   "sex": "male",
+   "weight_kg": 16.0
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.93,
+    "iron": 2.86,
+    "protein": 4.05
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "black_beans_mashed",
+     "meal": "lunch",
+     "name": "Black beans, cooked and mashed",
+     "reason": "fills protein shortfall",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "hummus",
+     "meal": "dinner",
+     "name": "Hummus",
+     "reason": "fills iron shortfall",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "snack",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 1284 kcal of a 1384 kcal target, 61.5 g protein of 15.2 g, and 28.6 mg iron of 10.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": "low_active",
+     "band": "3–8 years",
+     "calories": 1384,
+     "formula": "EER = 88.5 − 61.9 × 4.00 y + 1.13 × (26.7 × 16 kg + 903 × 1.02 m) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "4–8 years",
+     "iron_mg": 10.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "4–8 years",
+     "grams_per_kg": 0.95,
+     "protein_g": 15.2,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 992.0,
+    "calories": 1284.0,
+    "carbohydrate_g": 147.1,
+    "fat_g": 57.2,
+    "iron_mg": 28.6,
+    "protein_g": 61.5
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 60,
+   "height_cm": 108.0,
+   "sex": "female",
+   "weight_kg": 18.0
+  },
+  "result": {
+   "coverage": {
+    "calories": 0.92,
+    "iron": 2.56,
+    "protein": 3.4
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "meal": "breakfast",
+     "name": "Plain whole-milk yoghurt",
+     "reason": "dairy; highest iron among eligible dairy foods",
+     "serving_size": 100.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "egg_scrambled",
+     "meal": "lunch",
+     "name": "Egg, cooked until firm and mashed",
+     "reason": "fills protein shortfall",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "tahini",
+     "meal": "dinner",
+     "name": "Tahini (sesame paste), thinned",
+     "reason": "fills iron shortfall",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "snack",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 3.0
+    }
+   ],
+   "message": "A one-day plan with 8 foods chosen for iron and variety. Totals: about 1273 kcal of a 1380 kcal target, 58.2 g protein of 17.1 g, and 25.6 mg iron of 10.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": "low_active",
+     "band": "3–8 years",
+     "calories": 1380,
+     "formula": "EER = 135.3 − 30.8 × 5.00 y + 1.16 × (10.0 × 18 kg + 934 × 1.08 m) + 20",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "4–8 years",
+     "iron_mg": 10.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "4–8 years",
+     "grams_per_kg": 0.95,
+     "protein_g": 17.1,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 1162.0,
+    "calories": 1273.0,
+    "carbohydrate_g": 87.6,
+    "fat_g": 83.0,
+    "iron_mg": 25.6,
+    "protein_g": 58.2
+   }
+  }
+ },
+ {
+  "request": {
+   "age_months": 8,
+   "allergies": [
+    "peanut",
+    "milk"
+   ],
+   "diet_preference": "vegetarian",
+   "sex": "female",
+   "weight_kg": 8.5
+  },
+  "result": {
+   "coverage": {
+    "calories": 1.01,
+    "iron": 1.26,
+    "protein": 1.74
+   },
+   "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+   "exclusions": [
+    {
+     "food_id": "chicken_breast_shredded",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "turkey_ground_cooked",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "beef_ground_cooked",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "pork_tenderloin_cooked",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "salmon_cooked",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "cod_cooked",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "sardines_canned",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "shrimp_cooked_chopped",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "hot_dog",
+     "reasons": [
+      "not part of a vegetarian diet"
+     ]
+    },
+    {
+     "food_id": "infant_formula_iron_fortified",
+     "reasons": [
+      "contains recorded allergen: milk"
+     ]
+    },
+    {
+     "food_id": "whole_cows_milk",
+     "reasons": [
+      "contains recorded allergen: milk",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "plain_whole_yogurt",
+     "reasons": [
+      "contains recorded allergen: milk"
+     ]
+    },
+    {
+     "food_id": "cheddar_cheese_grated",
+     "reasons": [
+      "contains recorded allergen: milk"
+     ]
+    },
+    {
+     "food_id": "cottage_cheese",
+     "reasons": [
+      "contains recorded allergen: milk"
+     ]
+    },
+    {
+     "food_id": "peanut_butter_thinned",
+     "reasons": [
+      "contains recorded allergen: peanut"
+     ]
+    },
+    {
+     "food_id": "honey",
+     "reasons": [
+      "contains honey; not safe under 12 months (infant botulism)",
+      "not introduced before 12 months"
+     ]
+    },
+    {
+     "food_id": "whole_grapes",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "whole_nuts",
+     "reasons": [
+      "recognized choking hazard for children under 48 months",
+      "contains recorded allergen: peanut"
+     ]
+    },
+    {
+     "food_id": "popcorn",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "hard_candy",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_carrot_sticks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_apple_chunks",
+     "reasons": [
+      "recognized choking hazard for children under 48 months"
+     ]
+    },
+    {
+     "food_id": "raw_milk_soft_cheese",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "contains recorded allergen: milk"
+     ]
+    },
+    {
+     "food_id": "unpasteurized_juice",
+     "reasons": [
+      "commonly served unpasteurized; not safe at any age",
+      "not introduced before 12 months"
+     ]
+    }
+   ],
+   "food_table_version": "2026-08-26.1",
+   "items": [
+    {
+     "food_id": "breast_milk",
+     "meal": "milk feed",
+     "name": "Breast milk",
+     "reason": "milk feed: about half of daily energy at 6–11 months (WHO)",
+     "serving_size": 100.0,
+     "serving_unit": "ml",
+     "servings": 5.0
+    },
+    {
+     "food_id": "infant_cereal_iron_fortified",
+     "meal": "breakfast",
+     "name": "Iron-fortified infant oat cereal, dry",
+     "reason": "grain; highest iron among eligible grain foods",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 2.0
+    },
+    {
+     "food_id": "spinach_cooked",
+     "meal": "lunch",
+     "name": "Spinach, cooked and finely chopped",
+     "reason": "vegetable; highest iron among eligible vegetable foods",
+     "serving_size": 40.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "avocado",
+     "meal": "dinner",
+     "name": "Avocado, mashed",
+     "reason": "fruit; highest iron among eligible fruit foods",
+     "serving_size": 30.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "lentils_cooked",
+     "meal": "snack",
+     "name": "Lentils, cooked soft",
+     "reason": "protein food; highest iron among eligible protein food foods",
+     "serving_size": 50.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    },
+    {
+     "food_id": "almond_butter_thinned",
+     "meal": "breakfast",
+     "name": "Almond butter, thinned or spread thin",
+     "reason": "fills remaining energy; targets already met",
+     "serving_size": 15.0,
+     "serving_unit": "g",
+     "servings": 1.0
+    }
+   ],
+   "message": "A one-day plan with 5 foods chosen for iron and variety. Totals: about 683 kcal of a 678 kcal target, 17.7 g protein of 10.2 g, and 13.9 mg iron of 11.0 mg.",
+   "note_extraction": {
+    "detail": "",
+    "override": null,
+    "status": "not_present"
+   },
+   "outcome": "plan",
+   "override": {
+    "applied_value": null,
+    "conflict": false,
+    "detail": "",
+    "general_value": null,
+    "nutrient": null,
+    "source": "general_target"
+   },
+   "targets": {
+    "calories": {
+     "activity_level": null,
+     "band": "7–12 months",
+     "calories": 678,
+     "formula": "EER = (89 × 8.5 kg − 100) + 22",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    },
+    "iron": {
+     "band": "7–12 months",
+     "iron_mg": 11.0,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
+    },
+    "protein": {
+     "band": "7–12 months",
+     "grams_per_kg": 1.2,
+     "protein_g": 10.2,
+     "reference_type": "RDA",
+     "source": "Institute of Medicine, Dietary Reference Intakes for Energy, Carbohydrate, Fiber, Fat, Fatty Acids, Cholesterol, Protein, and Amino Acids (2005), via NIH ODS tables"
+    }
+   },
+   "totals": {
+    "calcium_mg": 482.0,
+    "calories": 683.0,
+    "carbohydrate_g": 78.1,
+    "fat_g": 35.6,
+    "iron_mg": 13.9,
+    "protein_g": 17.7
+   }
+  }
+ }
+]

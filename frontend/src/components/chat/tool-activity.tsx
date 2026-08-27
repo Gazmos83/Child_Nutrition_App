@@ -4,7 +4,11 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ToolActivity as ToolActivityData } from "@/lib/api-types";
-import { FROM_PROFILE, HIDE_DETAILS, SHOW_DETAILS, TOOL_CHIP_FAILED, TOOLS_USED, toolLabel } from "@/lib/copy";
+import { FROM_LOG, FROM_PROFILE, HIDE_DETAILS, SHOW_DETAILS, TOOL_CHIP_FAILED, TOOLS_USED, toolLabel } from "@/lib/copy";
+
+// Arguments that came from the feeding log rather than the child's details (change 2).
+const LOG_ARGS = new Set(["entries", "logged_today", "gaps"]);
+const NEUTRAL_ARGS = new Set(["timezone"]);
 
 export function ToolActivityList({ tools }: { tools: ToolActivityData[] }) {
   if (tools.length === 0) return null;
@@ -22,6 +26,8 @@ export function ToolActivityList({ tools }: { tools: ToolActivityData[] }) {
 function ToolChip({ tool }: { tool: ToolActivityData }) {
   const [open, setOpen] = useState(false);
   const failed = tool.status === "error";
+  const fromLog = tool.used_context.some((f) => LOG_ARGS.has(f));
+  const fromProfile = tool.used_context.some((f) => !LOG_ARGS.has(f) && !NEUTRAL_ARGS.has(f));
   return (
     <li className="max-w-full" data-testid="tool-chip" data-status={tool.status}>
       <div className="flex flex-wrap items-center gap-1">
@@ -29,9 +35,14 @@ function ToolChip({ tool }: { tool: ToolActivityData }) {
           <span aria-hidden="true">{failed ? "✗" : "✓"}</span>
           <span>{failed ? `${TOOL_CHIP_FAILED} — ${toolLabel(tool.name)}` : toolLabel(tool.name)}</span>
         </Badge>
-        {tool.used_context.length > 0 && (
+        {fromProfile && (
           <Badge variant="secondary" title={tool.used_context.join(", ")}>
             {FROM_PROFILE}
+          </Badge>
+        )}
+        {fromLog && (
+          <Badge variant="secondary" title={tool.used_context.join(", ")}>
+            {FROM_LOG}
           </Badge>
         )}
         <Button variant="link" size="sm" className="h-auto px-1 py-0 text-xs" onClick={() => setOpen((o) => !o)}>

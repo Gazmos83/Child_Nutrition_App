@@ -2,7 +2,8 @@
 
 Pipeline, in order and without exception:
 
-    validated request -> DRI targets -> doctor's-note override -> diet-preference filter
+    validated request -> DRI targets -> doctor's-note override (``resolve_targets``)
+    -> diet-preference filter
     -> infant-safety filter -> deterministic composition -> safety re-check -> totals
     -> disclaimer -> audit log
 
@@ -19,19 +20,17 @@ from dataclasses import dataclass
 
 from langchain_core.language_models import BaseChatModel
 
+from backend.chat import copy as chat_copy
 from backend.models.enums import Allergen, DietPreference
 from backend.nutrition.diet import filter_by_diet
+from backend.nutrition.feeding import normalise_entries, sum_totals
 from backend.nutrition.foods import FoodCategory, FoodItem, LoadedFoodTable, get_food_table
 from backend.nutrition.safety import assert_plan_safe, filter_foods
-from backend.nutrition.targets import (
-    calculate_calorie_target,
-    calculate_protein_target,
-    iron_target,
-)
 from backend.rag.prompts import DISCLAIMER
 from backend.schemas.tools import (
-    CalorieTargetInput,
+    Adjustment,
     Exclusion,
+    GapNutrient,
     MealItem,
     MealNutritionInput,
     MealPlanRequest,
@@ -39,14 +38,14 @@ from backend.schemas.tools import (
     MealSlot,
     NoteExtraction,
     NutrientCoverage,
+    NutrientGapReport,
     NutrientTargets,
     NutrientTotals,
     OverrideOutcome,
     PlannedItem,
-    ProteinTargetInput,
 )
-from backend.tools.doctors_note import apply_override, extract_override
 from backend.tools.nutrient_tools import calculate_meal_nutrition
+from backend.tools.targets_resolution import resolve_targets
 
 logger = logging.getLogger(__name__)
 audit_logger = logging.getLogger("backend.tools.audit")
@@ -61,6 +60,12 @@ MILK_ONLY_UNTIL_MONTHS = 6  # WHO/AAP: exclusive milk feeding to about 6 months
 MILK_ANCHOR_UNTIL_MONTHS = 12  # DGA: human milk or formula is the drink under 12 months
 MILK_SHARE_6_TO_11 = 0.5  # WHO: milk remains a major energy source through 6-23 months
 IRON_UL_MG = 40.0  # DRI tolerable upper intake level for iron, 0-13 years
+
+# Change 2 (feeding log; design Decision 7). When today's logged intake leaves less than
+# this share of the calorie target, there is nothing left to plan. Only a gap flagged at
+# these confidences may steer composition; ``low`` is reported, never acted on.
+TARGETS_MET_SHARE = 0.10
+PRIORITY_CONFIDENCE = frozenset({"medium", "high"})
 
 # WHO recommends breastfeeding; when both milk feeds are eligible the plan names breast
 # milk and a parent using formula swaps it (Day 5 UI). Formula stays the fallback.
@@ -119,24 +124,6 @@ class _Draft:
         return len(self.servings)
 
 
-def _general_targets(request: MealPlanRequest) -> NutrientTargets:
-    return NutrientTargets(
-        calories=calculate_calorie_target(
-            CalorieTargetInput(
-                age_months=request.age_months,
-                weight_kg=request.weight_kg,
-                sex=request.sex,
-                height_cm=request.height_cm,
-                activity_level=request.activity_level,
-            )
-        ),
-        protein=calculate_protein_target(
-            ProteinTargetInput(age_months=request.age_months, weight_kg=request.weight_kg)
-        ),
-        iron=iron_target(request.age_months),
-    )
-
-
 def _composable(food: FoodItem) -> bool:
     """Planner preference, distinct from the safety filter: never *recommend* a sweetener
     (DGA: avoid added sugars under 2, limit after) or a food on the choking-hazard list,
@@ -144,9 +131,15 @@ def _composable(food: FoodItem) -> bool:
     return not food.choking_hazard and food.category is not FoodCategory.SWEETENER
 
 
-def _pick(candidates: Iterable[FoodItem]) -> FoodItem | None:
-    """Highest iron per serving; ties break on the lowest id, so choice is deterministic."""
-    ranked = sorted(candidates, key=lambda f: (-f.iron_mg, f.id))
+def _density_field(priority: GapNutrient | None) -> str:
+    return "protein_g" if priority == "protein" else "iron_mg"
+
+
+def _pick(candidates: Iterable[FoodItem], priority: GapNutrient | None = None) -> FoodItem | None:
+    """Highest iron per serving -- or the priority nutrient's, when the log flagged one.
+    Ties break on the lowest id, so choice is deterministic."""
+    field = _density_field(priority)
+    ranked = sorted(candidates, key=lambda f: (-getattr(f, field), f.id))
     return ranked[0] if ranked else None
 
 
@@ -154,8 +147,14 @@ def _half_servings(value: float) -> float:
     return max(0.5, round(value * 2) / 2)
 
 
-def _compose(eligible: list[FoodItem], targets: NutrientTargets, age_months: int) -> _Draft:
+def _compose(
+    eligible: list[FoodItem],
+    targets: NutrientTargets,
+    age_months: int,
+    priority: GapNutrient | None = None,
+) -> _Draft:
     draft = _Draft(servings={}, foods={}, reasons={})
+    ranked_by = "protein" if priority == "protein" else "iron"
     calorie_target = float(targets.calories.calories)
     ceiling = CALORIE_CEILING * calorie_target
 
@@ -178,17 +177,18 @@ def _compose(eligible: list[FoodItem], targets: NutrientTargets, age_months: int
     if age_months < MILK_ONLY_UNTIL_MONTHS:
         return draft  # No solids before 6 months, whatever the table says.
 
-    # 2. Category coverage: one serving from each group, chosen for iron.
+    # 2. Category coverage: one serving from each group, chosen for iron (or the priority).
     for label, categories in COVERAGE_GROUPS:
         if len(draft) >= MAX_ITEMS:
             break
-        food = _pick(f for f in solids if f.category in categories)
+        food = _pick((f for f in solids if f.category in categories), priority)
         if food is None or draft.calories + food.calories > ceiling:
             continue
-        draft.add(food, 1.0, f"{label}; highest iron among eligible {label} foods")
+        draft.add(food, 1.0, f"{label}; highest {ranked_by} among eligible {label} foods")
 
     # 3. Fill toward the calorie floor. While a protein or iron shortfall remains, close the
-    #    larger one; once both targets are met, add calorie-dense foods not yet in the plan
+    #    larger one -- or the priority nutrient's, when the log flagged one and it is still
+    #    short; once both targets are met, add calorie-dense foods not yet in the plan
     #    (variety) rather than piling on more iron. No serving may push iron past the DRI
     #    tolerable upper intake level.
     protein_target = targets.protein.protein_g
@@ -209,6 +209,12 @@ def _compose(eligible: list[FoodItem], targets: NutrientTargets, age_months: int
         if iron_gap == 0 and protein_gap == 0:
             food = sorted(candidates, key=lambda f: (f.id in draft.servings, -f.calories, f.id))[0]
             reason = "fills remaining energy; targets already met"
+        elif priority == "protein" and protein_gap > 0:
+            food = _best_fit(candidates, protein_target - draft.protein_g, lambda f: f.protein_g)
+            reason = "fills protein shortfall (flagged by the feeding log)"
+        elif priority == "iron" and iron_gap > 0:
+            food = _best_fit(candidates, iron_target_mg - draft.iron_mg, lambda f: f.iron_mg)
+            reason = "fills iron shortfall (flagged by the feeding log)"
         elif iron_gap >= protein_gap:
             food = _best_fit(candidates, iron_target_mg - draft.iron_mg, lambda f: f.iron_mg)
             reason = "fills iron shortfall"
@@ -235,6 +241,49 @@ def _best_fit(candidates: list[FoodItem], need: float, contrib) -> FoodItem:
 
 def _gap(current: float, target: float) -> float:
     return 0.0 if target <= 0 else max(0.0, (target - current) / target)
+
+
+def _composition_targets(targets: NutrientTargets, already: NutrientTotals) -> NutrientTargets:
+    """Full-day targets minus what was already eaten, floored at zero (design Decision 7)."""
+    return targets.model_copy(
+        update={
+            "calories": targets.calories.model_copy(
+                update={"calories": max(0, round(targets.calories.calories - already.calories))}
+            ),
+            "protein": targets.protein.model_copy(
+                update={
+                    "protein_g": round(max(0.0, targets.protein.protein_g - already.protein_g), 1)
+                }
+            ),
+            "iron": targets.iron.model_copy(
+                update={"iron_mg": round(max(0.0, targets.iron.iron_mg - already.iron_mg), 1)}
+            ),
+        }
+    )
+
+
+def _priority(gaps: NutrientGapReport | None) -> tuple[GapNutrient | None, Adjustment | None]:
+    """The nutrient composition should favour, if the log flagged one with enough confidence.
+
+    Only protein or iron can steer (a calorie gap is already what step 3 fills); a ``low``
+    report is informational; targets are never touched here.
+    """
+    if gaps is None or gaps.status != "ok" or gaps.confidence not in PRIORITY_CONFIDENCE:
+        return None, None
+    for gap in gaps.gaps:
+        if gap.flag == "below" and gap.nutrient in ("protein", "iron"):
+            return gap.nutrient, Adjustment(
+                nutrient=gap.nutrient,
+                action="prioritised",
+                confidence=gaps.confidence,
+                window_days=gaps.window_days,
+                detail=(
+                    f"{gaps.window_days}-day average {gap.average:g} {gap.unit} against a "
+                    f"{gap.target:g} {gap.unit} target; foods ranked by {gap.nutrient} per "
+                    "serving, targets unchanged"
+                ),
+            )
+    return None, None
 
 
 def _items(draft: _Draft) -> list[PlannedItem]:
@@ -277,6 +326,7 @@ def _message(
     items: list[PlannedItem],
     totals: NutrientTotals,
     targets: NutrientTargets,
+    already: NutrientTotals | None = None,
 ) -> str:
     solids = [i for i in items if i.meal != "milk feed"]
     if request.age_months < MILK_ONLY_UNTIL_MONTHS:
@@ -288,10 +338,15 @@ def _message(
         lead = "Only milk feeds could be included: no eligible solid foods remained."
     else:
         lead = f"A one-day plan with {len(solids)} foods chosen for iron and variety."
+    rest = (
+        f" This covers the rest of the day after {already.calories:.0f} kcal already logged."
+        if already is not None
+        else ""
+    )
     return (
         f"{lead} Totals: about {totals.calories:.0f} kcal of a {targets.calories.calories} kcal "
         f"target, {totals.protein_g:.1f} g protein of {targets.protein.protein_g:.1f} g, and "
-        f"{totals.iron_mg:.1f} mg iron of {targets.iron.iron_mg:.1f} mg."
+        f"{totals.iron_mg:.1f} mg iron of {targets.iron.iron_mg:.1f} mg.{rest}"
     )
 
 
@@ -305,7 +360,10 @@ def _audit(
     items: list[PlannedItem],
     totals: NutrientTotals,
     table_version: str,
+    already_logged: NutrientTotals | None = None,
+    adjustments: list[Adjustment] | None = None,
 ) -> None:
+    gaps = request.gaps
     record = {
         "event": "meal_plan",
         "outcome": outcome,
@@ -342,6 +400,35 @@ def _audit(
         "items": [{"food_id": i.food_id, "servings": i.servings} for i in items],
         "totals": totals.model_dump(mode="json"),
         "food_table_version": table_version,
+        # Change 2 (hard rule 8, §9b): what from the feeding log informed this plan.
+        "gaps": (
+            {
+                "status": gaps.status,
+                "confidence": gaps.confidence,
+                "days_logged": gaps.days_logged,
+                "window_days": gaps.window_days,
+                "flags": {g.nutrient: g.flag for g in gaps.gaps},
+            }
+            if gaps is not None
+            else None
+        ),
+        "logged_today": (
+            {
+                "entries": [
+                    {
+                        "id": e.id,
+                        "fed_at": e.fed_at.isoformat(),
+                        "feeding_type": e.feeding_type.value,
+                        "food_id": e.food_id,
+                    }
+                    for e in request.logged_today
+                ],
+                "already_logged": already_logged.model_dump(mode="json"),
+            }
+            if already_logged is not None
+            else None
+        ),
+        "adjustments": [a.model_dump(mode="json") for a in adjustments or []],
         "rules": [
             "no_honey_under_12_months",
             "no_choking_hazard_under_4_years",
@@ -370,9 +457,18 @@ async def generate_meal_plan(
     allergens: frozenset[Allergen] = request.allergies
     preference: DietPreference = request.diet_preference
 
-    general = _general_targets(request)
-    extraction = await extract_override(request.doctors_note, chat_model)
-    targets, override = apply_override(general, extraction.override)
+    targets, extraction, override = await resolve_targets(request, chat_model)
+
+    # Change 2: the log may narrow what is left to cover and which nutrient to favour.
+    # Neither touches ``targets`` -- the day's targets stay the reference (Decision 7).
+    already_logged: NutrientTotals | None = None
+    composition_targets = targets
+    if request.logged_today:
+        logged = normalise_entries(request.logged_today, table)
+        already_logged = sum_totals(e.nutrients for e in logged)
+        composition_targets = _composition_targets(targets, already_logged)
+    priority, adjustment = _priority(request.gaps)
+    adjustments = [adjustment] if adjustment else []
 
     diet_ok, diet_excluded = filter_by_diet(table.foods, preference)
     safe, safety_excluded = filter_foods(diet_ok, age, allergens)
@@ -381,7 +477,43 @@ async def generate_meal_plan(
         for f in diet_excluded
     ] + [Exclusion(food_id=e.food.id, reasons=e.reasons) for e in safety_excluded]
 
-    draft = _compose(safe, targets, age)
+    zero = NutrientTotals(
+        calories=0, protein_g=0, fat_g=0, carbohydrate_g=0, iron_mg=0, calcium_mg=0
+    )
+    if (
+        already_logged is not None
+        and composition_targets.calories.calories < TARGETS_MET_SHARE * targets.calories.calories
+    ):
+        _audit(
+            request,
+            "targets_met",
+            targets,
+            extraction,
+            override,
+            exclusions,
+            [],
+            zero,
+            table.version,
+            already_logged,
+            adjustments,
+        )
+        return MealPlanResult(
+            outcome="targets_met",
+            items=[],
+            totals=zero,
+            targets=targets,
+            coverage=_coverage(zero, composition_targets),
+            note_extraction=extraction,
+            override=override,
+            exclusions=exclusions,
+            message=chat_copy.TARGETS_MET_MESSAGE,
+            disclaimer=DISCLAIMER,
+            food_table_version=table.version,
+            adjustments=adjustments,
+            already_logged=already_logged,
+        )
+
+    draft = _compose(safe, composition_targets, age, priority)
     items = _items(draft)
 
     # Second line of defence (hard rule 4): the finished plan is re-checked, unconditionally.
@@ -396,11 +528,9 @@ async def generate_meal_plan(
         )
         totals = nutrition.totals
         outcome = "plan"
-        message = _message(request, items, totals, targets)
+        message = _message(request, items, totals, composition_targets, already_logged)
     else:
-        totals = NutrientTotals(
-            calories=0, protein_g=0, fat_g=0, carbohydrate_g=0, iron_mg=0, calcium_mg=0
-        )
+        totals = zero
         outcome = "no_safe_plan"
         message = NO_SAFE_PLAN_MESSAGE
         logger.warning(
@@ -412,7 +542,17 @@ async def generate_meal_plan(
         )
 
     _audit(
-        request, outcome, targets, extraction, override, exclusions, items, totals, table.version
+        request,
+        outcome,
+        targets,
+        extraction,
+        override,
+        exclusions,
+        items,
+        totals,
+        table.version,
+        already_logged,
+        adjustments,
     )
 
     return MealPlanResult(
@@ -420,11 +560,13 @@ async def generate_meal_plan(
         items=items,
         totals=totals,
         targets=targets,
-        coverage=_coverage(totals, targets),
+        coverage=_coverage(totals, composition_targets),
         note_extraction=extraction,
         override=override,
         exclusions=exclusions,
         message=message,
         disclaimer=DISCLAIMER,
         food_table_version=table.version,
+        adjustments=adjustments,
+        already_logged=already_logged,
     )

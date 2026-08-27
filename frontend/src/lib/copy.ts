@@ -6,7 +6,7 @@
 // never the child. Components import from here; `copy.test.ts` snapshots the module and
 // fails on long string literals elsewhere.
 
-import type { OverridableNutrient } from "./api-types";
+import type { GapConfidence, GapFlag, OverridableNutrient } from "./api-types";
 
 // -- app ----------------------------------------------------------------------------------
 
@@ -59,6 +59,7 @@ export const RETRY = "Retry";
 
 export const TOOL_CHIP_FAILED = "Didn't work out";
 export const FROM_PROFILE = "from your child's details";
+export const FROM_LOG = "from your feeding log";
 export const TOOLS_USED = "What we used";
 export const SHOW_DETAILS = "Show details";
 export const HIDE_DETAILS = "Hide details";
@@ -116,6 +117,10 @@ export const TOOL_LABELS: Record<string, string> = {
   calculate_meal_nutrition: "Meal nutrition",
   generate_meal_plan: "Meal plan",
   search_guidelines: "Guideline search",
+  log_feeding: "Feed logged",
+  get_daily_nutrition: "Today's intake",
+  get_remaining_targets: "What's left today",
+  detect_nutrient_gaps: "Recent-days check",
 };
 
 export function toolLabel(name: string): string {
@@ -157,6 +162,91 @@ export const FORM_ERROR_NOTE = "That note is a little long — 4000 characters i
 
 export const THINKING = "Working on it…";
 export const INCOMPLETE = "Incomplete";
+
+
+// -- feeding log (change 2, design Decision 12) ---------------------------------------------
+
+export const TAB_CHILD = "Child";
+export const TAB_LOG = "Feeding log";
+export const LOG_TITLE = "Feeding log";
+export const LOG_EMPTY =
+  "Nothing logged yet. Add a feed whenever you like — the more days we see, the more we can tell you";
+export const TODAY_EMPTY = "A blank slate — today's just getting started";
+export const LOG_STORED_HERE =
+  "Your log lives in this browser for now — fourteen days, then it tidies itself";
+export const FEED_LOGGED = "Logged. One more piece of the picture";
+export const TODAY_TITLE = "Today so far";
+export const LOG_ADD_TITLE = "Log a feed";
+export const LOG_TYPE_LABEL = "What";
+export const LOG_FOOD_LABEL = "Which food";
+export const LOG_QUANTITY_LABEL = "How much";
+export const LOG_TIME_LABEL = "When";
+export const LOG_ADD = "Add feed";
+export const LOG_ADDING = "Adding…";
+export const LOG_DELETE = "Remove";
+export const LOG_UNMEASURED = "unmeasured";
+export const DAY_TODAY = "Today";
+export const FORM_QUANTITY_BREASTMILK_HINT =
+  "No measure? Leave it blank — we'll count the feed and skip the maths for that day";
+export const LOG_ERROR_QUANTITY = "How much needs to be a number above 0";
+export const LOG_ERROR_FOOD = "Pick a food from the list";
+export const LOG_ERROR_TIME = "Pick a time for this feed";
+export const LOG_FOODS_UNAVAILABLE =
+  "We couldn't load the food list. Check your connection and try again";
+export const LOG_FOODS_LOADING = "Fetching the food list…";
+export const LOG_ADD_FAILED = "That feed didn't save. Check the details and try again";
+
+export function todayLine(kcal: number, protein: number, iron: number): string {
+  return `${formatNumber(kcal)} kcal · ${formatNumber(protein)} g protein · ${formatNumber(iron)} mg iron`;
+}
+
+export function quantityLine(quantity: number | null | undefined, unit: string): string {
+  return quantity == null ? LOG_UNMEASURED : `${formatNumber(quantity)} ${unit}`;
+}
+
+// -- gap report card -----------------------------------------------------------------------
+
+export const GAPS_TITLE = "How the last few days have gone";
+export const GAPS_INSUFFICIENT =
+  "We need a few full days of feeds before we can spot patterns. Keep logging and we'll say when we can see enough";
+export const GAPS_LOW = "Early days — here's a first look. Take it lightly until there's more to go on";
+export function gapsWindow(days: number, window: number): string {
+  return `Based on ${days} full ${days === 1 ? "day" : "days"}, looking at the last ${window}`;
+}
+export function partialDaysNote(n: number): string {
+  return `${n} ${n === 1 ? "day" : "days"} had a breastfeed without a measure, so we left them out — that's normal, not a problem`;
+}
+export const FLAG_LABELS: Record<GapFlag, string> = {
+  below: "A little short of target",
+  adequate: "On track",
+  above: "Above target",
+};
+export const FLAG_BELOW_NOTE =
+  "Averages, not a verdict — one lighter day is fine. This is a nudge toward foods rich in it";
+export const CONFIDENCE_LABELS: Record<GapConfidence, string> = {
+  low: "Early look",
+  medium: "Getting clearer",
+  high: "Solid picture",
+};
+export function gapLine(average: number, target: number, unit: string): string {
+  return `${formatNumber(average)} of ${formatNumber(target)} ${unit} a day, on average`;
+}
+export function targetsFrom(source: string, band: string): string {
+  return `Targets from ${source} (${band})`;
+}
+
+// -- meal plan card: what the log changed --------------------------------------------------
+
+export function adjustedFor(nutrient: string, days: number | null): string {
+  const span = days ? `over the last ${days} ${days === 1 ? "day" : "days"}` : "lately";
+  return `Adjusted for ${nutrient} — intake has been a little short ${span}, so we leaned toward ${nutrient}-rich foods`;
+}
+export function alreadyLogged(kcal: number, protein: number, iron: number): string {
+  return `Already logged today: ${todayLine(kcal, protein, iron)}`;
+}
+export const REMAINING_COVERED = "Covered for today";
+export const PLAN_TARGETS_MET_TITLE = "Today's already covered";
+export const PLAN_REST_OF_DAY = "The rest of the day";
 
 // -- helpers -------------------------------------------------------------------------------
 

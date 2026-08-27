@@ -35,6 +35,7 @@ CORPUS = [
     ),
 ]
 ANSWER = "Babies 7–12 months need 11 mg of iron a day [1]."
+BREASTFEED = {"fed_at": "2026-08-27T09:00:00Z", "feeding_type": "breastmilk"}
 
 
 def call(name: str, **args) -> dict:
@@ -81,6 +82,15 @@ class TestValidation:
             {"message": "hi", "history": [{"role": "user", "content": "q"}] * 13},
             {"message": "hi", "child": {**CHILD, "age_months": 61}},
             {"message": "hi", "child": {**CHILD, "allergies": ["gluten"]}},
+            # Change 2: the client-held feeding log is validated before any work too.
+            {"message": "hi", "feeding_log": [BREASTFEED] * 201},
+            {
+                "message": "hi",
+                "feeding_log": [
+                    {**BREASTFEED, "feeding_type": "solid", "quantity": 30, "unit": "g"}
+                ],
+            },
+            {"message": "hi", "timezone": "Mars/Olympus"},
         ],
     )
     def test_422_before_any_work(self, client: TestClient, llm, body: dict) -> None:
@@ -197,3 +207,53 @@ class TestJsonResponse:
         assert body["intent"] == "tool" and body["retrieval"] is None
         assert body["tools"][0]["name"] == "calculate_bmi"
         assert body["tools"][0]["result"]["bmi"] == 17.36
+
+
+class TestFeedingLogThroughTheApi:
+    def test_log_backed_arguments_come_from_the_request(self, client: TestClient, llm) -> None:
+        llm.responses.extend(
+            [
+                AIMessage(content="", tool_calls=[call("detect_nutrient_gaps", entries=[])]),
+                "Not enough days yet.",
+            ]
+        )
+        response = client.post(
+            "/api/chat",
+            json={
+                "message": "has she been getting enough?",
+                "child": CHILD,
+                "feeding_log": [
+                    {
+                        "fed_at": "2026-08-26T12:00:00Z",
+                        "feeding_type": "solid",
+                        "food_id": "infant_cereal_iron_fortified",
+                        "quantity": 30,
+                        "unit": "g",
+                    }
+                ],
+                "timezone": "Europe/Vilnius",
+                "stream": False,
+            },
+        )
+        assert response.status_code == 200
+        [activity] = response.json()["tools"]
+        assert activity["name"] == "detect_nutrient_gaps" and activity["status"] == "ok"
+        assert len(activity["args"]["entries"]) == 1
+        assert activity["args"]["timezone"] == "Europe/Vilnius"
+        assert {"entries", "timezone", "age_months"} <= set(activity["used_context"])
+
+    def test_no_log_still_runs_detection_over_an_empty_log(self, client: TestClient, llm) -> None:
+        llm.responses.extend(
+            [
+                AIMessage(content="", tool_calls=[call("detect_nutrient_gaps")]),
+                "Log a few days first.",
+            ]
+        )
+        response = client.post(
+            "/api/chat", json={"message": "enough iron lately?", "child": CHILD, "stream": False}
+        )
+        assert response.status_code == 200
+        [activity] = response.json()["tools"]
+        assert activity["status"] == "ok"
+        assert activity["result"]["status"] == "insufficient_data"
+        assert activity["args"]["entries"] == []

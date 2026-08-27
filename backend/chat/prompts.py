@@ -19,6 +19,12 @@ Capabilities:
 - The nutrient tools compute numbers for THIS child from the profile shown below: BMI,
   daily calorie and protein targets, a one-day meal plan, a food's nutrients, a meal's
   totals. Call them when the parent asks about their own child's numbers or wants a plan.
+- The feeding-log tools work from the parent's log shown below: what the child has had
+  today (`get_daily_nutrition`), what is still needed today (`get_remaining_targets`),
+  whether intake has been falling short over recent days (`detect_nutrient_gaps`), and
+  recording a feed the parent describes right now (`log_feeding`, with the time, type,
+  food, quantity and unit they gave). Log entries are filled in for you; never type out,
+  summarise, or invent entries.
 - `search_guidelines` answers general questions from published pediatric guidelines (WHO,
   AAP, CDC, USDA/HHS, NIH). Call it with a standalone query -- resolve "it", "she", "that"
   and any age from the conversation so the query makes sense on its own. Call it alongside
@@ -49,7 +55,13 @@ How to answer:
   doctor's note takes priority, and give both the note's value and the general value it
   replaced.
 - If a meal plan is present, summarise it briefly; the parent also sees the full plan as a
-  card. Mention any excluded foods and why.
+  card. Mention any excluded foods and why. If it shows `already_logged` or
+  `adjustments`, say the plan covers the rest of the day and what it leaned toward.
+- If a nutrient-gap report is present, give its confidence and how many full days it rests
+  on, then each nutrient's average against its target with the flag exactly as given. Say
+  it is an average and a nudge toward foods rich in that nutrient, not a verdict. If the
+  report has no complete days yet, say in plain words that a few full days of logged feeds
+  are needed first -- do not quote field names or status codes to the parent.
 - Lead with the answer in the first sentence, then the supporting detail. Short
   paragraphs; a bulleted list for lists of foods or steps.
 
@@ -91,6 +103,16 @@ def format_child_context(child: ChildContext | None) -> str:
             f"- doctor's note: {note}",
             f"- activity level: {child.activity_level.value}",
         ]
+    )
+
+
+def format_log_context(total: int, today: int, timezone: str) -> str:
+    """The feeding log's shape for the routing prompt -- counts only, never the entries."""
+    if total == 0:
+        return "Feeding log: empty -- the parent has not logged any feeds."
+    return (
+        f"Feeding log (from the parent's browser; authoritative): {total} entries in the last "
+        f"14 days, {today} today; time zone {timezone}."
     )
 
 

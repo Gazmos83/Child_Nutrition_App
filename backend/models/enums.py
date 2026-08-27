@@ -69,3 +69,18 @@ class Allergen(StrEnum):
     FISH = "fish"
     SHELLFISH = "shellfish"
     SESAME = "sesame"
+
+
+class FeedingType(StrEnum):
+    """What kind of feed a logged entry records (feeding-log spec, hard rule 2).
+
+    Closed on purpose so a logged feed can always be turned into table nutrients: milk
+    feeds map to the food table's ``milk_feed`` rows, solids name a table food, water
+    contributes nothing. The PostgreSQL mirror of this enum ships with the Day 6
+    ``feeding_log`` migration; until then entries are client-held and never stored.
+    """
+
+    BREASTMILK = "breastmilk"
+    FORMULA = "formula"
+    SOLID = "solid"
+    WATER = "water"

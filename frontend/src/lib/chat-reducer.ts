@@ -1,12 +1,14 @@
 // Pure reducer: chat stream events → the assistant message being built (design.md
 // Decision 10). The hook owns the network; this owns the shape.
 
-import type {
-  ChatSseEvent,
-  Citation,
-  Intent,
-  RetrievalMeta,
-  ToolActivity,
+import {
+  isLoggedFeeding,
+  type ChatSseEvent,
+  type Citation,
+  type Intent,
+  type LoggedFeeding,
+  type RetrievalMeta,
+  type ToolActivity,
 } from "./api-types";
 
 export type AssistantStatus = "streaming" | "done" | "error" | "interrupted";
@@ -93,6 +95,14 @@ export function reduceAssistant(
     case "failed":
       return { ...message, status: "error", error: action.message };
   }
+}
+
+/** A feed the assistant logged on the parent's behalf, to be appended to the local log. */
+export function loggedFeedingFrom(event: ChatSseEvent): LoggedFeeding | null {
+  if (event.event !== "tool" || event.data.name !== "log_feeding" || event.data.status !== "ok") {
+    return null;
+  }
+  return isLoggedFeeding(event.data.result) ? event.data.result : null;
 }
 
 /** Text the reducer should keep when a stream ends badly: everything received so far. */

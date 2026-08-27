@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development (Day 5 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, and the Next.js chat UI are implemented. The child's details are entered in the UI and travel with each request — auth and saved profiles follow on Day 6, deployment on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+> **Status:** early development (Day 5 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, and the feeding log with nutrient-gap detection (reference §9b) are implemented. The child's details and the feeding log are entered in the UI and travel with each request — auth, saved profiles, and the persisted log follow on Day 6, deployment on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -129,7 +129,7 @@ Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-ve
 
 ## Deterministic tools (Day 4)
 
-Six tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
+Ten tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
 model for a number. `backend/tools/langchain_tools.py::build_tools(chat_model)` exposes
 them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 
@@ -140,7 +140,11 @@ them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 | `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
 | `lookup_food` | one row of the food table: nutrients, allergens, safety flags, minimum age, source | `nutrition-data/foods.yaml` |
 | `calculate_meal_nutrition` | sums foods × servings; unknown ids reported, never dropped | `nutrition-data/foods.yaml` |
-| `generate_meal_plan` | targets → doctor's-note override → diet filter → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log | all of the above |
+| `generate_meal_plan` | targets → doctor's-note override → diet filter → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log; optionally steered by a gap report and today's logged feeds (below) | all of the above |
+| `log_feeding` | validates one feed (type from a closed vocabulary, table food, quantity, unit), prices it from the table, assigns an id; stores nothing until Day 6 | `nutrition-data/foods.yaml` |
+| `get_daily_nutrition` | one local day's totals from the feeding log | `nutrition-data/foods.yaml` |
+| `get_remaining_targets` | the day's targets (doctor's note honoured) minus intake, floored at zero | DRI + food table |
+| `detect_nutrient_gaps` | rolling-window intake vs. targets with confidence that grows with complete days logged | DRI + food table |
 
 `nutrition-data/foods.yaml` is a hand-curated, validated table (~55 infant/toddler foods,
 USDA FoodData Central figures per serving) carrying the "big nine" allergens and the
@@ -205,6 +209,49 @@ safety and errors).
 ```bash
 uv run pytest tests/test_chat_*.py tests/test_api_chat.py tests/test_schemas_chat.py
 pnpm -C frontend test
+```
+
+## Feeding log and nutrient gaps (Day 5, second change)
+
+Everything above produces *targets*. The feeding log captures what the child actually had
+(reference §9b): each entry is a time-zone-aware timestamp, a feeding type from the closed
+vocabulary `breastmilk | formula | solid | water`, a food from the table for solids, a
+quantity and unit. Breast milk may be logged without a quantity — direct breastfeeding has
+no measure — and such an entry contributes no nutrients and marks its day *incomplete*. An
+entry's nutrients are `quantity ÷ serving size × per-serving` from `foods.yaml`; the model
+never computes them, and the backend never trusts client-supplied figures.
+
+**The log is client-held until Day 6.** The Feeding-log tab in the side panel posts each
+feed to `POST /api/feedings` (validate, price, assign an id; nothing stored), keeps the
+result in the browser for fourteen days, and sends the entries with every `/api/chat`
+request together with the browser's IANA `timezone`. `GET /api/foods` lists the table for
+the picker. Log-backed tool arguments (`entries`, `logged_today`, `timezone`) are always
+filled from the request, never from the model. Day 6 adds the `feeding_log` table and the
+auth-scoped read/write behind the same handler.
+
+`detect_nutrient_gaps` compares logged intake with the child's targets — the same
+note-overridden targets the planner uses, so a prescribed calorie limit is never reported
+as a deficit — over a window that widens with *complete* days (at least one entry, no
+unmeasured feed) in the last fourteen days, excluding the reference day itself: 0 days →
+`insufficient_data`; 1–2 → `low` confidence, directional only; 3–6 → `medium`, three-day
+window; 7+ → `high`, seven-day window. Per nutrient (calories, protein, iron) the report
+gives the average, target, ratio, and a flag (`below` < 0.80, `above` > 1.20, else
+`adequate`), with the target's source and age band.
+
+`generate_meal_plan` accepts the report and today's entries. A `below` flag at `medium` or
+`high` confidence makes the composer favour foods dense in that nutrient — targets are
+never raised and the iron upper limit stays in force; a `low` flag changes nothing. Today's
+intake is subtracted so the plan covers the rest of the day (`already_logged` is reported),
+and when under ten percent of the calorie target remains the outcome is `targets_met`. With
+no report and no entries the plan is byte-identical to the Day 4 planner (regression-tested
+against `tests/fixtures/meal_plans_before_change_2.json`). When a plan is requested and
+the request carries a log, the chat service runs gap detection first and hands the report
+to the planner. The audit line gains the gap report, the logged entries, and the
+adjustments; gap detection emits its own `nutrient_gaps_audit` line.
+
+```bash
+uv run pytest tests/test_nutrition_feeding.py tests/test_nutrition_gaps.py \
+  tests/test_tools_feeding_log.py tests/test_tools_nutrient_gaps.py tests/test_api_feedings.py
 ```
 
 ## Project docs

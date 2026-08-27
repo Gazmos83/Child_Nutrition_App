@@ -43,7 +43,7 @@ Dependencies are always added through the package manager — `uv add` / `uv add
 ## Scope discipline
 
 - Label every proposed feature **[MVP]** or **[Stretch]** — do not silently expand MVP scope.
-- MVP: basic + advanced RAG, 3+ deterministic tools (BMI, calorie/protein targets, food lookup, meal nutrition, nutrient-specific meal plan), simple intent router, production UI with citations + tool-activity display, real-time KB re-ingestion, logging/monitoring, RAGAs A/B evaluation.
+- MVP: basic + advanced RAG, 3+ deterministic tools (BMI, calorie/protein targets, food lookup, meal nutrition, nutrient-specific meal plan, feeding log + nutrient-gap detection — reference §9b), simple intent router, production UI with citations + tool-activity display, real-time KB re-ingestion, logging/monitoring, RAGAs A/B evaluation.
 - Stretch (only if MVP done early): full LangGraph orchestration, LangSmith tracing, multi-model support, token/cost dashboards. **Kubernetes/Celery/distributed infra is out of scope entirely.**
 
 ## Detailed reference

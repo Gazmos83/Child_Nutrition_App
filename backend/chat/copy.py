@@ -50,3 +50,10 @@ def missing_field_hint(field: str) -> str:
 
 def unknown_food(food_id: str) -> str:
     return f"We don't know a food called “{food_id}” yet — try picking one from the list"
+
+
+# The meal planner's ``targets_met`` outcome (change 2 design Decisions 7 and 12).
+TARGETS_MET_MESSAGE = (
+    "Today's already covered — what you've logged meets the day's targets. Nothing more to "
+    "plan; enjoy the rest of it"
+)

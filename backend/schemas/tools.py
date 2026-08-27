@@ -9,12 +9,14 @@ Design.md Decision 12: inputs are floats with sanity bounds, outputs are rounded
 precision (kcal whole, g/mg one decimal, BMI two).
 """
 
+import datetime as dt
 from enum import StrEnum
-from typing import Literal
+from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from backend.models.enums import Allergen, DietPreference, Sex
+from backend.models.enums import Allergen, DietPreference, FeedingType, Sex
 
 MIN_AGE_MONTHS = 0
 MAX_AGE_MONTHS = 60
@@ -226,6 +228,200 @@ class OverrideOutcome(_Frozen):
     detail: str = ""
 
 
+# -- Feeding log (Day 5 change 2; feeding-log spec) -----------------------------------------
+
+# Client-held log bounds: the request carries at most this many entries (design Decision 9).
+MAX_LOG_ENTRIES = 200
+# Sanity limit on one feed, not a nutritional one: rejects a litre typed as millilitres x10.
+MAX_FEED_QUANTITY = 2000.0
+
+FeedingUnit = Literal["ml", "g"]
+
+
+def _check_timezone(value: str) -> str:
+    """An IANA zone name, validated by constructing it (design Decision 4)."""
+    try:
+        ZoneInfo(value)
+    except ZoneInfoNotFoundError, ValueError, TypeError:
+        raise ValueError(f"{value!r} is not a known IANA time zone") from None
+    return value
+
+
+TimeZoneName = Annotated[str, AfterValidator(_check_timezone)]
+"""A client-supplied IANA time zone; local calendar days are taken in it."""
+
+
+class FeedingEntry(_Strict):
+    """One thing the child was actually fed.
+
+    Shape rules live here; table facts (does the food exist, is the unit right) are checked
+    in ``backend.nutrition.feeding.normalise_entry`` so this model can travel inside a
+    request without table I/O. ``quantity`` is optional only for breast milk -- direct
+    breastfeeding has no measure, and an invented volume would be a made-up number.
+    """
+
+    id: str | None = Field(default=None, min_length=1, max_length=64)
+    fed_at: AwareDatetime
+    feeding_type: FeedingType
+    food_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Food-table id; required for solids, optional milk-feed override, none for water."
+        ),
+    )
+    quantity: float | None = Field(default=None, gt=0, le=MAX_FEED_QUANTITY)
+    unit: FeedingUnit = "ml"
+
+    @model_validator(mode="after")
+    def _shape_rules(self) -> FeedingEntry:
+        kind = self.feeding_type
+        if self.quantity is None and kind is not FeedingType.BREASTMILK:
+            raise ValueError(f"quantity is required for a {kind.value} feed")
+        if kind is FeedingType.SOLID and self.food_id is None:
+            raise ValueError("food_id is required for a solid feed")
+        if kind is FeedingType.WATER and self.food_id is not None:
+            raise ValueError("water has no food_id")
+        if kind is not FeedingType.SOLID and self.unit != "ml":
+            raise ValueError(f"{kind.value} is measured in ml, not {self.unit}")
+        return self
+
+
+class LoggedFeeding(_Frozen):
+    """A feeding entry as the system hands it back: normalised, identified, and priced."""
+
+    entry: FeedingEntry
+    food_id: str | None = Field(description="The table food the entry resolved to, if any.")
+    food_name: str | None = None
+    quantified: bool = Field(description="False for an unmeasured breastfeed.")
+    nutrients: NutrientTotals
+    source: str
+
+
+class DailyNutritionInput(_Strict):
+    entries: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
+    timezone: TimeZoneName = "UTC"
+    date: dt.date | None = Field(default=None, description="Local day; defaults to today.")
+
+
+class DailyNutritionResult(_Frozen):
+    date: dt.date
+    timezone: str
+    entries: list[LoggedFeeding]
+    totals: NutrientTotals
+    complete: bool = Field(description="At least one entry and no unmeasured feed.")
+    unquantified: int = Field(ge=0)
+    source: str
+
+
+class _ChildForTargets(_Strict):
+    """The child fields target resolution needs -- the planner's, minus diet and allergies."""
+
+    age_months: int = _AGE
+    weight_kg: float = _WEIGHT
+    sex: Sex
+    height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
+    doctors_note: str | None = Field(default=None, max_length=4000)
+    activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
+
+    @model_validator(mode="after")
+    def _normalise(self) -> _ChildForTargets:
+        if self.age_months >= HEIGHT_REQUIRED_FROM_MONTHS and self.height_cm is None:
+            raise ValueError(
+                f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
+                "energy equation for 3–8 years uses height"
+            )
+        if self.doctors_note is not None and not self.doctors_note.strip():
+            object.__setattr__(self, "doctors_note", None)
+        return self
+
+
+class RemainingTargetsInput(_ChildForTargets):
+    entries: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
+    timezone: TimeZoneName = "UTC"
+    date: dt.date | None = Field(default=None, description="Local day; defaults to today.")
+
+
+class RemainingNutrients(_Frozen):
+    calories: float = Field(ge=0)
+    protein_g: float = Field(ge=0)
+    iron_mg: float = Field(ge=0)
+
+
+class RemainingTargetsResult(_Frozen):
+    date: dt.date
+    timezone: str
+    targets: NutrientTargets
+    intake: NutrientTotals
+    remaining: RemainingNutrients = Field(description="targets minus intake, floored at zero.")
+    note_extraction: NoteExtraction
+    override: OverrideOutcome
+    source: str
+
+
+# -- Nutrient-gap detection (nutrient-gap-detection spec) ----------------------------------
+
+GapNutrient = Literal["calories", "protein", "iron"]
+GapFlag = Literal["below", "adequate", "above"]
+GapConfidence = Literal["low", "medium", "high"]
+
+
+class GapDetectionRequest(_ChildForTargets):
+    entries: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
+    timezone: TimeZoneName = "UTC"
+    as_of: dt.date | None = Field(
+        default=None, description="Reference day (excluded from the window); defaults to today."
+    )
+
+
+class NutrientGap(_Frozen):
+    nutrient: GapNutrient
+    unit: NutrientUnit
+    average: float = Field(ge=0, description="Window average per day, one decimal.")
+    target: float = Field(gt=0)
+    ratio: float = Field(ge=0, description="average / target, two decimals.")
+    flag: GapFlag
+    target_source: str
+    target_band: str
+
+
+class NutrientGapReport(_Frozen):
+    status: Literal["ok", "insufficient_data"]
+    confidence: GapConfidence | None = Field(default=None, description="None when insufficient.")
+    directional: bool = Field(
+        default=False, description="True at low confidence: flags show direction only."
+    )
+    days_logged: int = Field(ge=0, description="Complete days in the look-back.")
+    window_days: int = Field(ge=0)
+    partial_days: int = Field(ge=0, description="Days excluded for an unmeasured feed.")
+    as_of: dt.date
+    gaps: list[NutrientGap] = Field(default_factory=list)
+    targets: NutrientTargets
+    note_extraction: NoteExtraction | None = None
+    override: OverrideOutcome | None = None
+
+
+class Adjustment(_Frozen):
+    """One change a plan made because of the log (meal-plan-generation spec)."""
+
+    nutrient: GapNutrient
+    action: str
+    confidence: GapConfidence | None = None
+    window_days: int | None = Field(default=None, ge=0, description="Days the gap rests on.")
+    detail: str
+
+
+class FoodSummary(_Frozen):
+    """What a food picker needs; no nutrients, no user data (feeding-log spec)."""
+
+    id: str
+    name: str
+    category: str
+    serving_size: float
+    serving_unit: str
+    min_age_months: int
+
+
 # -- Meal plan ------------------------------------------------------------------------------
 
 
@@ -238,6 +434,17 @@ class MealPlanRequest(_Strict):
     allergies: frozenset[Allergen] = Field(default_factory=frozenset)
     doctors_note: str | None = Field(default=None, max_length=4000)
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
+    # Change 2 (feeding log): both optional; with neither, the plan is byte-identical to
+    # the Day 4 planner (meal-plan-generation spec, "No log inputs, unchanged output").
+    gaps: NutrientGapReport | None = Field(
+        default=None, description="A gap report to steer composition; never raises a target."
+    )
+    logged_today: list[FeedingEntry] = Field(
+        default_factory=list,
+        max_length=MAX_LOG_ENTRIES,
+        description="Today's feeds; their nutrients are subtracted so the plan covers the rest.",
+    )
+    timezone: TimeZoneName = "UTC"
 
     @model_validator(mode="after")
     def _normalise(self) -> MealPlanRequest:
@@ -275,15 +482,26 @@ class NutrientCoverage(_Frozen):
     iron: float = Field(ge=0)
 
 
+MealPlanOutcome = Literal["plan", "no_safe_plan", "targets_met"]
+
+
 class MealPlanResult(_Frozen):
-    outcome: Literal["plan", "no_safe_plan"]
+    outcome: MealPlanOutcome
     items: list[PlannedItem]
     totals: NutrientTotals
-    targets: NutrientTargets
-    coverage: NutrientCoverage
+    targets: NutrientTargets = Field(description="Full-day targets, note applied.")
+    coverage: NutrientCoverage = Field(
+        description="Against what the plan set out to cover: the day, or what remained of it."
+    )
     note_extraction: NoteExtraction
     override: OverrideOutcome
     exclusions: list[Exclusion]
     message: str = Field(description="Plain-language summary, or why no safe plan exists.")
     disclaimer: str
     food_table_version: str
+    adjustments: list[Adjustment] = Field(
+        default_factory=list, description="What the feeding log changed about composition."
+    )
+    already_logged: NutrientTotals | None = Field(
+        default=None, description="Today's logged intake, when entries were supplied."
+    )

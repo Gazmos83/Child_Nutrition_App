@@ -7,16 +7,24 @@ child context, never from the model -- Day 6 swaps the request read for an auth-
 profile read here and nowhere else.
 """
 
+import datetime as dt
 import logging
 from collections.abc import Sequence
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.chat.prompts import ROUTER_SYSTEM_PROMPT, format_child_context, format_history
+from backend.chat.prompts import (
+    ROUTER_SYSTEM_PROMPT,
+    format_child_context,
+    format_history,
+    format_log_context,
+)
+from backend.nutrition.feeding import local_date
 from backend.schemas.chat import ChatRequest, Intent, PlannedCall, RouteDecision
 
 logger = logging.getLogger(__name__)
@@ -38,6 +46,14 @@ PROFILE_FIELDS = frozenset(
         "activity_level",
     }
 )
+
+# Arguments that describe the feeding log. Always filled from the request (change 2 design
+# Decision 9): the model must never transcribe a log -- it would drop or invent entries.
+LOG_FIELDS = frozenset({"entries", "logged_today", "timezone"})
+
+# Arguments only the service may supply, from its own tool runs; a model-proposed value is
+# discarded (a fabricated gap report would steer a plan).
+SERVICE_FIELDS = frozenset({"gaps"})
 
 
 class SearchGuidelinesInput(BaseModel):
@@ -80,6 +96,24 @@ def _json_value(value: object) -> object:
     return value
 
 
+def today_in(timezone: str) -> dt.date:
+    return dt.datetime.now(ZoneInfo(timezone)).date()
+
+
+def log_context(request: ChatRequest) -> dict[str, object]:
+    """The log-backed argument values: every entry, today's entries, the time zone."""
+    today = today_in(request.timezone)
+    return {
+        "entries": [e.model_dump(mode="json") for e in request.feeding_log],
+        "logged_today": [
+            e.model_dump(mode="json")
+            for e in request.feeding_log
+            if local_date(e.fed_at, request.timezone) == today
+        ],
+        "timezone": request.timezone,
+    }
+
+
 def resolve_context(
     tool_name: str,
     model_args: dict[str, object],
@@ -92,30 +126,50 @@ def resolve_context(
     model proposed is replaced (and the mismatch logged). A field the child context does
     not have (e.g. no height recorded) is *removed* so the tool's own required/optional
     rule applies -- the model's invented value never survives. Without child context the
-    model's arguments pass through untouched to validation.
+    model's profile arguments pass through untouched to validation.
+
+    Log-backed fields are always taken from ``request.feeding_log`` -- an empty log is an
+    empty list, not the model's guess -- and service-only fields are dropped.
     """
     args = dict(model_args)
     used: list[str] = []
-    if request.child is None or args_schema is None:
+    if args_schema is None:
         return args, used
-    declared = PROFILE_FIELDS & set(args_schema.model_fields)
-    for field in sorted(declared):
-        value = _json_value(getattr(request.child, field))
-        proposed = args.get(field)
-        if field in args and proposed != value:
-            logger.info(
-                "resolve_context tool=%s field=%s model=%r context=%r -> context wins",
-                tool_name,
-                field,
-                proposed,
-                value,
-            )
-        if value is None:
-            args.pop(field, None)
-            continue
-        args[field] = value
-        used.append(field)
+    fields = set(args_schema.model_fields)
+
+    if request.child is not None:
+        for field in sorted(PROFILE_FIELDS & fields):
+            value = _json_value(getattr(request.child, field))
+            _note_override(tool_name, field, args, value)
+            if value is None:
+                args.pop(field, None)
+                continue
+            args[field] = value
+            used.append(field)
+
+    log_fields = sorted(LOG_FIELDS & fields)
+    if log_fields:
+        values = log_context(request)
+        for field in log_fields:
+            _note_override(tool_name, field, args, values[field])
+            args[field] = values[field]
+            used.append(field)
+
+    for field in sorted(SERVICE_FIELDS & fields):
+        if args.pop(field, None) is not None:
+            logger.info("resolve_context tool=%s field=%s model value discarded", tool_name, field)
     return args, used
+
+
+def _note_override(tool_name: str, field: str, args: dict[str, object], value: object) -> None:
+    if field in args and args[field] != value:
+        logger.info(
+            "resolve_context tool=%s field=%s model=%r context=%r -> context wins",
+            tool_name,
+            field,
+            args[field],
+            value,
+        )
 
 
 async def decide(
@@ -124,8 +178,16 @@ async def decide(
     """One routing call. The reply's tool calls are the decision; its text is discarded."""
     known = {t.name for t in tools}
     bound = chat_model.bind_tools([*tools, search_guidelines_tool()])
+    today = today_in(request.timezone)
+    log_line = format_log_context(
+        len(request.feeding_log),
+        sum(1 for e in request.feeding_log if local_date(e.fed_at, request.timezone) == today),
+        request.timezone,
+    )
     messages = [
-        SystemMessage(content=f"{ROUTER_SYSTEM_PROMPT}\n\n{format_child_context(request.child)}"),
+        SystemMessage(
+            content=f"{ROUTER_SYSTEM_PROMPT}\n\n{format_child_context(request.child)}\n{log_line}"
+        ),
         *format_history(request.history),
         HumanMessage(content=request.message),
     ]

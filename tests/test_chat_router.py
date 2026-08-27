@@ -1,12 +1,19 @@
 """Routing decisions and the context seam (Day 5 task 3.2; intent-routing spec)."""
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 from langchain_core.messages import AIMessage
 
 from backend.chat.router import MAX_TOOL_CALLS, SEARCH_TOOL_NAME, decide, resolve_context
 from backend.schemas.chat import ChatRequest
-from backend.schemas.tools import BmiInput, MealPlanRequest, ProteinTargetInput
+from backend.schemas.tools import (
+    BmiInput,
+    DailyNutritionInput,
+    GapDetectionRequest,
+    MealPlanRequest,
+    ProteinTargetInput,
+)
 from backend.tools.langchain_tools import build_tools
 from tests.fixtures.fake_llm import RecordingChatModel
 
@@ -127,3 +134,89 @@ class TestRoutingPrompt:
     async def test_prompt_states_missing_child(self) -> None:
         _, llm = await route(call(SEARCH_TOOL_NAME, query="q"))
         assert "No child details supplied" in llm.calls[0][0].content
+
+
+# -- Change 2: log-backed arguments (task 4.2) ------------------------------------------------
+
+
+def log_entry(days_ago: int = 0, hour: int = 8) -> dict:
+    when = datetime.now(UTC) - timedelta(days=days_ago)
+    when = when.replace(hour=hour, minute=0, second=0, microsecond=0)
+    return {
+        "fed_at": when.isoformat(),
+        "feeding_type": "solid",
+        "food_id": "infant_cereal_iron_fortified",
+        "quantity": 30,
+        "unit": "g",
+    }
+
+
+class TestLogContext:
+    def test_entries_and_timezone_come_from_the_request(self) -> None:
+        request = ChatRequest.model_validate(
+            {
+                "message": "m",
+                "child": CHILD,
+                "feeding_log": [log_entry(0), log_entry(2)],
+                "timezone": "Europe/Vilnius",
+            }
+        )
+        proposed = {
+            "age_months": 8,
+            "entries": [{"fed_at": "2020-01-01T00:00:00Z", "feeding_type": "water", "quantity": 9}],
+            "timezone": "UTC",
+        }
+        args, used = resolve_context("detect_nutrient_gaps", proposed, request, GapDetectionRequest)
+        assert len(args["entries"]) == 2
+        assert args["entries"][0]["food_id"] == "infant_cereal_iron_fortified"
+        assert args["timezone"] == "Europe/Vilnius"
+        assert {"entries", "timezone", "age_months", "weight_kg", "sex"} <= set(used)
+
+    def test_logged_today_is_only_todays_entries_and_gaps_is_dropped(self) -> None:
+        request = ChatRequest.model_validate(
+            {
+                "message": "m",
+                "child": CHILD,
+                "feeding_log": [log_entry(0), log_entry(0, 12), log_entry(3)],
+            }
+        )
+        args, used = resolve_context(
+            "generate_meal_plan", {"gaps": {"status": "ok"}}, request, MealPlanRequest
+        )
+        assert len(args["logged_today"]) == 2
+        assert "gaps" not in args
+        assert "logged_today" in used and "timezone" in used and "entries" not in args
+
+    def test_empty_log_is_an_empty_list_not_the_models_guess(self) -> None:
+        request = ChatRequest.model_validate({"message": "m", "child": CHILD})
+        args, used = resolve_context(
+            "detect_nutrient_gaps", {"entries": [log_entry(1)]}, request, GapDetectionRequest
+        )
+        assert args["entries"] == [] and "entries" in used
+
+    def test_log_fields_filled_even_without_child_context(self) -> None:
+        request = ChatRequest.model_validate({"message": "m", "feeding_log": [log_entry(0)]})
+        args, used = resolve_context("get_daily_nutrition", {}, request, DailyNutritionInput)
+        assert len(args["entries"]) == 1 and used == ["entries", "timezone"]
+
+    def test_profile_fields_untouched_without_child(self) -> None:
+        request = ChatRequest.model_validate({"message": "m"})
+        args, used = resolve_context(
+            "detect_nutrient_gaps", {"age_months": 9}, request, GapDetectionRequest
+        )
+        assert args["age_months"] == 9 and "age_months" not in used
+
+    async def test_routing_prompt_describes_the_log_not_its_entries(self) -> None:
+        _, llm = await route(
+            call(SEARCH_TOOL_NAME, query="q"),
+            feeding_log=[log_entry(0), log_entry(1)],
+            timezone="Europe/Vilnius",
+        )
+        system = llm.calls[0][0].content
+        assert "Feeding log" in system and "2 entries" in system and "1 today" in system
+        assert "Europe/Vilnius" in system
+        assert "infant_cereal_iron_fortified" not in system
+
+    async def test_routing_prompt_says_when_the_log_is_empty(self) -> None:
+        _, llm = await route(call(SEARCH_TOOL_NAME, query="q"))
+        assert "Feeding log: empty" in llm.calls[0][0].content

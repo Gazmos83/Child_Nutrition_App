@@ -2,15 +2,17 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
-import type { ChatRequest, ChatTurn, ChildContext } from "@/lib/api-types";
+import type { ChatRequest, ChatTurn, ChildContext, FeedingEntry } from "@/lib/api-types";
 import {
   applyEvent,
   emptyAssistantMessage,
+  loggedFeedingFrom,
   reduceAssistant,
   type AssistantMessage,
   type ChatMessage,
 } from "@/lib/chat-reducer";
 import * as copy from "@/lib/copy";
+import { appendLoggedFeeding } from "@/lib/feeding-log-store";
 import { parseSseFrames } from "@/lib/sse";
 
 const MAX_HISTORY_TURNS = 12;
@@ -54,10 +56,17 @@ async function readDetail(res: Response): Promise<string> {
   return res.statusText;
 }
 
-export function useChat(getChild: () => ChildContext | null) {
+/** What travels with every message besides the text: the side panel and the local log. */
+export interface RequestContext {
+  child: ChildContext | null;
+  feeding_log: FeedingEntry[];
+  timezone: string;
+}
+
+export function useChat(getContext: () => RequestContext) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const getChildRef = useRef(getChild);
-  getChildRef.current = getChild;
+  const getContextRef = useRef(getContext);
+  getContextRef.current = getContext;
 
   const patch = useCallback((id: string, fn: (m: AssistantMessage) => AssistantMessage) => {
     setMessages((current) =>
@@ -67,10 +76,13 @@ export function useChat(getChild: () => ChildContext | null) {
 
   const run = useCallback(
     async ({ text, assistantId, history }: RunParams) => {
+      const context = getContextRef.current();
       const body: ChatRequest = {
         message: text,
-        child: getChildRef.current(),
+        child: context.child,
         history,
+        feeding_log: context.feeding_log,
+        timezone: context.timezone,
         stream: true,
       };
       let res: Response;
@@ -106,6 +118,9 @@ export function useChat(getChild: () => ChildContext | null) {
           carry = parsed.carry;
           for (const event of parsed.events) {
             sawEvent = true;
+            // A feed the assistant logged for the parent joins the local log (Decision 11).
+            const logged = loggedFeedingFrom(event);
+            if (logged) appendLoggedFeeding(logged);
             patch(assistantId, (m) => applyEvent(m, event));
           }
         }

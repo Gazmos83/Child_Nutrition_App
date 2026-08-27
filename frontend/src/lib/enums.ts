@@ -16,6 +16,7 @@ export type Allergen =
   | "shellfish"
   | "sesame";
 export type ActivityLevel = "sedentary" | "low_active" | "active" | "very_active";
+export type FeedingType = "breastmilk" | "formula" | "solid" | "water";
 
 export interface Option<T extends string> {
   value: T;
@@ -51,6 +52,13 @@ export const ACTIVITY_LEVEL_OPTIONS: readonly Option<ActivityLevel>[] = [
   { value: "low_active", label: "Low active" },
   { value: "active", label: "Active" },
   { value: "very_active", label: "Very active" },
+];
+
+export const FEEDING_TYPE_OPTIONS: readonly Option<FeedingType>[] = [
+  { value: "breastmilk", label: "Breast milk" },
+  { value: "formula", label: "Formula" },
+  { value: "solid", label: "Solid food" },
+  { value: "water", label: "Water" },
 ];
 
 export const NUTRIENT_LABELS: Record<string, string> = {

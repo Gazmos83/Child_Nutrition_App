@@ -2,22 +2,26 @@
 
 import json
 import logging
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from backend.models.enums import Allergen, DietPreference, Sex
+from backend.chat.copy import TARGETS_MET_MESSAGE
+from backend.models.enums import Allergen, DietPreference, FeedingType, Sex
 from backend.nutrition.diet import EXCLUDED_CATEGORIES
 from backend.nutrition.foods import FoodCategory, get_food_table, load_food_table
 from backend.nutrition.safety import check_food
 from backend.rag.prompts import DISCLAIMER
-from backend.schemas.tools import MealPlanRequest
+from backend.schemas.tools import FeedingEntry, MealPlanRequest, NutrientGap, NutrientGapReport
 from backend.tools.meal_plan import (
     IRON_UL_MG,
     MAX_ITEMS,
     NO_SAFE_PLAN_MESSAGE,
     generate_meal_plan,
 )
+from backend.tools.targets_resolution import general_targets
 from tests.fixtures.fake_llm import RecordingChatModel
 from tests.test_nutrition_foods import VALID_ENTRY, write_table
 
@@ -297,3 +301,223 @@ class TestAuditLog:
         assert record["input"]["age_months"] == 24
         assert record["exclusions"][0]["food_id"] == "grapes"
         assert "choking" in record["exclusions"][0]["reasons"][0]
+
+
+# -- Change 2: feeding log inputs (tasks 3.1-3.3) -------------------------------------------
+
+FIXTURE = Path("tests") / "fixtures" / "meal_plans_before_change_2.json"
+NEW_RESULT_FIELDS = {"adjustments", "already_logged"}
+DAY = date(2026, 8, 27)
+
+
+def cereal_today(grams: float, hour: int = 8) -> FeedingEntry:
+    return FeedingEntry(
+        fed_at=datetime(DAY.year, DAY.month, DAY.day, hour, 0, tzinfo=UTC),
+        feeding_type=FeedingType.SOLID,
+        food_id="infant_cereal_iron_fortified",
+        quantity=grams,
+        unit="g",
+    )
+
+
+def gap_report(nutrient: str, confidence: str, req: MealPlanRequest) -> NutrientGapReport:
+    targets = general_targets(req)
+    target = {"protein": targets.protein.protein_g, "iron": targets.iron.iron_mg}[nutrient]
+    return NutrientGapReport(
+        status="ok",
+        confidence=confidence,  # type: ignore[arg-type]
+        directional=confidence == "low",
+        days_logged=3 if confidence == "medium" else 8,
+        window_days=3 if confidence == "medium" else 7,
+        partial_days=0,
+        as_of=DAY,
+        gaps=[
+            NutrientGap(
+                nutrient=nutrient,  # type: ignore[arg-type]
+                unit="g" if nutrient == "protein" else "mg",
+                average=round(target * 0.5, 1),
+                target=target,
+                ratio=0.5,
+                flag="below",
+                target_source="DRI",
+                target_band="test",
+            )
+        ],
+        targets=targets,
+    )
+
+
+class TestChangeTwoRegression:
+    """meal-plan-generation spec: no log inputs -> the Day 4 plan, byte for byte."""
+
+    @pytest.mark.parametrize("case", json.loads(FIXTURE.read_text(encoding="utf-8")))
+    async def test_existing_fixture_unchanged_without_log_inputs(self, case) -> None:
+        result = await generate_meal_plan(MealPlanRequest.model_validate(case["request"]), None)
+        dumped = result.model_dump(mode="json")
+        assert dumped["adjustments"] == [] and dumped["already_logged"] is None
+        assert {k: v for k, v in dumped.items() if k not in NEW_RESULT_FIELDS} == case["result"]
+
+
+class TestGapSteering:
+    async def test_medium_protein_gap_changes_selection_not_targets(self) -> None:
+        req = request(age_months=24, weight_kg=12.5)
+        baseline = await generate_meal_plan(req, None)
+        steered = await generate_meal_plan(
+            req.model_copy(update={"gaps": gap_report("protein", "medium", req)}), None
+        )
+        assert steered.outcome == "plan"
+        assert steered.targets == baseline.targets
+        assert [i.food_id for i in steered.items] != [i.food_id for i in baseline.items]
+        assert any("highest protein" in i.reason for i in steered.items)
+        [adjustment] = steered.adjustments
+        assert adjustment.nutrient == "protein" and adjustment.action == "prioritised"
+        assert adjustment.confidence == "medium" and "targets unchanged" in adjustment.detail
+
+    async def test_low_confidence_gap_changes_nothing(self) -> None:
+        req = request(age_months=24, weight_kg=12.5)
+        baseline = await generate_meal_plan(req, None)
+        informed = await generate_meal_plan(
+            req.model_copy(update={"gaps": gap_report("iron", "low", req)}), None
+        )
+        assert informed.adjustments == []
+        assert informed.model_dump() == baseline.model_dump()
+
+    async def test_insufficient_report_changes_nothing(self) -> None:
+        req = request()
+        report = NutrientGapReport(
+            status="insufficient_data",
+            days_logged=0,
+            window_days=0,
+            partial_days=2,
+            as_of=DAY,
+            targets=general_targets(req),
+        )
+        assert (
+            await generate_meal_plan(req.model_copy(update={"gaps": report}), None)
+        ).model_dump() == (await generate_meal_plan(req, None)).model_dump()
+
+    @pytest.mark.parametrize(
+        ("age", "weight", "height"), [(9, 8.8, None), (24, 12.5, None), (48, 16.0, 102.0)]
+    )
+    async def test_high_iron_gap_respects_upper_limit_and_targets(
+        self, age, weight, height
+    ) -> None:
+        req = request(age_months=age, weight_kg=weight, height_cm=height)
+        result = await generate_meal_plan(
+            req.model_copy(update={"gaps": gap_report("iron", "high", req)}), None
+        )
+        assert result.totals.iron_mg <= IRON_UL_MG
+        assert result.targets == general_targets(req)
+        assert result.adjustments[0].nutrient == "iron"
+
+
+class TestLoggedToday:
+    async def test_partial_day_composes_toward_the_remainder(self) -> None:
+        req = request()  # 9 months, 8.8 kg -> 705 kcal general target
+        full = await generate_meal_plan(req, None)
+        result = await generate_meal_plan(
+            req.model_copy(update={"logged_today": [cereal_today(75)]}),
+            None,  # 300 kcal
+        )
+        assert result.outcome == "plan"
+        assert result.already_logged is not None and result.already_logged.calories == 300.0
+        assert result.targets == full.targets  # the day's targets are still the reference
+        remaining = full.targets.calories.calories - 300
+        assert result.totals.calories <= 1.1 * remaining
+        assert result.totals.calories < full.totals.calories
+        assert result.coverage.calories == round(result.totals.calories / remaining, 2)
+        assert "already logged" in result.message
+        table = get_food_table()
+        for item in result.items:
+            assert check_food(table.get(item.food_id), 9, ()) == []
+
+    async def test_targets_met_when_little_remains(self) -> None:
+        req = request()
+        result = await generate_meal_plan(
+            req.model_copy(update={"logged_today": [cereal_today(170)]}),
+            None,  # 680 kcal
+        )
+        assert result.outcome == "targets_met"
+        assert result.items == [] and result.totals.calories == 0
+        assert result.message == TARGETS_MET_MESSAGE
+        assert result.disclaimer == DISCLAIMER
+        assert result.already_logged is not None and result.already_logged.calories == 680.0
+        assert result.targets.calories.calories == 705
+
+    async def test_override_still_wins_with_intake_subtracted(self) -> None:
+        llm = RecordingChatModel(
+            responses=['{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}']
+        )
+        result = await generate_meal_plan(
+            request(
+                age_months=8,
+                weight_kg=8.5,
+                doctors_note="Limit to 650 kcal per day.",
+                logged_today=[cereal_today(75)],
+            ),
+            llm,
+        )
+        assert result.override.conflict is True and result.targets.calories.calories == 650
+        assert result.already_logged is not None and result.already_logged.calories == 300.0
+        assert result.totals.calories <= 1.1 * 350
+        assert result.outcome == "plan"
+
+    async def test_empty_log_list_is_the_unlogged_plan(self) -> None:
+        req = request()
+        assert (await generate_meal_plan(req.model_copy(update={"logged_today": []}), None)) == (
+            await generate_meal_plan(req, None)
+        )
+
+
+class TestAuditLogChangeTwo:
+    async def test_plan_records_gaps_entries_and_adjustments(self, caplog) -> None:
+        caplog.set_level(logging.INFO, logger="backend.tools.audit")
+        req = request(age_months=24, weight_kg=12.5)
+        entry = cereal_today(15).model_copy(update={"id": "entry-1"})
+        result = await generate_meal_plan(
+            req.model_copy(
+                update={"gaps": gap_report("protein", "medium", req), "logged_today": [entry]}
+            ),
+            None,
+        )
+        [record] = audit_records(caplog)
+        assert record["outcome"] == "plan"
+        assert record["gaps"] == {
+            "status": "ok",
+            "confidence": "medium",
+            "days_logged": 3,
+            "window_days": 3,
+            "flags": {"protein": "below"},
+        }
+        assert record["logged_today"]["entries"] == [
+            {
+                "id": "entry-1",
+                "fed_at": "2026-08-27T08:00:00+00:00",
+                "feeding_type": "solid",
+                "food_id": "infant_cereal_iron_fortified",
+            }
+        ]
+        assert record["logged_today"]["already_logged"]["calories"] == 60.0
+        assert record["adjustments"] == [a.model_dump(mode="json") for a in result.adjustments]
+        assert record["adjustments"][0]["nutrient"] == "protein"
+
+    async def test_targets_met_is_audited(self, caplog) -> None:
+        caplog.set_level(logging.INFO, logger="backend.tools.audit")
+        await generate_meal_plan(
+            request().model_copy(update={"logged_today": [cereal_today(170)]}), None
+        )
+        [record] = audit_records(caplog)
+        assert record["outcome"] == "targets_met" and record["items"] == []
+        assert record["logged_today"]["already_logged"]["calories"] == 680.0
+        assert record["gaps"] is None and record["adjustments"] == []
+
+    async def test_no_safe_plan_carries_the_new_keys_as_empty(self, caplog, tmp_path) -> None:
+        caplog.set_level(logging.INFO, logger="backend.tools.audit")
+        table = load_food_table(
+            write_table(tmp_path, {**VALID_ENTRY, "id": "grapes", "choking_hazard": True})
+        )
+        await generate_meal_plan(request(age_months=24, weight_kg=12), None, table)
+        [record] = audit_records(caplog)
+        assert record["outcome"] == "no_safe_plan"
+        assert record["gaps"] is None and record["logged_today"] is None
+        assert record["adjustments"] == []

@@ -8,9 +8,9 @@ from enum import StrEnum
 
 import pytest
 
-from backend.models.enums import Allergen, DietPreference, Sex
+from backend.models.enums import Allergen, DietPreference, FeedingType, Sex
 
-ALL_VOCABULARIES: list[type[StrEnum]] = [Sex, DietPreference, Allergen]
+ALL_VOCABULARIES: list[type[StrEnum]] = [Sex, DietPreference, Allergen, FeedingType]
 
 # PostgreSQL enum labels are created from these values. Constraining them to lowercase
 # snake_case keeps labels stable and quoting-free across migrations.
@@ -50,6 +50,9 @@ class TestVocabularyCoverage:
             "pescatarian",
             "vegan",
         }
+
+    def test_feeding_type_members(self) -> None:
+        assert {f.value for f in FeedingType} == {"breastmilk", "formula", "solid", "water"}
 
 
 class TestDietPreferenceDefault:
@@ -99,3 +102,8 @@ class TestFreeTextRejection:
     def test_off_vocabulary_diet_preference_is_rejected(self, bad: str) -> None:
         with pytest.raises(ValueError):
             DietPreference(bad)
+
+    @pytest.mark.parametrize("bad", ["Breastmilk", "bottle", "snack", ""])
+    def test_off_vocabulary_feeding_type_is_rejected(self, bad: str) -> None:
+        with pytest.raises(ValueError):
+            FeedingType(bad)

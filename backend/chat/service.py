@@ -27,11 +27,22 @@ from backend.nutrition.safety import UnsafePlanError
 from backend.rag.pipeline import RagPipeline, RagResponse, RetrievedContext
 from backend.rag.prompts import DISCLAIMER
 from backend.rag.retrievers import _content_text
-from backend.schemas.chat import ChatRequest, ChatResponse, RouteDecision, ToolActivity
+from backend.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+    PlannedCall,
+    RouteDecision,
+    ToolActivity,
+)
 from backend.schemas.rag import Citation, RetrievalMeta
 
 logger = logging.getLogger(__name__)
 route_logger = logging.getLogger("backend.chat.router")
+
+# Change 2 design Decision 9: a plan over a non-empty log is always informed by gap detection
+# -- the model's if it planned one, otherwise the service's own run, made before the plan.
+PLAN_TOOL = "generate_meal_plan"
+GAPS_TOOL = "detect_nutrient_gaps"
 
 
 @dataclass(frozen=True)
@@ -76,10 +87,17 @@ def _as_json(result: object) -> dict[str, object]:
 
 
 async def _run_one(
-    name: str, model_args: dict[str, object], request: ChatRequest, tool: BaseTool
+    name: str,
+    model_args: dict[str, object],
+    request: ChatRequest,
+    tool: BaseTool,
+    inject: dict[str, object] | None = None,
 ) -> ToolActivity:
     schema = tool.args_schema if isinstance(tool.args_schema, type) else None
     args, used = resolve_context(name, model_args, request, schema)
+    if inject:
+        args.update(inject)
+        used.extend(inject)
     try:
         result = await tool.ainvoke(args)
     except ValidationError as exc:
@@ -128,12 +146,33 @@ async def _run_one(
 async def run_tools(
     decision: RouteDecision, request: ChatRequest, tools: dict[str, BaseTool]
 ) -> list[ToolActivity]:
-    """Run every planned invocation concurrently; results keep the planned order."""
-    return list(
-        await asyncio.gather(
-            *(_run_one(call.name, call.args, request, tools[call.name]) for call in decision.calls)
-        )
+    """Run the planned invocations; results keep the planned order, planner last.
+
+    Everything but ``generate_meal_plan`` runs concurrently. When a plan is planned and the
+    request carries a feeding log, gap detection runs first (the model's call if it made
+    one, otherwise an implicit one) and its report is handed to the planner as ``gaps``.
+    """
+    planners = [c for c in decision.calls if c.name == PLAN_TOOL]
+    others = [c for c in decision.calls if c.name != PLAN_TOOL]
+    if (
+        planners
+        and request.feeding_log
+        and GAPS_TOOL in tools
+        and not any(c.name == GAPS_TOOL for c in others)
+    ):
+        others.append(PlannedCall(name=GAPS_TOOL, args={}))
+    activities = list(
+        await asyncio.gather(*(_run_one(c.name, c.args, request, tools[c.name]) for c in others))
     )
+    if planners:
+        report = next((a for a in activities if a.name == GAPS_TOOL and a.status == "ok"), None)
+        inject = {"gaps": report.result} if report is not None else None
+        activities.extend(
+            await asyncio.gather(
+                *(_run_one(c.name, c.args, request, tools[c.name], inject) for c in planners)
+            )
+        )
+    return activities
 
 
 # -- the service ----------------------------------------------------------------------------

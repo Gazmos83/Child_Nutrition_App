@@ -1,4 +1,5 @@
 {
+  "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
   "sex": [
     "male",
     "female"
@@ -26,5 +27,10 @@
     "active",
     "very_active"
   ],
-  "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs."
+  "feeding_type": [
+    "breastmilk",
+    "formula",
+    "solid",
+    "water"
+  ]
 }

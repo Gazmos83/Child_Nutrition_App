@@ -1,12 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { isMealPlanResult } from "@/lib/api-types";
+import { isMealPlanResult, isNutrientGapReport } from "@/lib/api-types";
 import type { AssistantMessage as AssistantMessageData } from "@/lib/chat-reducer";
 import * as copy from "@/lib/copy";
 import { AnswerText } from "./answer-text";
 import { Citations } from "./citations";
 import { Disclaimer } from "./disclaimer";
+import { GapReportCard } from "./gap-report-card";
 import { IntentChip } from "./intent-chip";
 import { MealPlanCard } from "./meal-plan-card";
 import { ToolActivityList } from "./tool-activity";
@@ -24,6 +25,10 @@ export function AssistantMessage({
     .filter((t) => t.name === "generate_meal_plan" && t.status === "ok")
     .map((t) => t.result as unknown)
     .find(isMealPlanResult);
+  const gapReport = message.tools
+    .filter((t) => t.name === "detect_nutrient_gaps" && t.status === "ok")
+    .map((t) => t.result as unknown)
+    .find(isNutrientGapReport);
   const streaming = message.status === "streaming";
   const troubled = message.status === "error" || message.status === "interrupted";
 
@@ -38,6 +43,7 @@ export function AssistantMessage({
         )}
       </div>
       <ToolActivityList tools={message.tools} />
+      {gapReport && <GapReportCard report={gapReport} />}
       {plan && <MealPlanCard plan={plan} />}
       {message.text && (
         <div className="mt-3">
