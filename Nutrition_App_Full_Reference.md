@@ -83,7 +83,7 @@ Design ingestion as a reproducible, re-runnable job (not one-off) — e.g., a sc
 ## 9. Function Calling / Tools **[MVP]**
 Deterministic Python functions, typed inputs, Pydantic validation, authorization checks, structured results, graceful failure handling. Never let the LLM perform math it can compute deterministically.
 
-Initial tools: `calculate_bmi()`, `calculate_calorie_target()`, `calculate_protein_target()`, `lookup_food()`, `calculate_meal_nutrition()`, `generate_meal_plan()` (nutrient-specific meal plan), `get_daily_nutrition()`, `get_remaining_targets()`. MVP requires 3+ of these as deterministic tools, with `generate_meal_plan()` as the core child-facing one.
+Initial tools: `calculate_bmi()`, `calculate_calorie_target()`, `calculate_protein_target()`, `lookup_food()`, `calculate_meal_nutrition()`, `generate_meal_plan()` (nutrient-specific meal plan), `get_daily_nutrition()`, `get_remaining_targets()`, `log_feeding()`, `detect_nutrient_gaps()` (see Section 9b). MVP requires 3+ of these as deterministic tools, with `generate_meal_plan()` as the core child-facing one.
 
 Every meal plan passes a **hard-coded infant-safety filter** (e.g., no honey under 12 months, no choking hazards, no unpasteurized products) that runs independently of the RAG/LLM pipeline — the LLM cannot bypass or override it.
 
@@ -105,6 +105,34 @@ Every meal plan passes a **hard-coded infant-safety filter** (e.g., no honey und
 **[Stretch] Full LangGraph Nutrition Agent:** explicit state graph (intent analysis → planning/routing → RAG/Tools/UserData/Hybrid branches → context builder → answer generator → validator), with tool-call limits, retries, and execution-time caps. Only build this if Days 1–7 finish with time to spare — it was originally a Day 6 priority but is now optional upside, not required scope.
 
 *If pursued, use Claude Code to scaffold the graph nodes/edges after you've decided the routing logic by hand.*
+
+---
+
+## 9b. Feeding Log & Adaptive Nutrient-Gap Recommendations
+
+### Feeding log — daily intake capture **[MVP]**
+A new PostgreSQL table (Section 6 remains the authoritative store — no new database engine) recording what was **actually** fed, distinct from the *planned* meal/meal_items already in scope. Each entry: `child_id`, `timestamp`, `feeding_type` (**enum**: breastmilk / formula / solid / water — per Hard rule 2, never free text), `food_id` (nullable, links to `lookup_food()` catalog when applicable), `quantity`, `unit`. Bound to the authenticated user's identity like every other user-scoped table (Hard rule 9).
+
+New tool: **`log_feeding()`** — deterministic, Pydantic-validated write. This is the mechanism that makes logging **optional**: it is just a normal tool call the chat UI or a manual form can invoke. If a child has zero feeding-log entries, downstream tools fall back to standard age/weight targets exactly as they do today — logging is never required to receive a plan.
+
+### Nutrient-gap detection **[MVP]**
+New tool: **`detect_nutrient_gaps()`** — deterministic, lookup-table-driven, consistent with the "LLM never generates nutrient numbers" principle (Section 4 / Hard rule enforcement). It does **not** use a trained model; "improves as the food log grows" is achieved by widening the trusted rolling window as more data accumulates, not by learning:
+
+- **0 days logged** → no gap detection; standard age/weight-based targets only.
+- **1–2 days logged** → gaps flagged as low-confidence / directional only.
+- **3+ days logged** → 3-day rolling average per nutrient vs. target.
+- **7+ days logged** → 7-day rolling average, higher-confidence flags.
+
+Output feeds `generate_meal_plan()` as an additional input alongside age, weight, allergies, diet preference, and doctor's note — the same override hierarchy already applies (doctor's note wins on conflict, flagged not blended).
+
+### Daily plan adjustment **[MVP]**
+Not a new generation path — an invocation of the existing `generate_meal_plan()` with the day's `log_feeding()` entries and `detect_nutrient_gaps()` output as additional arguments. Passes through the existing hard-coded infant-safety filter and doctor's-note override unchanged (Hard rules 3–4); no new safety logic required.
+
+### Auditability **[MVP]**
+Extends Hard rule 8: every adjusted plan is logged with the same full input snapshot (age in months, weight, gender, allergies, diet preference, doctor's note, rule/source used) **plus** which feeding-log entries and detected gaps informed the adjustment.
+
+### Explicitly out of scope **[Stretch]**
+A learned/ML-based prediction model for nutrient gaps, and any real-time push notification when a gap is detected. The rolling-average approach above satisfies "predictions improve as the log grows" without introducing a new eval surface into a 7-day MVP.
 
 ---
 
@@ -175,8 +203,11 @@ DAY 2  Nutrition data + Milvus ingestion + re-runnable update pipeline [MVP]
 DAY 3  Basic + Advanced LangChain RAG (OpenRouter) + query translation
        — protect from feature creep; establish a strong baseline first
 DAY 4  Function calling + deterministic tools
-       (BMI, calorie/protein targets, food lookup, meal nutrition, meal plan)
+       (BMI, calorie/protein targets, food lookup, meal nutrition, meal plan,
+       feeding log, nutrient-gap detection — Section 9b)
        + hard-coded infant-safety filter + doctor's-note override logic
+       — protect from feature creep; log_feeding()/detect_nutrient_gaps() reuse
+         existing generate_meal_plan() rather than a new generation path
 DAY 5  Lightweight intent router + Next.js/React production UI
        (chat, citations, tool-activity display)
        — protect from feature creep; full LangGraph agent only if ahead of schedule
