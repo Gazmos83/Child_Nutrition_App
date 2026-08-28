@@ -39,7 +39,8 @@ Applied after `day-5-feeding-log-and-gaps` is archived.
 - **UI** — a growth card in chat: one row per indicator with the measurement, percentile,
   a marker on the −3…+3 SD track, WHO reference values, and WHO's label when present;
   skipped rows show their reason. Copy is direct (Day 5 Decision 13): no weight-status
-  wordplay, no diagnosis, a pointer to plotting over time with the pediatrician.
+  wordplay, no diagnosis, a note that the WHO standard is a reference, not a diagnosis,
+  with a pointer to plotting the trend with the pediatrician.
 
 ## Capabilities
 

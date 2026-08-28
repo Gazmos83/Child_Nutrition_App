@@ -177,10 +177,18 @@ track built from `Progress`, reference line "WHO range for this age and sex: lo�
 median m", WHO label sentence when present), skipped rows with their reason, a source line,
 and `GROWTH_TREND_NOTE`. Strings: `GROWTH_INDICATOR_LABELS`, `GROWTH_BAND_LABELS`,
 `growthReference()`, `GROWTH_TREND_NOTE`, `growthWhoLabel()`, `TOOL_LABELS.assess_growth =
-"Growth check"`; snapshot updated.
+"Growth check"`; snapshot updated. `GROWTH_TREND_NOTE` reads: "Based on the WHO 2006 growth
+standards — a reference, not a diagnosis. Preterm birth, birth size, and family background
+all shift where a healthy child falls. Ask your pediatrician to interpret the trend."
 
 **Why:** The pattern exists and is tested; a card is what makes four percentiles readable.
-Copy lives in one file so the snapshot test reviews every new sentence.
+Copy lives in one file so the snapshot test reviews every new sentence. The note names the
+standard's known limits because the WHO 2006 sample (Brazil, Ghana, India, Norway, Oman,
+USA) is prescriptive, not descriptive: studies report over-classification of stunting and
+underweight in some populations, birth-size mismatches in UK and South African cohorts, and
+misplaced preterm infants when chronological age is not corrected for gestation. The tool
+has no gestational age and no history, so it cannot correct for any of these — the note
+says who can.
 
 **Cut line:** if time runs short, ship without the card — the tool-activity chip already
 renders the result JSON and the prose carries the numbers.
@@ -207,6 +215,9 @@ have nothing to match at archive time if change 2's tool task were cut and moved
 - [Misreading a percentile as a diagnosis] → WHO's label is quoted as WHO's term, only
   when outside the expected range; the trend note and the disclaimer ride on every
   answer; copy is direct and reviewed via the snapshot.
+- [Standard misfits the child — preterm, small at birth, population differs from the WHO
+  sample] → the trend note names these three cases and the pediatrician as the
+  interpreter; no correction is attempted.
 - [Model still calls `calculate_bmi` or `search_guidelines` for a growth question] →
   description and router example name the exact phrasings; end-to-end check repeats Day
   5's test 7. Both tools may legitimately run together; the card renders either way.
