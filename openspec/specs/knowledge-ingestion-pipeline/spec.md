@@ -11,7 +11,7 @@ without a full rebuild.
 
 ### Requirement: Ingestion is idempotent
 
-Running the ingestion pipeline twice with the same input documents produces the same
+Running the ingestion pipeline twice with the same input documents SHALL produce the same
 final state: all documents are indexed exactly once, and no duplicates or partial state
 remain.
 
@@ -59,7 +59,7 @@ re-embed only documents that are new or have changed.
 
 ### Requirement: Upserts preserve referential integrity and metadata
 
-When a document is updated, all its chunks are atomically replaced so queries see a
+When a document is updated, all its chunks SHALL be atomically replaced so queries see a
 consistent snapshot.
 
 #### Scenario: Updated document chunks are atomically replaced
