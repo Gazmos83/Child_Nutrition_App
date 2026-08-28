@@ -74,6 +74,10 @@ rule or source produced each target) sufficient to reconstruct why the plan was
 generated the way it was (hard rule 8), and SHALL additionally record the gap report
 (status, confidence, days, flags), the identifiers and timestamps of the day's logged
 entries with their summed nutrients, and each adjustment the plan made because of them.
+When the plan is generated inside a request, the record SHALL carry that request's
+correlation identifier, the account identifier, and the stored child profile identifier
+the inputs came from, so the recommendation can be traced to the account and profile that
+received it.
 
 #### Scenario: Log captures the full snapshot
 
@@ -92,6 +96,11 @@ entries with their summed nutrients, and each adjustment the plan made because o
 - **WHEN** a plan is generated with a gap report and logged entries
 - **THEN** the log record includes the gap report's status, confidence, days and flags,
   the logged entries' identifiers and summed nutrients, and the adjustments applied
+
+#### Scenario: Log record is correlated to account and profile
+
+- **WHEN** a plan is generated through the chat for a signed-in parent's saved child
+- **THEN** the log record carries the request id, the account id, and the child profile id
 
 ### Requirement: Gaps steer composition without raising targets
 
