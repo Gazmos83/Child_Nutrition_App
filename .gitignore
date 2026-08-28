@@ -33,3 +33,7 @@ frontend/out/
 frontend/.env*.local
 frontend/coverage/
 *.tsbuildinfo
+
+# Evaluation harness (separate uv project; see evals/README.md)
+evals/.venv/
+evals/results/

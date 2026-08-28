@@ -265,6 +265,32 @@ uv run pytest tests/test_nutrition_feeding.py tests/test_nutrition_gaps.py \
   tests/test_tools_feeding_log.py tests/test_tools_nutrient_gaps.py tests/test_api_feedings.py
 ```
 
+## Evaluation (Day 6)
+
+`evals/` is a **separate uv project** (RAGAs 0.4 needs LangChain 0.3, the app runs 1.x) that
+evaluates the running service as a black box over HTTP — see [`evals/README.md`](./evals/README.md).
+It runs a reviewed 54-case test set (`evals/cases.yaml`; seven categories: basic and advanced
+knowledge-base questions, tool, hybrid, user-data, out-of-domain, adversarial) through both
+retrieval strategies and scores three ways: deterministic retrieval/routing/safety checks,
+RAGAs generation metrics (faithfulness, answer relevancy, context precision, context recall),
+and a per-category breakdown. `tests/test_eval_cases.py` in the main suite keeps the case file
+valid without the evals environment.
+
+```bash
+uv run --project evals python -m harness.run --skip-judge        # deterministic layers only, no spend
+uv run --project evals python -m harness.run --label baseline    # full A/B with the RAGAs judge
+```
+
+**Baseline (2026-08-28, [`evals/reports/2026-08-28-baseline.md`](./evals/reports/2026-08-28-baseline.md)):**
+`basic` and `advanced` tie on every deterministic check — 100% retrieval hit and citation
+provenance, 100% correct no-answer on out-of-domain and adversarial probes — and sit within noise
+on generation (faithfulness 0.853 vs 0.867, context precision 0.919 vs 0.891, context recall
+0.943 vs 0.923; 28 judged cases each), with `advanced` ~1.3 s slower at the median. Three
+findings, not test-set errors: the vegan-diet answer omits B12, "what's in X plus Y" never
+reaches `calculate_meal_nutrition`, and one food-table question routed to the knowledge base
+in one of four runs. Prompts and corpus were frozen for this baseline; acting on the findings is
+a Day 7 decision.
+
 ## Logging and monitoring (Day 6)
 
 Structured logs are the MVP observability deliverable (reference §14); no dashboard. Every record is one line — a JSON object by default (`LOG_FORMAT=json`), or readable text — and every record emitted while handling a request carries the same three correlation fields: `request_id`, `user_id` (from the session), and `child_profile_id` (from the account's stored profile the request resolved). Nothing in `backend/tools/` or `backend/nutrition/` knows about any of this: the values live in `contextvars` set by the middleware and the auth dependencies, and a logging filter stamps them onto each record.

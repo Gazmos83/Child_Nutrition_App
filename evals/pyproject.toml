@@ -1,0 +1,40 @@
+[project]
+name = "nutrition-evals"
+version = "0.1.0"
+description = "RAG A/B evaluation harness for the child-nutrition assistant (reference §12). Standalone: RAGAs needs LangChain 0.3, the app runs LangChain 1.x."
+requires-python = ">=3.14"
+dependencies = [
+    "ragas>=0.4.3,<0.5",
+    "langchain-openai<1",
+    "langchain-community<0.4",
+    "httpx>=0.28",
+    "pyyaml>=6",
+    "pydantic>=2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness"]
+
+[tool.uv]
+package = true
+
+[dependency-groups]
+dev = [
+    "pytest>=9",
+    "ruff>=0.16",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
