@@ -11,10 +11,12 @@ citation events; and an equivalent non-streaming JSON response.
 ### Requirement: The request is validated before any work
 
 `POST /api/chat` SHALL accept a JSON body with a required non-blank `message` (at most
-2000 characters), an optional `child` context, an optional `history` of at most twelve
-prior turns, an optional retrieval `strategy` (`basic` or `advanced`, default
-`advanced`), and `stream` (default `true`). Unknown fields SHALL be rejected. Invalid
-requests SHALL return HTTP 422 before any model call, retrieval, or tool runs.
+2000 characters), an optional `child_id` (a UUID naming one of the caller's children), an
+optional `history` of at most twelve prior turns, an optional IANA `timezone` (default
+UTC), an optional retrieval `strategy` (`basic` or `advanced`, default `advanced`), and
+`stream` (default `true`). Unknown fields — including `child` and `feeding_log` — SHALL be
+rejected. Invalid requests SHALL return HTTP 422 before any model call, retrieval, or tool
+runs.
 
 #### Scenario: Blank message rejected
 
@@ -28,8 +30,19 @@ requests SHALL return HTTP 422 before any model call, retrieval, or tool runs.
 
 #### Scenario: Invalid child context rejected
 
-- **WHEN** the child context has an age of 61 months, a non-positive weight, or an
-  allergy outside the controlled vocabulary
+- **WHEN** the body carries a child context — of any shape, valid or with an age of 61
+  months, a non-positive weight, or an allergy outside the controlled vocabulary
+- **THEN** the response is 422, because the child's details are no longer accepted in the
+  body at all
+
+#### Scenario: Client cannot supply the child
+
+- **WHEN** the body carries a `child` object or a `feeding_log`
+- **THEN** the response is 422 and no model call is made
+
+#### Scenario: Invalid child id rejected
+
+- **WHEN** `child_id` is not a UUID
 - **THEN** the response is 422
 
 ### Requirement: The streaming response is an ordered sequence of typed events
@@ -94,53 +107,39 @@ SHALL return HTTP 503 with a message naming what is missing, without exposing se
 - **WHEN** the provider API key is not configured
 - **THEN** the response is 503 and the message names the missing configuration
 
-### Requirement: The endpoint reads and writes no user data
+### Requirement: The endpoint answers for the authenticated account's child
 
-The endpoint SHALL NOT read or write any stored user, child, or conversation record and
-SHALL take no user identity. Child context and history exist only in the request.
+`POST /api/chat` SHALL require a valid session and SHALL fill the child context and the
+feeding log from the account's stored rows: the profile `child_id` names when given; the
+account's only profile when omitted; no child context when the account has none. It SHALL
+reject an omitted `child_id` with 422 naming the field when the account has several
+children, and SHALL refuse a `child_id` the account does not own exactly as it refuses a
+nonexistent one. The log read SHALL be bounded to the last fourteen days and two hundred
+entries. Nothing about the conversation SHALL be stored.
 
-#### Scenario: No persistence
+#### Scenario: Unauthenticated chat refused
 
-- **WHEN** a message with child context and history is processed
-- **THEN** no database read or write occurs and a second identical request produces the
-  same result independent of the first
+- **WHEN** the request carries no valid session
+- **THEN** the response is 401 and no model call is made
 
-### Requirement: The request may carry the client-held feeding log
+#### Scenario: Child and log come from the rows
 
-`POST /api/chat` SHALL accept an optional `feeding_log` of at most two hundred validated
-feeding entries and an optional IANA `timezone` (default UTC). Log-backed tool arguments
-(entries, today's entries, time zone) SHALL be filled from the request, never from the
-model, and the tool activity SHALL record that they came from the feeding log. An invalid
-entry or time zone SHALL reject the request with HTTP 422 before any work.
+- **WHEN** the account has one child with a logged formula feed and asks a question
+- **THEN** the resolved request carries that child's age, sex, and allergies and a feeding
+  log containing that feed, and neither came from the body
 
-#### Scenario: Log-backed arguments come from the request
+#### Scenario: No child yet
 
-- **WHEN** the router selects `detect_nutrient_gaps` and the request carries a feeding log
-- **THEN** the tool runs over the request's entries and the activity lists `entries` as
-  taken from the feeding log
+- **WHEN** the account has no child profile
+- **THEN** the request proceeds without child context and the existing side-panel hint
+  applies to profile-backed tools
 
-#### Scenario: Invalid entry rejected
+#### Scenario: Several children need a name
 
-- **WHEN** the feeding log contains a `solid` entry without a food identifier
-- **THEN** the response is 422 and no model call is made
+- **WHEN** the account has two children and `child_id` is omitted
+- **THEN** the response is 422 and the message names `child_id`
 
-#### Scenario: No log, tools still run
+#### Scenario: Unowned child id
 
-- **WHEN** the request carries no feeding log and the router selects `detect_nutrient_gaps`
-- **THEN** the tool runs over an empty log and reports `insufficient_data`
-
-### Requirement: Feedings and foods endpoints are stateless
-
-`POST /api/feedings` SHALL validate a single feeding entry, return it normalised with its
-identifier and table-derived nutrients, and store nothing. `GET /api/foods` SHALL return
-the food-composition table listing. Neither SHALL take a user identity or read user data.
-
-#### Scenario: Valid feeding returned with nutrients
-
-- **WHEN** a valid `formula` entry of 150 ml is posted
-- **THEN** the response is 200 with the entry, a generated identifier, and 100.5 kcal
-
-#### Scenario: Unknown food named in the error
-
-- **WHEN** a `solid` entry with an unknown food identifier is posted
-- **THEN** the response is a validation error whose message contains that identifier
+- **WHEN** `child_id` names another account's child, and separately a nonexistent id
+- **THEN** both responses are 404 with identical bodies and no model call is made
