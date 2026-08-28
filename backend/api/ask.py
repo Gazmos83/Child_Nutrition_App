@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from backend.api.sse import sse
+from backend.core import request_context
 from backend.rag.llm import get_pipeline
 from backend.rag.pipeline import RagPipeline, RagResponse
 from backend.schemas.rag import AskRequest, AskResponse
@@ -58,7 +59,13 @@ async def _event_stream(pipeline: RagPipeline, request: AskRequest) -> AsyncIter
         yield sse("done", {})
     except Exception:
         logger.exception("Streaming answer failed")
-        yield sse("error", {"message": "The answer could not be completed. Please try again."})
+        yield sse(
+            "error",
+            {
+                "message": "The answer could not be completed. Please try again.",
+                "request_id": request_context.get_request_id(),
+            },
+        )
 
 
 @router.post(

@@ -15,6 +15,7 @@ PostgreSQL, and the app must boot -- and ``/health`` must answer -- with no LLM 
 store configured at all.
 """
 
+import logging
 from functools import lru_cache
 from typing import Literal
 
@@ -72,8 +73,29 @@ class Settings(BaseSettings):
         le=24 * 30,
         description="How long a signed-in session stays valid.",
     )
+    # Day 6 logging (observability spec). JSON by default so a deployed instance is
+    # machine-readable; .env.example sets text for local reading.
+    log_format: Literal["json", "text"] = Field(
+        default="json", description="One JSON object per line, or human-readable text."
+    )
+    log_level: str = Field(default="INFO", description="Minimum level, e.g. INFO or WARNING.")
+    audit_log_path: str | None = Field(
+        default=None,
+        description=(
+            "File that receives the meal-plan and gap-detection audit records as JSON lines. "
+            "Unset: they go to the main log with everything else."
+        ),
+    )
 
-    @field_validator("session_secret", "test_database_url", mode="before")
+    @field_validator("log_level")
+    @classmethod
+    def _known_level_name(cls, value: str) -> str:
+        name = value.strip().upper()
+        if name not in logging.getLevelNamesMapping():
+            raise ValueError(f"LOG_LEVEL must be a logging level name, got {value!r}")
+        return name
+
+    @field_validator("session_secret", "test_database_url", "audit_log_path", mode="before")
     @classmethod
     def _blank_optional_is_absent(cls, value: object) -> object:
         """``SESSION_SECRET=`` (present but empty, as .env.example ships) means unset."""

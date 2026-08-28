@@ -26,6 +26,7 @@ from backend.api.sse import sse
 from backend.chat import copy
 from backend.chat.service import ChatService
 from backend.chat.wiring import get_chat_service
+from backend.core import request_context
 from backend.models import ChildProfile
 from backend.schemas.chat import ChatRequest, ChatRequestBody, ChatResponse
 
@@ -67,6 +68,7 @@ async def resolve_chat_request(
         child = children[0] if children else None
     if child is None:
         return ChatRequest(**body.model_dump())
+    request_context.set_child_profile_id(child.id)
     rows = await recent_feedings(db, child, DEFAULT_LOG_DAYS)
     return ChatRequest(
         **body.model_dump(), child=to_child_context(child), feeding_log=to_feeding_entries(rows)
@@ -79,7 +81,10 @@ async def _event_stream(service: ChatService, request: ChatRequest) -> AsyncIter
             yield sse(event.event, event.data)
     except Exception:
         logger.exception("Chat stream failed")
-        yield sse("error", {"message": copy.STREAM_FAILED})
+        yield sse(
+            "error",
+            {"message": copy.STREAM_FAILED, "request_id": request_context.get_request_id()},
+        )
 
 
 @router.post(

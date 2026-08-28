@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.auth.tokens import read_session_token
+from backend.core import request_context
 from backend.core.config import Settings, get_settings
 from backend.db.session import get_db
 from backend.models import ChildProfile, User
@@ -64,6 +65,9 @@ async def get_current_user(
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise unauthenticated()
+    # Correlation for every log record in this request (observability spec): the id comes
+    # from the session cookie just verified, never from the body.
+    request_context.set_user_id(user.id)
     return user
 
 
@@ -83,6 +87,7 @@ async def owned_child(child_id: uuid.UUID, user: CurrentUser, db: DbSession) -> 
     child = result.scalar_one_or_none()
     if child is None:
         raise no_such_child()
+    request_context.set_child_profile_id(child.id)
     return child
 
 

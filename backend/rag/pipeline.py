@@ -5,6 +5,7 @@ tone, disclaimer -- is identical for both strategies.
 """
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -69,7 +70,9 @@ class RagPipeline:
             raise ValueError(f"Unknown strategy {strategy!r}") from None
 
     async def retrieve(self, question: str, strategy: Strategy) -> RetrievedContext:
+        started = time.perf_counter()
         result = await self._retriever(strategy).retrieve(question)
+        latency_ms = int((time.perf_counter() - started) * 1000)
         scores = [c.score for c in result.chunks if c.score is not None]
         top_score = max(scores) if scores else None
         # The floor is judged on the original question's own best match (Decision 7): a
@@ -91,6 +94,16 @@ class RagPipeline:
             len(kept),
             len(citations),
             top_score if top_score is not None else float("nan"),
+            # Structured fields for the JSON log; the queries are what the client already
+            # receives in RetrievalMeta, so nothing new is exposed.
+            extra={
+                "strategy": strategy,
+                "queries": list(result.queries),
+                "retrieved": result.retrieved,
+                "kept": len(kept),
+                "top_score": top_score,
+                "latency_ms": latency_ms,
+            },
         )
         return RetrievedContext(result, kept, context, citations, top_score)
 

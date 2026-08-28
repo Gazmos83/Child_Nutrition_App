@@ -185,3 +185,16 @@ class TestFloorIsJudgedOnTheOriginalQuestion:
         pipeline = RagPipeline(retrievers={"advanced": Retriever()}, chat_model=llm)
         response = await pipeline.answer("iron for my baby", "advanced")
         assert len(response.citations) == 2
+
+
+async def test_retrieval_record_carries_latency_and_queries(caplog) -> None:
+    """Observability spec: the rag line gains structured latency and the queries issued."""
+    import logging
+
+    pipeline = make_pipeline(RecordingChatModel(responses=[]))
+    with caplog.at_level(logging.INFO, logger="backend.rag.pipeline"):
+        await pipeline.retrieve("how much iron do infants need", "basic")
+    [record] = [r for r in caplog.records if r.getMessage().startswith("rag ")]
+    assert isinstance(record.latency_ms, int) and record.latency_ms >= 0
+    assert record.queries == ["how much iron do infants need"]
+    assert record.strategy == "basic" and isinstance(record.retrieved, int)

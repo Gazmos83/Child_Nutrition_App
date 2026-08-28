@@ -258,6 +258,35 @@ class TestStream:
         line = next(r.getMessage() for r in caplog.records if r.getMessage().startswith("chat "))
         assert "intent=tool" in line and "calculate_bmi:ok" in line and "latency_ms=" in line
 
+    async def test_one_tool_record_per_invocation_and_no_message_text(self, caplog) -> None:
+        service, _ = make_service(
+            [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        call("calculate_bmi", weight_kg=9, height_cm=72),
+                        call("lookup_food", food_id="nope"),
+                    ],
+                ),
+                "ok",
+            ]
+        )
+        with caplog.at_level(logging.INFO):
+            await collect(service, ChatRequest(message="secret question about bmi"))
+        tools = [r for r in caplog.records if r.name == "backend.chat.tools"]
+        # Tools run concurrently, so the records' order is not fixed.
+        assert sorted((r.tool, r.status, r.error_kind) for r in tools) == [
+            ("calculate_bmi", "ok", None),
+            ("lookup_food", "error", "unknown_food"),
+        ]
+        for record in tools:
+            assert isinstance(record.latency_ms, int) and record.latency_ms >= 0
+            assert record.used_context == []
+        summary = next(r for r in caplog.records if r.getMessage().startswith("chat "))
+        assert summary.message_chars == len("secret question about bmi")
+        assert "message_chars=25" in summary.getMessage()
+        assert "secret question" not in "\n".join(r.getMessage() for r in caplog.records)
+
     async def test_answer_collects_the_same_content(self) -> None:
         service, _ = make_service(
             [

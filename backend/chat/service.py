@@ -38,6 +38,7 @@ from backend.schemas.rag import Citation, RetrievalMeta
 
 logger = logging.getLogger(__name__)
 route_logger = logging.getLogger("backend.chat.router")
+tool_logger = logging.getLogger("backend.chat.tools")
 
 # Change 2 design Decision 9: a plan over a non-empty log is always informed by gap detection
 # -- the model's if it planned one, otherwise the service's own run, made before the plan.
@@ -98,6 +99,45 @@ async def _run_one(
     if inject:
         args.update(inject)
         used.extend(inject)
+    started = time.perf_counter()
+    activity = await _invoke(name, args, used, request, tool)
+    # One record per invocation (observability spec): outcome and latency, and which
+    # arguments came from the child's stored details or log -- never the values.
+    tool_logger.info(
+        "tool %s %s %dms",
+        name,
+        activity.status,
+        int((time.perf_counter() - started) * 1000),
+        extra={
+            "tool": name,
+            "status": activity.status,
+            "latency_ms": int((time.perf_counter() - started) * 1000),
+            "used_context": list(used),
+            "error_kind": _error_kind(activity),
+        },
+    )
+    return activity
+
+
+def _error_kind(activity: ToolActivity) -> str | None:
+    if activity.status == "ok":
+        return None
+    if activity.error == copy.SAFETY_STOP:
+        return "unsafe"
+    if activity.error == copy.TOOL_FAILED:
+        return "failure"
+    if activity.detail and activity.detail.startswith("Unknown food"):
+        return "unknown_food"
+    return "validation"
+
+
+async def _invoke(
+    name: str,
+    args: dict[str, object],
+    used: list[str],
+    request: ChatRequest,
+    tool: BaseTool,
+) -> ToolActivity:
     try:
         result = await tool.ainvoke(args)
     except ValidationError as exc:
@@ -242,16 +282,29 @@ class ChatService:
                     yield ChatEvent("token", {"text": text})
             yield self._final(decision.intent, activities, citations, retrieval)
 
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        # The message's length, never its text (observability spec).
         route_logger.info(
             "chat intent=%s planned=%s executed=%s dropped=%d retrieval_kept=%s "
-            "retrieval_top=%s latency_ms=%d",
+            "retrieval_top=%s message_chars=%d latency_ms=%d",
             decision.intent,
             decision.planned,
             [f"{a.name}:{a.status}" for a in activities],
             decision.dropped,
             retrieval.kept if retrieval else "-",
             f"{retrieval.top_score:.3f}" if retrieval and retrieval.top_score is not None else "-",
-            int((time.perf_counter() - started) * 1000),
+            len(request.message),
+            latency_ms,
+            extra={
+                "intent": decision.intent,
+                "planned": list(decision.planned),
+                "executed": [f"{a.name}:{a.status}" for a in activities],
+                "dropped": decision.dropped,
+                "retrieval_kept": retrieval.kept if retrieval else None,
+                "retrieval_top": retrieval.top_score if retrieval else None,
+                "message_chars": len(request.message),
+                "latency_ms": latency_ms,
+            },
         )
         yield ChatEvent("done", {})
 

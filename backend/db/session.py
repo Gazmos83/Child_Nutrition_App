@@ -32,7 +32,10 @@ def get_engine() -> AsyncEngine:
         # drop idle connections, and design.md Decision 11 puts one behind every
         # deployment, so the alternative is intermittent errors on the first query.
         pool_pre_ping=True,
-        echo=settings.app_env == "dev",
+        # Never echo SQL: bound parameters would put emails and password hashes into the
+        # log (observability spec, "Some things are never logged"). For query debugging
+        # raise `sqlalchemy.engine` to DEBUG deliberately and locally.
+        echo=False,
     )
 
 

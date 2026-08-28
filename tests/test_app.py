@@ -44,6 +44,16 @@ def unconfigured_client(monkeypatch) -> TestClient:
 class TestAppBoots:
     """Task 6.2."""
 
+    def test_create_app_configures_logging_once(self) -> None:
+        """Day 6 logging: repeated factories do not stack root handlers."""
+        import logging
+
+        create_app()
+        create_app()
+        root = logging.getLogger()
+        own = [h for h in root.handlers if getattr(h, "_nutrition_app_handler", False)]
+        assert len(own) == 1
+
     def test_app_is_importable_without_a_database(self) -> None:
         assert app is not None
         assert len(app.routes) > 0

@@ -71,6 +71,8 @@ Every user-scoped read and write is bound to the authenticated user's identity �
 
 All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
 
+**Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
+
 Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, doctor's note, rule/source used) for auditability.
 
 ## Development
@@ -98,7 +100,7 @@ Always add dependencies through the package manager (`uv add`, `pnpm add`) and r
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
 
 ### Knowledge base
 
@@ -262,6 +264,31 @@ adjustments; gap detection emits its own `nutrient_gaps_audit` line.
 uv run pytest tests/test_nutrition_feeding.py tests/test_nutrition_gaps.py \
   tests/test_tools_feeding_log.py tests/test_tools_nutrient_gaps.py tests/test_api_feedings.py
 ```
+
+## Logging and monitoring (Day 6)
+
+Structured logs are the MVP observability deliverable (reference §14); no dashboard. Every record is one line — a JSON object by default (`LOG_FORMAT=json`), or readable text — and every record emitted while handling a request carries the same three correlation fields: `request_id`, `user_id` (from the session), and `child_profile_id` (from the account's stored profile the request resolved). Nothing in `backend/tools/` or `backend/nutrition/` knows about any of this: the values live in `contextvars` set by the middleware and the auth dependencies, and a logging filter stamps them onto each record.
+
+Record types, by logger:
+
+| Logger | One record per | Fields |
+|---|---|---|
+| `backend.api.access` | request (at `DEBUG` for `/health`) | `method`, `route` (template, e.g. `/api/children/{child_id}`), `status`, `latency_ms`, `user_id` |
+| `backend.chat.router` | chat message | intent, planned/executed capabilities with outcomes, retrieval stats, `message_chars`, `latency_ms` |
+| `backend.chat.tools` | tool invocation | `tool`, `status`, `latency_ms`, `used_context` (which args came from the profile/log), `error_kind` |
+| `backend.rag.pipeline` | knowledge-base retrieval | `strategy`, `queries`, `retrieved`, `kept`, `top_score`, `latency_ms` |
+| `backend.tools.audit` | meal plan / gap detection (hard rule 8) | the full input snapshot as JSON in the message; correlation fields on the record |
+| `backend.api.errors` | unhandled exception | traceback; the client gets `500 {"detail", "request_id"}` and never a traceback |
+
+Every response carries `X-Request-ID` (a well-formed incoming one is honoured, so a proxy's id threads through); a streamed `error` event on `/api/chat` or `/api/ask` carries `request_id` too. To follow one request end to end:
+
+```bash
+uv run uvicorn backend.main:app --port 8000 --no-access-log > app.log
+curl -si localhost:8000/api/foods | grep -i x-request-id
+grep '"request_id": "<the id>"' app.log
+```
+
+Set `AUDIT_LOG_PATH=audit.jsonl` to write the audit records to their own file (and not to the main log) when they need longer retention than the rest.
 
 ## Project docs
 

@@ -130,3 +130,35 @@ class TestSession:
         assert response.status_code == 204
         cookie = response.headers["set-cookie"]
         assert cookie.startswith(f'{SESSION_COOKIE}="";') or "Max-Age=0" in cookie
+
+
+class TestNothingSensitiveIsLogged:
+    """Observability spec: credentials, tokens, and emails never reach a log record."""
+
+    async def test_register_and_sign_in_leave_no_credential_trace(
+        self, api_client: AsyncClient, caplog
+    ) -> None:
+        import logging as _logging
+
+        caplog.set_level(_logging.DEBUG)
+        registered = await api_client.post("/api/auth/register", json=CREDENTIALS)
+        assert registered.status_code == 201
+        cookie = registered.cookies.get(SESSION_COOKIE)
+        assert cookie
+        api_client.cookies.clear()
+        signed_in = await api_client.post("/api/auth/login", json=CREDENTIALS)
+        assert signed_in.status_code == 200
+        assert (await api_client.get("/api/auth/me")).status_code == 200
+
+        captured = "\n".join(
+            r.getMessage() + " " + repr({k: v for k, v in r.__dict__.items() if k != "msg"})
+            for r in caplog.records
+        )
+        assert CREDENTIALS["password"] not in captured
+        assert CREDENTIALS["email"] not in captured
+        assert cookie not in captured
+        assert "$argon2" not in captured
+        # The access records are there, carrying only the account's identifier.
+        access = [r for r in caplog.records if r.name == "backend.api.access"]
+        assert [r.status for r in access] == [201, 200, 200]
+        assert access[-1].user_id == registered.json()["id"]

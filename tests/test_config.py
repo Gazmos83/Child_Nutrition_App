@@ -94,6 +94,32 @@ class TestSessionSettings:
             Settings(database_url=self.DEV, session_ttl_hours=0, _env_file=None)
 
 
+class TestLoggingSettings:
+    DEV = "postgresql+asyncpg://u:p@h/nutrition"
+
+    def test_defaults(self, monkeypatch) -> None:
+        for name in ("LOG_FORMAT", "LOG_LEVEL", "AUDIT_LOG_PATH"):
+            monkeypatch.delenv(name, raising=False)
+        settings = Settings(database_url=self.DEV, _env_file=None)
+        assert settings.log_format == "json"
+        assert settings.log_level == "INFO"
+        assert settings.audit_log_path is None
+
+    def test_level_is_normalised_and_validated(self) -> None:
+        settings = Settings(database_url=self.DEV, log_level=" warning ", _env_file=None)
+        assert settings.log_level == "WARNING"
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, log_level="LOUD", _env_file=None)
+
+    def test_unknown_format_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, log_format="xml", _env_file=None)
+
+    def test_blank_audit_path_is_absent(self) -> None:
+        settings = Settings(database_url=self.DEV, audit_log_path="  ", _env_file=None)
+        assert settings.audit_log_path is None
+
+
 class TestMissingConfiguration:
     """Task 3.2: absence of DATABASE_URL must fail loudly and name the field."""
 

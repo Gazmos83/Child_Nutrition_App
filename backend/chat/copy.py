@@ -16,6 +16,7 @@ SAFETY_STOP = (
 )
 
 TOOL_FAILED = "That one didn't work out on our side. Everything else in this answer still stands"
+SERVER_ERROR = "Something went wrong on our side. If it keeps happening, quote the request id"
 
 STREAM_FAILED = (
     "We lost the thread mid-answer. Please try again — your child's details are safe in "

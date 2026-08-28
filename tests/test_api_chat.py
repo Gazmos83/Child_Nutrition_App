@@ -192,11 +192,14 @@ class TestStreaming:
         ]
         llm.fail_with = "provider dropped"
         llm.fail_after_tokens = 2
-        events = parse_sse(client.post("/api/chat", json={"message": "bmi?"}).text)
+        r = client.post("/api/chat", json={"message": "bmi?"})
+        events = parse_sse(r.text)
         kinds = [k for k, _ in events]
         assert kinds.count("error") == 1 and "done" not in kinds
         assert kinds[-1] == "error"
-        assert events[-1][1] == {"message": copy.STREAM_FAILED}
+        assert events[-1][1]["message"] == copy.STREAM_FAILED
+        assert set(events[-1][1]) == {"message", "request_id"}
+        assert events[-1][1]["request_id"] == r.headers["x-request-id"]
         assert "provider dropped" not in json.dumps(events)
 
 
