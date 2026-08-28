@@ -182,6 +182,8 @@ Auth/authz before deployment. Every user-scoped operation must be bound to authe
 ## 15. Infrastructure **[MVP, kept simple]**
 Docker, GitHub, GitHub Actions, managed PostgreSQL, Milvus Lite, Vercel (or equivalent) for Next.js, container hosting for FastAPI. No Kubernetes, Celery, or microservices unless a real need appears.
 
+Local development and the test suite run PostgreSQL 17 in Docker Compose (`docker-compose.yml`, decided Day 6 — a single `postgres` service on loopback with a dev and a test database; backend and frontend stay on the host). Deployment keeps the managed instance, reached through the same `DATABASE_URL`.
+
 ---
 
 ## 16. Production Migration Path (Design-only, not built now)
@@ -211,8 +213,9 @@ DAY 4  Function calling + deterministic tools
 DAY 5  Lightweight intent router + Next.js/React production UI
        (chat, citations, tool-activity display)
        — protect from feature creep; full LangGraph agent only if ahead of schedule
-DAY 6  Evaluation (RAGAs A/B testing [MVP]) +
-       security + AI safety + logging/monitoring [MVP]        — protect from feature creep
+DAY 6  Accounts + auth, Docker Postgres + Alembic (Day 1 group 7 closed) [MVP] +
+       logging/monitoring [MVP] + Evaluation (RAGAs A/B testing [MVP])
+       + AI safety                                            — protect from feature creep
 DAY 7  Deployment + UX polish + stretch goals if time allows
 ```
 

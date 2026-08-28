@@ -16,8 +16,8 @@ A RAG + tool-calling chatbot for **Turing College Project 2**, specialized in **
 | Backend | Python, FastAPI, Pydantic, SQLAlchemy, Alembic |
 | LLM | LangChain via **OpenRouter** (OpenAI-compatible SDK) — never call OpenAI directly with a raw key |
 | Vector DB | Milvus Lite, behind a vector-store abstraction (not tightly coupled) |
-| App DB | PostgreSQL — users, meals, conversations, nutrition data. **Never store this in Milvus.** |
-| Tooling | **uv** — Python deps + venv, Python 3.14 pinned, `uv.lock` committed and authoritative · **pnpm** — frontend deps, workspace-ready |
+| App DB | PostgreSQL — users, meals, conversations, nutrition data. **Never store this in Milvus.** Runs locally as `postgres:17` via `docker-compose.yml` (dev + test databases); deployment targets a managed instance through the same `DATABASE_URL`. Schema via Alembic (`uv run alembic upgrade head`). |
+| Tooling | **uv** — Python deps + venv, Python 3.14 pinned, `uv.lock` committed and authoritative · **pnpm** — frontend deps, workspace-ready · **Docker Compose** — local PostgreSQL only; the backend and frontend run on the host (`uv run uvicorn`, `pnpm -C frontend dev`) |
 
 Dependencies are always added through the package manager — `uv add` / `uv add --dev`, `pnpm add` — and Python code runs via `uv run`. Never `pip install` into `.venv` and never hand-edit a lockfile; `uv.lock` and `pnpm-lock.yaml` are the source of truth.
 
