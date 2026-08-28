@@ -52,6 +52,48 @@ class TestDatabaseUrlNormalization:
         assert "must not be empty" in str(exc_info.value)
 
 
+class TestTestDatabaseUrl:
+    """Day 6: the test database is an explicit, optional, separately-validated setting."""
+
+    DEV = "postgresql+asyncpg://u:p@h/nutrition"
+
+    def test_absent_by_default(self, monkeypatch) -> None:
+        monkeypatch.delenv("TEST_DATABASE_URL", raising=False)
+        assert Settings(database_url=self.DEV, _env_file=None).test_database_url is None
+
+    def test_normalized_like_database_url(self) -> None:
+        settings = Settings(
+            database_url=self.DEV,
+            test_database_url="postgresql://u:p@h/nutrition_test",
+            _env_file=None,
+        )
+        assert settings.test_database_url == "postgresql+asyncpg://u:p@h/nutrition_test"
+
+    def test_non_postgres_test_url_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, test_database_url="sqlite:///t.db", _env_file=None)
+
+
+class TestSessionSettings:
+    DEV = "postgresql+asyncpg://u:p@h/nutrition"
+
+    def test_blank_secret_is_absent_not_an_error(self) -> None:
+        """.env.example ships `SESSION_SECRET=`; the app must still boot."""
+        settings = Settings(database_url=self.DEV, session_secret="", _env_file=None)
+        assert settings.session_secret is None
+        blank_test_url = Settings(database_url=self.DEV, test_database_url="  ", _env_file=None)
+        assert blank_test_url.test_database_url is None
+
+    def test_short_secret_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, session_secret="short", _env_file=None)
+
+    def test_ttl_default_and_bounds(self) -> None:
+        assert Settings(database_url=self.DEV, _env_file=None).session_ttl_hours == 24 * 7
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, session_ttl_hours=0, _env_file=None)
+
+
 class TestMissingConfiguration:
     """Task 3.2: absence of DATABASE_URL must fail loudly and name the field."""
 

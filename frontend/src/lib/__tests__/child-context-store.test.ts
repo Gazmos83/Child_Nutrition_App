@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  CHILD_STORAGE_KEY,
-  EMPTY_CHILD_FORM,
-  loadChildForm,
-  saveChildForm,
-  toChildContext,
-} from "../child-context-store";
+import { EMPTY_CHILD_FORM, fromProfile, toChildContext } from "../child-context-store";
 
 const FILLED = { ...EMPTY_CHILD_FORM, age_months: "8", weight_kg: "8.5", sex: "female" as const };
 
@@ -50,18 +44,32 @@ describe("toChildContext", () => {
   });
 });
 
-describe("browser persistence", () => {
-  it("round-trips through localStorage and tolerates junk", () => {
-    saveChildForm(FILLED);
-    expect(loadChildForm()).toEqual(FILLED);
-    window.localStorage.setItem(CHILD_STORAGE_KEY, "{not json");
-    expect(loadChildForm()).toBeNull();
-    window.localStorage.setItem(CHILD_STORAGE_KEY, JSON.stringify({ age_months: 8 }));
-    expect(loadChildForm()).toBeNull();
-  });
-
-  it("survives a missing storage", () => {
-    expect(loadChildForm(undefined)).toBeNull();
-    expect(() => saveChildForm(FILLED, undefined)).not.toThrow();
+describe("fromProfile", () => {
+  it("shows the stored profile as form strings, blanks for nulls", () => {
+    const form = fromProfile({
+      id: "c1",
+      age_months: 8,
+      weight_kg: 8.5,
+      sex: "female",
+      height_cm: null,
+      diet_preference: "omnivore",
+      allergies: ["peanut"],
+      doctors_note: null,
+      doctors_note_recorded_at: null,
+      activity_level: "low_active",
+      created_at: "2026-08-28T09:00:00Z",
+    });
+    expect(form).toEqual({ ...FILLED, allergies: ["peanut"] });
+    // And back again without loss.
+    expect(toChildContext(form).child).toEqual({
+      age_months: 8,
+      weight_kg: 8.5,
+      sex: "female",
+      height_cm: null,
+      diet_preference: "omnivore",
+      allergies: ["peanut"],
+      doctors_note: null,
+      activity_level: "low_active",
+    });
   });
 });

@@ -1,6 +1,8 @@
-Groups 1–6 need no database and are verifiable on this machine today. Group 7 is the
-database-dependent work, isolated deliberately (see design.md — Risks) so everything else
-completes and verifies without a `DATABASE_URL`.
+Groups 1–6 need no database and were verified on Day 1. Group 7 is the database-dependent
+work, isolated deliberately (see design.md — Risks); it was completed on 2026-08-28 against
+the Docker-hosted PostgreSQL introduced by `day-6-auth-and-persistence`, whose tests hold
+the verifications named below (`tests/test_migrations.py`, `tests/test_db_constraints.py`,
+`tests/test_api_children.py`).
 
 ## 1. Toolchain and dependency baseline
 
@@ -42,16 +44,16 @@ completes and verifies without a `DATABASE_URL`.
 - [x] 6.3 Implement `GET /health` returning app status plus a database-reachability field that degrades gracefully (reports `"db": "unreachable"` rather than raising) when Postgres is absent; verify via FastAPI `TestClient` that it returns 200 with no `DATABASE_URL` set
 - [x] 6.4 Confirm no user-scoped route is exposed (design.md Risk 6) — verify by asserting the app's route paths are exactly `/health` plus FastAPI's built-in docs routes
 
-## 7. Database-dependent work — blocked until `DATABASE_URL` exists
+## 7. Database-dependent work — completed 2026-08-28 (Day 6)
 
-- [ ] 7.1 Initialize Alembic and convert `alembic/env.py` to the async `run_async_migrations` pattern (Decision 1); verify `uv run alembic current` connects and prints an empty revision
-- [ ] 7.2 Author the initial migration creating the three enum types, `users`, `child_profiles`, and `child_allergies`; verify `uv run alembic upgrade head` exits 0
-- [ ] 7.3 Hand-write the migration's `downgrade()` to drop tables before enum types, with a comment on the `ALTER TYPE ... ADD VALUE` transaction restriction (design.md Risks); verify `alembic downgrade base` then `upgrade head` round-trips cleanly
-- [ ] 7.4 Implement `tests/conftest.py` with an async engine fixture and per-test transaction rollback against the Postgres test database (Decision 12); verify `uv run pytest` collects and runs
-- [ ] 7.5 Verify the age constraint against real Postgres — integration tests assert `-1`, `61`, and `8.5` are all rejected, and `0` and `8` accepted (child-profile spec, *Age is represented in months*)
-- [ ] 7.6 Verify the allergen vocabulary against real Postgres — integration test asserts an off-vocabulary string raises a database error and that inserting the same allergen twice violates the composite PK
-- [ ] 7.7 Verify email uniqueness is case-insensitive — integration test asserts `Parent@Example.com` then `parent@example.com` raises a uniqueness violation (user-account spec)
-- [ ] 7.8 Verify cascade deletion — integration test asserts deleting a user removes its child profiles and their allergy rows, leaving no orphans (user-account spec, *Account deletion removes owned data*)
-- [ ] 7.9 Verify weight precision — integration test asserts `8.4` and `8.45` round-trip exactly as `Decimal`, and that `0` is rejected
-- [ ] 7.10 Add the `user-account` authorization scenarios as `xfail(reason="authz lands D6")` tests so D6 inherits a ready checklist (design.md Risk 6); verify the suite reports them as expected failures, not passes
-- [ ] 7.11 Run `GET /health` against the live database and verify it reports the database as reachable
+- [x] 7.1 Initialize Alembic and convert `alembic/env.py` to the async `run_async_migrations` pattern (Decision 1); verify `uv run alembic current` connects and prints an empty revision
+- [x] 7.2 Author the initial migration creating the three enum types, `users`, `child_profiles`, and `child_allergies`; verify `uv run alembic upgrade head` exits 0
+- [x] 7.3 Hand-write the migration's `downgrade()` to drop tables before enum types, with a comment on the `ALTER TYPE ... ADD VALUE` transaction restriction (design.md Risks); verify `alembic downgrade base` then `upgrade head` round-trips cleanly
+- [x] 7.4 Implement `tests/conftest.py` with an async engine fixture and per-test transaction rollback against the Postgres test database (Decision 12); verify `uv run pytest` collects and runs
+- [x] 7.5 Verify the age constraint against real Postgres — integration tests assert `-1`, `61`, and `8.5` are all rejected, and `0` and `8` accepted (child-profile spec, *Age is represented in months*). *Note at completion:* PostgreSQL rounds `8.5` into a `smallint` rather than refusing it; the fraction is rejected by the Pydantic write model, and the test asserts that
+- [x] 7.6 Verify the allergen vocabulary against real Postgres — integration test asserts an off-vocabulary string raises a database error and that inserting the same allergen twice violates the composite PK
+- [x] 7.7 Verify email uniqueness is case-insensitive — integration test asserts `Parent@Example.com` then `parent@example.com` raises a uniqueness violation (user-account spec)
+- [x] 7.8 Verify cascade deletion — integration test asserts deleting a user removes its child profiles and their allergy rows, leaving no orphans (user-account spec, *Account deletion removes owned data*)
+- [x] 7.9 Verify weight precision — integration test asserts `8.4` and `8.45` round-trip exactly as `Decimal`, and that `0` is rejected
+- [x] 7.10 Add the `user-account` authorization scenarios as `xfail(reason="authz lands D6")` tests so D6 inherits a ready checklist (design.md Risk 6); verify the suite reports them as expected failures, not passes. *Note at completion:* group 7 never ran before Day 6, so the scenarios were written directly as passing tests in `tests/test_api_children.py` the same day authorization landed
+- [x] 7.11 Run `GET /health` against the live database and verify it reports the database as reachable

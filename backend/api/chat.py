@@ -1,9 +1,10 @@
-"""``POST /api/chat`` -- the routed assistant (Day 5 chat-api spec).
+"""``POST /api/chat`` -- the routed assistant (chat-api spec).
 
-Not user-scoped: the child's details and the conversation history arrive in the request
-body, nothing is persisted, and no identity is taken. Streaming uses the same hand-formatted
-server-sent events as ``/api/ask``; the event order is ``route``, ``tool``..., ``token``...,
-``final``, ``done`` (design.md Decision 6).
+Authenticated since Day 6. ``resolve_chat_request`` is the authority seam: the child's
+details and feeding log come from the signed-in account's own rows, never from the body,
+and the conversation history is the only thing the browser supplies. Streaming uses the
+same hand-formatted server-sent events as ``/api/ask``; the event order is ``route``,
+``tool``..., ``token``..., ``final``, ``done`` (Day 5 design.md Decision 6).
 """
 
 import logging
@@ -12,12 +13,21 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 
+from backend.api.children import (
+    DEFAULT_LOG_DAYS,
+    recent_feedings,
+    to_child_context,
+    to_feeding_entries,
+)
+from backend.api.deps import CurrentUser, DbSession, owned_child
 from backend.api.sse import sse
 from backend.chat import copy
 from backend.chat.service import ChatService
 from backend.chat.wiring import get_chat_service
-from backend.schemas.chat import ChatRequest, ChatResponse
+from backend.models import ChildProfile
+from backend.schemas.chat import ChatRequest, ChatRequestBody, ChatResponse
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +40,37 @@ def get_service() -> ChatService:
         return get_chat_service()
     except RuntimeError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+async def resolve_chat_request(
+    body: ChatRequestBody, user: CurrentUser, db: DbSession
+) -> ChatRequest:
+    """The authority seam: fill ``child`` and ``feeding_log`` from the caller's own rows.
+
+    ``child_id`` names one of the caller's children (an unowned id is refused exactly like a
+    nonexistent one). Omitted, it means the account's only child; with several children it
+    is required; with none the request proceeds without child context and the service's
+    existing "details go in the side panel" path applies.
+    """
+    if body.child_id is not None:
+        child = await owned_child(body.child_id, user, db)
+    else:
+        result = await db.execute(
+            select(ChildProfile).where(ChildProfile.user_id == user.id).limit(2)
+        )
+        children = list(result.scalars())
+        if len(children) > 1:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="child_id is required when the account has more than one child",
+            )
+        child = children[0] if children else None
+    if child is None:
+        return ChatRequest(**body.model_dump())
+    rows = await recent_feedings(db, child, DEFAULT_LOG_DAYS)
+    return ChatRequest(
+        **body.model_dump(), child=to_child_context(child), feeding_log=to_feeding_entries(rows)
+    )
 
 
 async def _event_stream(service: ChatService, request: ChatRequest) -> AsyncIterator[str]:
@@ -53,16 +94,18 @@ async def _event_stream(service: ChatService, request: ChatRequest) -> AsyncIter
                 "`final` event, then `done` (or a terminal `error`)."
             )
         },
+        401: {"description": "No valid session."},
         503: {"description": "Language-model provider or knowledge base is not configured."},
     },
 )
 async def chat(
-    request: ChatRequest,
+    request: Annotated[ChatRequest, Depends(resolve_chat_request)],
     service: Annotated[ChatService, Depends(get_service)],
 ) -> ChatResponse | StreamingResponse:
     """Route the message to the knowledge base, the nutrient tools, or both, and answer.
 
-    Stateless: the child's details and history live only in this request.
+    Nothing about the conversation is stored; the child's details and log are read from
+    the account (``resolve_chat_request``) for this request only.
     """
     if request.stream:
         return StreamingResponse(

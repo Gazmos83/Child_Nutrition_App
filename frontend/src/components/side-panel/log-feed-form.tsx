@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ApiError } from "@/lib/api";
 import type { FeedingEntry, FoodSummary, LoggedFeeding } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 import { FEEDING_TYPE_OPTIONS, type FeedingType } from "@/lib/enums";
@@ -18,6 +19,8 @@ interface Props {
   foods: FoodSummary[] | undefined;
   foodsLoading: boolean;
   foodsError: boolean;
+  /** Saves the entry to the child's log on the account and returns it priced. */
+  submit: (entry: FeedingEntry) => Promise<LoggedFeeding>;
   onLogged: (logged: LoggedFeeding) => void;
 }
 
@@ -27,32 +30,7 @@ function nowLocal(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-async function postFeeding(entry: FeedingEntry): Promise<LoggedFeeding> {
-  const res = await fetch("/api/feedings", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(entry),
-  });
-  if (!res.ok) {
-    let detail = "";
-    try {
-      const body = (await res.json()) as { detail?: unknown };
-      if (typeof body.detail === "string") detail = body.detail;
-      else if (Array.isArray(body.detail)) {
-        detail = body.detail
-          .map((d) => (d && typeof d === "object" && "msg" in d ? String(d.msg) : ""))
-          .filter(Boolean)
-          .join(" ");
-      }
-    } catch {
-      // Not JSON.
-    }
-    throw new Error(detail || copy.LOG_ADD_FAILED);
-  }
-  return (await res.json()) as LoggedFeeding;
-}
-
-export function LogFeedForm({ foods, foodsLoading, foodsError, onLogged }: Props) {
+export function LogFeedForm({ foods, foodsLoading, foodsError, submit: post, onLogged }: Props) {
   const [type, setType] = useState<FeedingType>("breastmilk");
   const [foodId, setFoodId] = useState<string>(DEFAULT_FOOD.breastmilk ?? "");
   const [quantity, setQuantity] = useState("");
@@ -69,13 +47,15 @@ export function LogFeedForm({ foods, foodsLoading, foodsError, onLogged }: Props
   const unit = food?.serving_unit === "g" ? "g" : "ml";
 
   const mutation = useMutation({
-    mutationFn: postFeeding,
+    mutationFn: post,
     onSuccess: (logged) => {
       onLogged(logged);
       setQuantity("");
       setError(null);
     },
-    onError: (e: Error) => setError(e.message || copy.LOG_ADD_FAILED),
+    // A 422 carries the server's own parent-facing reason (unknown food, wrong unit).
+    onError: (e: unknown) =>
+      setError(e instanceof ApiError && e.status === 422 ? e.detail : copy.LOG_ADD_FAILED),
   });
 
   function changeType(next: FeedingType) {

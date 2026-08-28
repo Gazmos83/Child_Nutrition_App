@@ -1,5 +1,5 @@
-import { ChatPage } from "./chat-page";
+import { AppGate } from "./app-gate";
 
 export default function Home() {
-  return <ChatPage />;
+  return <AppGate />;
 }

@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development (Day 5 of 7). PostgreSQL schema, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, and the feeding log with nutrient-gap detection (reference §9b) are implemented. The child's details and the feeding log are entered in the UI and travel with each request — auth, saved profiles, and the persisted log follow on Day 6, deployment on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+> **Status:** early development (Day 6 of 7). PostgreSQL schema and migrations, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, the feeding log with nutrient-gap detection (reference §9b), and accounts with saved child profiles and a persisted feeding log are implemented. Deployment follows on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -65,7 +65,11 @@ Three constraints are load-bearing and worth knowing before touching the schema:
 
 ## Security
 
-Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles, meals, or conversations. All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
+Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles or feeding log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
+
+`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` and `GET /api/foods` stay public — they read no user data, and the Day 6 evaluation harness posts to `/api/ask` without a session.
+
+All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
 
 Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, doctor's note, rule/source used) for auditability.
 
@@ -77,7 +81,10 @@ Python dependencies are managed with [uv](https://docs.astral.sh/uv/) (Python 3.
 uv sync                  # create/refresh .venv from uv.lock
 uv add <package>         # add a dependency
 uv add --dev <package>   # add a dev-only dependency
-uv run pytest            # unit tests (offline); add -m integration for live tests
+docker compose up -d     # PostgreSQL 17 on 127.0.0.1:5432 (dev + test databases)
+uv run alembic upgrade head   # apply the schema (DATABASE_URL from .env)
+uv run pytest            # offline tests + the PostgreSQL-backed `db` tests
+uv run pytest -m integration  # live OpenRouter/Milvus tests; spends credit
 uv run ruff check .      # lint
 
 pnpm install             # frontend deps (pnpm workspace; `frontend/` is the only package)
@@ -85,11 +92,13 @@ pnpm -C frontend dev     # Next.js dev server on :3000, proxying /api/* to the b
 pnpm -C frontend lint && pnpm -C frontend typecheck && pnpm -C frontend test
 ```
 
+`docker-compose.yml` runs the database only; the backend (`uv run uvicorn backend.main:app --reload`) and the frontend stay on the host. `docker compose down -v` resets it. Migrations live in `alembic/versions/` and are hand-written: the initial one creates the five PostgreSQL enum types before the tables and its `downgrade()` drops them after, so `uv run alembic downgrade base && uv run alembic upgrade head` round-trips — `tests/test_migrations.py` checks exactly that. Tests marked `db` bind to `TEST_DATABASE_URL` (a separate database the compose file creates, so the fixtures can never touch development data); when it is unset they skip, when it is set but unreachable they fail.
+
 Always add dependencies through the package manager (`uv add`, `pnpm add`) and run Python via `uv run`. Never `pip install` into `.venv`, and never hand-edit a lockfile.
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it). `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
 
 ### Knowledge base
 

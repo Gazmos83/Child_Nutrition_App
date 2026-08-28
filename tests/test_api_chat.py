@@ -1,4 +1,11 @@
-"""POST /api/chat contract (Day 5 task 4.2; chat-api spec)."""
+"""POST /api/chat contract (Day 5 task 4.2; chat-api spec): streaming, events, errors.
+
+Offline: ``resolve_chat_request`` -- the Day 6 authority seam that needs a session and the
+database -- is overridden to accept a fully-formed ``ChatRequest`` from the body, so these
+tests exercise the stream contract only. The seam itself (401 without a session, child and
+log read from the account's rows, ``child`` rejected in the body) is covered against
+PostgreSQL in ``tests/test_api_children.py``.
+"""
 
 import json
 
@@ -7,7 +14,7 @@ from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from backend.api.chat import get_service
+from backend.api.chat import get_service, resolve_chat_request
 from backend.chat import copy
 from backend.chat.router import SEARCH_TOOL_NAME
 from backend.chat.service import ChatService
@@ -16,6 +23,7 @@ from backend.main import create_app
 from backend.rag.pipeline import RagPipeline
 from backend.rag.prompts import DISCLAIMER
 from backend.rag.retrievers import AdvancedRetriever, BasicRetriever
+from backend.schemas.chat import ChatRequest
 from backend.tools.langchain_tools import build_tools
 from tests.fixtures.fake_llm import RecordingChatModel
 from tests.fixtures.memory_store import InMemoryKnowledgeStore
@@ -59,7 +67,13 @@ def make_client(llm: RecordingChatModel) -> TestClient:
     service = ChatService(pipeline, llm, build_tools(None))
     app = create_app()
     app.dependency_overrides[get_service] = lambda: service
+    app.dependency_overrides[resolve_chat_request] = _resolved_from_body
     return TestClient(app)
+
+
+def _resolved_from_body(body: ChatRequest) -> ChatRequest:
+    """Stand-in for the authority seam: the body already is the resolved request."""
+    return body
 
 
 @pytest.fixture
@@ -106,6 +120,7 @@ class TestUnavailable:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail="OPENROUTER_API_KEY")
 
         app.dependency_overrides[get_service] = unconfigured
+        app.dependency_overrides[resolve_chat_request] = _resolved_from_body
         with TestClient(app) as c:
             r = c.post("/api/chat", json={"message": "hi"})
         assert r.status_code == 503 and "OPENROUTER_API_KEY" in r.json()["detail"]

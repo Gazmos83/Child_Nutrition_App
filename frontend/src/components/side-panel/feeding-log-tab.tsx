@@ -17,26 +17,45 @@ export function FeedingLogTab({ log }: { log: FeedingLogState }) {
   const groups = groupByDay(log.log, log.timeZone);
   const today = localDay(new Date().toISOString(), log.timeZone);
 
+  if (log.childId === null) {
+    return (
+      <section className="flex flex-col gap-4 p-4" aria-label={copy.LOG_TITLE}>
+        <h2 className="text-lg font-semibold">{copy.LOG_TITLE}</h2>
+        <p className="rounded-md bg-muted p-3 text-sm" data-testid="log-needs-child">
+          {copy.LOG_NEEDS_CHILD}
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="flex flex-col gap-4 p-4" aria-label={copy.LOG_TITLE}>
       <h2 className="text-lg font-semibold">{copy.LOG_TITLE}</h2>
       <p className="text-xs text-muted-foreground">{copy.LOG_STORED_HERE}</p>
 
-      {log.hydrated && (
+      {log.unavailable && (
+        <p className="text-sm text-destructive" role="alert">
+          {copy.LOG_UNAVAILABLE}
+        </p>
+      )}
+      {log.hydrated && !log.unavailable && (
         <>
           <TodaySummary entries={log.today} />
           <LogFeedForm
             foods={foods.data}
             foodsLoading={foods.isPending}
             foodsError={foods.isError}
-            onLogged={(logged) => {
-              log.add(logged);
-              setNotice(copy.FEED_LOGGED);
-            }}
+            submit={log.add}
+            onLogged={() => setNotice(copy.FEED_LOGGED)}
           />
           {notice && (
             <p className="text-sm" role="status">
               {notice}
+            </p>
+          )}
+          {log.removeFailed && (
+            <p className="text-sm text-destructive" role="alert">
+              {copy.LOG_REMOVE_FAILED}
             </p>
           )}
           {log.log.length === 0 ? (

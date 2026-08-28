@@ -3,7 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.schemas.chat import ChatRequest, ChatTurn, ChildContext, ToolActivity
+from backend.schemas.chat import (
+    ChatRequest,
+    ChatRequestBody,
+    ChatTurn,
+    ChildContext,
+    ToolActivity,
+)
 
 CHILD = {"age_months": 8, "weight_kg": 8.5, "sex": "female"}
 
@@ -70,3 +76,36 @@ def test_tool_activity_defaults() -> None:
     activity = ToolActivity(name="calculate_bmi", status="ok", result={"bmi": 17.36})
     assert activity.used_context == [] and activity.error is None and activity.detail is None
     assert ChatTurn(role="user", content="x").role == "user"
+
+
+class TestChatRequestBody:
+    """Day 6: the wire contract carries no child and no log -- those come from the account."""
+
+    def test_minimal_body(self) -> None:
+        body = ChatRequestBody.model_validate({"message": "hi"})
+        assert body.child_id is None and body.history == [] and body.timezone == "UTC"
+
+    def test_child_id_is_a_uuid(self) -> None:
+        body = ChatRequestBody.model_validate(
+            {"message": "hi", "child_id": "0198f0a0-0000-7000-8000-000000000001"}
+        )
+        assert str(body.child_id) == "0198f0a0-0000-7000-8000-000000000001"
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"message": "hi", "child": CHILD},
+            {"message": "hi", "feeding_log": []},
+            {"message": "hi", "child_id": "not-a-uuid"},
+            {"message": "hi", "child_id": 7},
+        ],
+    )
+    def test_client_cannot_supply_child_or_log(self, body: dict) -> None:
+        with pytest.raises(ValidationError):
+            ChatRequestBody.model_validate(body)
+
+    def test_resolved_request_extends_the_body(self) -> None:
+        body = ChatRequestBody.model_validate({"message": "hi", "timezone": "Europe/Vilnius"})
+        request = ChatRequest(**body.model_dump(), child=ChildContext.model_validate(CHILD))
+        assert request.timezone == "Europe/Vilnius" and request.child is not None
+        assert request.feeding_log == []

@@ -26,24 +26,63 @@ interface Props {
   errors: ChildFormErrors;
   isEmpty: boolean;
   hydrated: boolean;
+  /** True when the form differs from what the account has saved. */
+  dirty: boolean;
+  saving: boolean;
+  saveFailed: boolean;
+  clearFailed: boolean;
   update: <K extends keyof ChildForm>(key: K, value: ChildForm[K]) => void;
+  save: () => void;
+  /** Deletes the saved profile and its feeding log; the form asks before calling it. */
   clear: () => void;
 }
 
-export function ChildContextForm({ form, errors, isEmpty, hydrated, update, clear }: Props) {
+export function ChildContextForm({
+  form,
+  errors,
+  isEmpty,
+  hydrated,
+  dirty,
+  saving,
+  saveFailed,
+  clearFailed,
+  update,
+  save,
+  clear,
+}: Props) {
   const age = Number(form.age_months);
   const heightNeeded = form.age_months !== "" && Number.isInteger(age) && age >= HEIGHT_REQUIRED_FROM_MONTHS;
+  const canSave = dirty && !isEmpty && Object.keys(errors).length === 0 && !saving;
 
   return (
-    <form className="flex flex-col gap-4 p-4" onSubmit={(e) => e.preventDefault()} aria-label={copy.PANEL_TITLE}>
+    <form
+      className="flex flex-col gap-4 p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canSave) save();
+      }}
+      aria-label={copy.PANEL_TITLE}
+    >
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{copy.PANEL_TITLE}</h2>
         {!isEmpty && (
-          <Button type="button" variant="ghost" size="sm" onClick={clear}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (window.confirm(copy.FORM_CLEAR_CONFIRM)) clear();
+            }}
+          >
             {copy.FORM_CLEAR}
           </Button>
         )}
       </div>
+      {clearFailed && (
+        <p className="text-xs text-destructive" role="alert">
+          {copy.FORM_CLEAR_FAILED}
+        </p>
+      )}
 
       {hydrated && isEmpty && (
         <p className="rounded-md bg-muted p-3 text-sm" data-testid="panel-empty">
@@ -51,6 +90,7 @@ export function ChildContextForm({ form, errors, isEmpty, hydrated, update, clea
         </p>
       )}
 
+      <fieldset className="contents" disabled={!hydrated} aria-busy={!hydrated}>
       <Field label={copy.FORM_AGE_LABEL} hint={copy.FORM_AGE_HINT} error={errors.age_months} htmlFor="age_months">
         <Input
           id="age_months"
@@ -152,9 +192,19 @@ export function ChildContextForm({ form, errors, isEmpty, hydrated, update, clea
         />
       </Field>
 
+      </fieldset>
+
       {hydrated && !isEmpty && (
-        <p className="text-xs text-muted-foreground">
-          <Badge variant="outline">{copy.FORM_SAVED}</Badge>
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="outline">{dirty ? copy.FORM_UNSAVED : copy.FORM_SAVED}</Badge>
+          <Button type="submit" size="sm" disabled={!canSave}>
+            {saving ? copy.FORM_SAVING : copy.FORM_SAVE}
+          </Button>
+        </div>
+      )}
+      {saveFailed && (
+        <p className="text-xs text-destructive" role="alert">
+          {copy.FORM_SAVE_FAILED}
         </p>
       )}
     </form>

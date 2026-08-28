@@ -10,13 +10,12 @@ precision (kcal whole, g/mg one decimal, BMI two).
 """
 
 import datetime as dt
-from enum import StrEnum
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
-from backend.models.enums import Allergen, DietPreference, FeedingType, Sex
+from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
 
 MIN_AGE_MONTHS = 0
 MAX_AGE_MONTHS = 60
@@ -29,15 +28,6 @@ HEIGHT_REQUIRED_FROM_MONTHS = 36
 # not real children.
 MAX_WEIGHT_KG = 60.0
 MAX_HEIGHT_CM = 150.0
-
-
-class ActivityLevel(StrEnum):
-    """Physical-activity categories of the 2005 DRI energy equations."""
-
-    SEDENTARY = "sedentary"
-    LOW_ACTIVE = "low_active"
-    ACTIVE = "active"
-    VERY_ACTIVE = "very_active"
 
 
 # -- shared field definitions ---------------------------------------------------------------

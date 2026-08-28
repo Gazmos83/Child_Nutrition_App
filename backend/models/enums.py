@@ -84,3 +84,16 @@ class FeedingType(StrEnum):
     FORMULA = "formula"
     SOLID = "solid"
     WATER = "water"
+
+
+class ActivityLevel(StrEnum):
+    """Physical-activity categories of the 2005 DRI energy equations.
+
+    A controlled vocabulary like the others here (hard rule 2); stored on the child
+    profile as a PostgreSQL enum since Day 6.
+    """
+
+    SEDENTARY = "sedentary"
+    LOW_ACTIVE = "low_active"
+    ACTIVE = "active"
+    VERY_ACTIVE = "very_active"
