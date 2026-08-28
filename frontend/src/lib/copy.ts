@@ -92,13 +92,39 @@ export const FORM_NOTE_HINT =
   "Anything your doctor wrote about calories, protein, or iron — we'll follow it";
 export const FORM_ACTIVITY_LABEL = "Activity level";
 export const FORM_CLEAR = "Clear details";
-export const FORM_SAVED = "Saved in this browser";
+export const FORM_SAVE = "Save details";
+export const FORM_SAVING = "Saving…";
+export const FORM_SAVED = "Saved to your account";
+export const FORM_UNSAVED = "Not saved yet";
+export const FORM_SAVE_FAILED = "Those details didn't save. Check them and try again";
+export const FORM_CLEAR_CONFIRM =
+  "This removes your little one's details and their whole feeding log from your account. Continue?";
+export const FORM_CLEAR_FAILED = "Those details didn't clear. Try again in a moment";
 
 // -- chat input ----------------------------------------------------------------------------
 
 export const INPUT_PLACEHOLDER = "Ask about feeding your little one…";
 export const SEND = "Send";
 export const SENDING = "Thinking…";
+
+// -- account (Day 6; direct: signing in guards a child's health record) --------------------
+
+export const AUTH_TITLE = "Welcome";
+export const AUTH_INTRO =
+  "Sign in to keep your little one's details and feeding log with your account";
+export const AUTH_SIGN_IN = "Sign in";
+export const AUTH_CREATE = "Create account";
+export const AUTH_EMAIL = "Email";
+export const AUTH_PASSWORD = "Password";
+export const AUTH_PASSWORD_HINT = "At least 8 characters";
+export const AUTH_SWITCH_TO_CREATE = "New here? Create an account";
+export const AUTH_SWITCH_TO_SIGN_IN = "Already have an account? Sign in";
+export const AUTH_WORKING = "One moment…";
+export const AUTH_FAILED = "That didn't go through. Check the details and try again";
+export const SIGN_OUT = "Sign out";
+export const SESSION_LOADING = "Just a moment…";
+export const SESSION_EXPIRED =
+  "You've been signed out. Sign in again, then tap retry and we'll pick this up";
 
 // -- disclaimer -----------------------------------------------------------------------------
 
@@ -172,8 +198,14 @@ export const LOG_TITLE = "Feeding log";
 export const LOG_EMPTY =
   "Nothing logged yet. Add a feed whenever you like — the more days we see, the more we can tell you";
 export const TODAY_EMPTY = "A blank slate — today's just getting started";
-export const LOG_STORED_HERE =
-  "Your log lives in this browser for now — fourteen days, then it tidies itself";
+export const LOG_STORED_HERE = "Saved to your account — we show the last fourteen days";
+export const LOG_NEEDS_CHILD = "Save your little one's details first, then log feeds here";
+export const LOG_UNAVAILABLE = "We couldn't load the log. Check your connection and try again";
+export const LOG_REMOVE_FAILED = "That feed didn't come off the log. Try again in a moment";
+export const CHAT_FEED_NEEDS_CHILD =
+  "The assistant noted a feed, but it isn't saved — save your little one's details first, then log it from the Feeding log tab";
+export const CHAT_FEED_SAVE_FAILED =
+  "The assistant noted a feed, but it didn't save to your log. Add it from the Feeding log tab";
 export const FEED_LOGGED = "Logged. One more piece of the picture";
 export const TODAY_TITLE = "Today so far";
 export const LOG_ADD_TITLE = "Log a feed";

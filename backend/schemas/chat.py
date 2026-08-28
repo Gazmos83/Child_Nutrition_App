@@ -1,11 +1,16 @@
-"""Request, routing, and response models for ``POST /api/chat`` (Day 5 chat-api spec).
+"""Request, routing, and response models for ``POST /api/chat`` (chat-api spec).
 
-The child's details travel in the request body (design.md Decisions 2 and 7): nothing
-here is read from a database and no identity is taken, so hard rule 9 holds because no
-user-scoped operation exists. ``ChildContext`` reuses the tool schemas' field definitions
-(ages in months, controlled vocabularies) so the form cannot send what a tool would reject.
+Two request models since Day 6. ``ChatRequestBody`` is the wire contract: the message,
+which of the caller's children it is about, and the conversation so far. ``ChatRequest``
+is what the chat service runs on -- the same plus the child's details and feeding log --
+and is built server-side from the authenticated account's own rows
+(``backend/api/chat.py``). The body cannot carry a child or a log at all, so the stored
+profile is the only authority for the numbers a plan is built from (hard rules 8 and 9).
+``ChildContext`` reuses the tool schemas' field definitions (ages in months, controlled
+vocabularies) so a stored profile can never resolve to what a tool would reject.
 """
 
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -75,15 +80,20 @@ class ChatTurn(_Strict):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
-class ChatRequest(BaseModel):
+class ChatRequestBody(BaseModel):
+    """What the browser sends. Unknown fields -- ``child`` included -- are rejected."""
+
     model_config = ConfigDict(extra="forbid")
 
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
-    child: ChildContext | None = None
+    child_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Which of the caller's children the question is about. May be omitted when the "
+            "account has exactly one child, or none."
+        ),
+    )
     history: list[ChatTurn] = Field(default_factory=list, max_length=MAX_HISTORY_TURNS)
-    # Change 2: the feeding log is client-held until Day 6 and travels with every message,
-    # bounded; log-backed tool arguments are filled from it, never from the model.
-    feeding_log: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
     timezone: TimeZoneName = "UTC"
     strategy: Strategy = "advanced"
     stream: bool = True
@@ -95,6 +105,18 @@ class ChatRequest(BaseModel):
         if not value:
             raise ValueError("message must not be blank")
         return value
+
+
+class ChatRequest(ChatRequestBody):
+    """The resolved request the chat service runs on. Constructed by the server only.
+
+    ``child`` and ``feeding_log`` are read from the authenticated account's rows; the
+    log is bounded like the client-held log was, and log-backed tool arguments are filled
+    from it, never from the model.
+    """
+
+    child: ChildContext | None = None
+    feeding_log: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
 
 
 # -- routing --------------------------------------------------------------------------------

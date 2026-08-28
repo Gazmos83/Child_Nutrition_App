@@ -15,9 +15,10 @@ from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
-from backend.models.enums import Allergen, DietPreference, Sex
+from backend.models.enums import ActivityLevel, Allergen, DietPreference, Sex
 
 if TYPE_CHECKING:
+    from backend.models.feeding import Feeding
     from backend.models.user import User
 
 # Newborn through ~4 years, the supported range. 60 months = 5 years exclusive upper
@@ -49,6 +50,17 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     sex: Mapped[Sex] = mapped_column(pg_enum(Sex, "sex"), nullable=False)
 
+    # Optional below 36 months, required from 36 (the DRI energy equation for 3-8 years
+    # uses height); the request schema enforces that rule, the column only bounds it.
+    height_cm: Mapped[Decimal | None] = mapped_column(Numeric(4, 1), nullable=True)
+
+    activity_level: Mapped[ActivityLevel] = mapped_column(
+        pg_enum(ActivityLevel, "activity_level"),
+        nullable=False,
+        default=ActivityLevel.LOW_ACTIVE,
+        server_default=ActivityLevel.LOW_ACTIVE.value,
+    )
+
     diet_preference: Mapped[DietPreference] = mapped_column(
         pg_enum(DietPreference, "diet_preference"),
         nullable=False,
@@ -72,6 +84,12 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         lazy="selectin",
     )
 
+    feedings: Mapped[list[Feeding]] = relationship(
+        back_populates="child_profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     #: Read/write view of :attr:`allergies` as plain :class:`Allergen` values.
     allergens: AssociationProxy[list[Allergen]] = association_proxy(
         "allergies",
@@ -85,6 +103,7 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             name="age_in_months_range",
         ),
         CheckConstraint("weight_kg > 0", name="weight_kg_positive"),
+        CheckConstraint("height_cm IS NULL OR height_cm > 0", name="height_cm_positive"),
         # Either a note with its timestamp, or neither. Keeps "a note nobody can date"
         # out of the database (design.md Decision 9).
         CheckConstraint(

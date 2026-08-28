@@ -1,35 +1,91 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import type { ChildProfile } from "@/lib/api-types";
+import { fetchJson } from "@/lib/api";
 import {
   EMPTY_CHILD_FORM,
-  getChildFormSnapshot,
-  parseChildForm,
-  subscribeChildForm,
+  fromProfile,
   toChildContext,
-  writeChildForm,
   type ChildForm,
 } from "@/lib/child-context-store";
 
-const serverSnapshot = () => null;
-const clientReady = () => true;
-const serverReady = () => false;
+export const CHILDREN_KEY = ["children"] as const;
 
-/** Form state backed by localStorage as an external store; the server renders it empty. */
+/**
+ * The child's details, saved to the account. The UI keeps one child per account today:
+ * the form edits a local draft and saves it as the account's first profile (create or
+ * replace); the chat sends that profile's id.
+ */
 export function useChildContext() {
-  const raw = useSyncExternalStore(subscribeChildForm, getChildFormSnapshot, serverSnapshot);
-  const hydrated = useSyncExternalStore(subscribeChildForm, clientReady, serverReady);
-  const form = useMemo(() => parseChildForm(raw) ?? EMPTY_CHILD_FORM, [raw]);
+  const queryClient = useQueryClient();
+  const children = useQuery<ChildProfile[]>({
+    queryKey: CHILDREN_KEY,
+    queryFn: () => fetchJson<ChildProfile[]>("/api/children"),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const profile = children.data?.[0] ?? null;
+
+  // null means "nothing edited since the last save": the form shows the stored profile.
+  const [draft, setDraft] = useState<ChildForm | null>(null);
+  const form = useMemo(
+    () => draft ?? (profile ? fromProfile(profile) : EMPTY_CHILD_FORM),
+    [draft, profile],
+  );
+  const result = useMemo(() => toChildContext(form), [form]);
 
   const update = useCallback(
     <K extends keyof ChildForm>(key: K, value: ChildForm[K]) => {
-      writeChildForm({ ...form, [key]: value });
+      // Not before the saved profile has loaded: a draft typed over an empty form would
+      // silently mask the stored values once they arrive.
+      if (children.isPending) return;
+      setDraft({ ...form, [key]: value });
     },
-    [form],
+    [form, children.isPending],
   );
 
-  const clear = useCallback(() => writeChildForm(null), []);
+  const save = useMutation({
+    mutationFn: async () => {
+      if (!result.child) throw new Error("form is not valid");
+      return profile
+        ? fetchJson<ChildProfile>(`/api/children/${profile.id}`, {
+            method: "PUT",
+            body: result.child,
+          })
+        : fetchJson<ChildProfile>("/api/children", { method: "POST", body: result.child });
+    },
+    onSuccess: (saved) => {
+      queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, [saved]);
+      setDraft(null);
+    },
+  });
 
-  const result = useMemo(() => toChildContext(form), [form]);
-  return { form, update, clear, hydrated, ...result };
+  const clear = useMutation({
+    mutationFn: async () => {
+      if (profile) await fetchJson<void>(`/api/children/${profile.id}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, []);
+      queryClient.removeQueries({ queryKey: ["feedings"] });
+      setDraft(null);
+    },
+  });
+
+  return {
+    form,
+    update,
+    save: () => save.mutate(),
+    saving: save.isPending,
+    saveFailed: save.isError,
+    clear: () => clear.mutate(),
+    clearFailed: clear.isError,
+    dirty: draft !== null,
+    hydrated: !children.isPending,
+    profile,
+    childId: profile?.id ?? null,
+    ...result,
+  };
 }
+
+export type ChildContextState = ReturnType<typeof useChildContext>;

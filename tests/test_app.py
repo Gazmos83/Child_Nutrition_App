@@ -1,9 +1,10 @@
-"""Application boot, health reporting, and route surface (tasks 6.2, 6.3, 6.4)."""
+"""Application boot, health reporting, and route surface (tasks 6.2, 6.3, 6.4; Day 6)."""
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.core.config import get_settings
+from backend.api.deps import get_auth_settings
+from backend.core.config import Settings, get_settings
 from backend.db.session import reset_engine_cache
 from backend.main import app, create_app
 
@@ -88,37 +89,69 @@ class TestHealthDegradesGracefully:
         assert set(body) == {"status", "app_env", "database"}
 
 
-class TestNoUserScopedRoutesExposed:
-    """Task 6.4 / design.md Risk 6: authorization lands on Day 6, so nothing user-scoped
-    may be reachable before then."""
+PUBLIC_PATHS = {
+    "/health",
+    "/api/ask",
+    "/api/foods",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/logout",
+}
+USER_SCOPED_PATHS = {
+    "/api/auth/me",
+    "/api/chat",
+    "/api/children",
+    "/api/children/{child_id}",
+    "/api/children/{child_id}/feedings",
+    "/api/children/{child_id}/feedings/{feeding_id}",
+}
 
-    def test_documented_surface_is_health_and_the_stateless_api(self) -> None:
-        # Day 3 adds /api/ask, Day 5 adds /api/chat, /api/feedings, /api/foods; none is
-        # user-scoped (ask-api, chat-api, feeding-log specs): child details and the
-        # feeding log travel in the body, and nothing is stored.
-        assert set(app.openapi()["paths"]) == {
-            "/health",
-            "/api/ask",
-            "/api/chat",
-            "/api/feedings",
-            "/api/foods",
-        }
+
+class TestRouteSurface:
+    """Day 1 task 6.4 inverted on Day 6 (hard rule 9): every user-scoped route exists and
+    refuses an unauthenticated request; nothing user-scoped is reachable any other way."""
+
+    def test_documented_surface_is_exactly_public_plus_user_scoped(self) -> None:
+        assert set(app.openapi()["paths"]) == PUBLIC_PATHS | USER_SCOPED_PATHS
 
     def test_only_builtin_docs_routes_are_top_level(self) -> None:
         top_level = {r.path for r in app.routes if getattr(r, "path", None) is not None}
         assert top_level == FASTAPI_BUILTIN_PATHS
 
-    @pytest.mark.parametrize(
-        "path",
-        ["/api/children", "/api/users", "/api/child-profiles", "/api/me", "/children"],
-    )
-    def test_user_scoped_paths_are_not_routed(self, path: str) -> None:
+    def test_every_user_scoped_operation_refuses_without_a_session(self) -> None:
+        """Iterate the OpenAPI schema so the *next* route added without auth fails here."""
+        secret_app = create_app()
+        secret_app.dependency_overrides[get_auth_settings] = lambda: Settings(
+            database_url="postgresql://u:p@h/db", session_secret="s" * 32, _env_file=None
+        )
+        sample_id = "0198f0a0-0000-7000-8000-000000000001"
+        with TestClient(secret_app) as client:
+            for path, operations in app.openapi()["paths"].items():
+                if path not in USER_SCOPED_PATHS:
+                    continue
+                concrete = path.replace("{child_id}", sample_id).replace("{feeding_id}", sample_id)
+                for method in operations:
+                    response = client.request(method.upper(), concrete, json={})
+                    assert response.status_code == 401, (method, path, response.status_code)
+                    assert response.json() == {"detail": "Sign in to continue"}
+
+    def test_authenticated_routes_report_503_without_a_session_secret(self, monkeypatch) -> None:
+        """A missing SESSION_SECRET is loud, not an open door."""
+        monkeypatch.delenv("SESSION_SECRET", raising=False)
+        monkeypatch.setattr(
+            "backend.core.config.Settings.model_config",
+            {"env_file": None, "env_file_encoding": "utf-8", "extra": "ignore"},
+        )
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h/db")
+        get_settings.cache_clear()
+        try:
+            with TestClient(create_app()) as client:
+                response = client.get("/api/auth/me")
+        finally:
+            get_settings.cache_clear()
+        assert response.status_code == 503 and "SESSION_SECRET" in response.json()["detail"]
+
+    @pytest.mark.parametrize("path", ["/api/users", "/api/child-profiles", "/api/me", "/children"])
+    def test_unknown_paths_are_not_routed(self, path: str) -> None:
         with TestClient(app) as client:
             assert client.get(path).status_code == 404
-
-    def test_api_router_exposes_only_the_stateless_routes(self) -> None:
-        from backend.api.router import api_router
-
-        assert api_router.prefix == "/api"
-        api_paths = {p for p in app.openapi()["paths"] if p.startswith("/api/")}
-        assert api_paths == {"/api/ask", "/api/chat", "/api/feedings", "/api/foods"}

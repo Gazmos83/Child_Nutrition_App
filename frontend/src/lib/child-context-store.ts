@@ -1,12 +1,9 @@
-// The side-panel form state, its validation into a `ChildContext`, and its browser
-// persistence (design.md Decision 12). Pure except the three localStorage helpers, which
-// swallow storage errors: absence is a valid state.
+// The side-panel form state and its validation into a `ChildContext`. Pure. Since Day 6
+// the profile is saved to the account (`use-child-context.ts`), not to this browser.
 
-import type { ChildContext } from "./api-types";
+import type { ChildContext, ChildProfile } from "./api-types";
 import * as copy from "./copy";
 import type { ActivityLevel, Allergen, DietPreference, Sex } from "./enums";
-
-export const CHILD_STORAGE_KEY = "child-nutrition:child-context:v1";
 
 export const HEIGHT_REQUIRED_FROM_MONTHS = 36;
 export const MAX_AGE_MONTHS = 60;
@@ -93,107 +90,16 @@ export function toChildContext(form: ChildForm): ChildFormResult {
   };
 }
 
-function isChildForm(value: unknown): value is ChildForm {
-  if (!value || typeof value !== "object") return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.age_months === "string" &&
-    typeof v.weight_kg === "string" &&
-    typeof v.sex === "string" &&
-    typeof v.height_cm === "string" &&
-    typeof v.diet_preference === "string" &&
-    Array.isArray(v.allergies) &&
-    typeof v.doctors_note === "string" &&
-    typeof v.activity_level === "string"
-  );
-}
-
-export function loadChildForm(storage: Storage | undefined = safeStorage()): ChildForm | null {
-  try {
-    const raw = storage?.getItem(CHILD_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    return isChildForm(parsed) ? { ...EMPTY_CHILD_FORM, ...parsed } : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveChildForm(form: ChildForm, storage: Storage | undefined = safeStorage()): void {
-  try {
-    storage?.setItem(CHILD_STORAGE_KEY, JSON.stringify(form));
-  } catch {
-    // Storage may be unavailable or full; the form still works for this visit.
-  }
-}
-
-export function clearChildForm(storage: Storage | undefined = safeStorage()): void {
-  try {
-    storage?.removeItem(CHILD_STORAGE_KEY);
-  } catch {
-    // Nothing to clear, or storage unavailable.
-  }
-}
-
-// -- external store for useSyncExternalStore -----------------------------------------------
-//
-// React reads the form through a subscribe/snapshot pair instead of an effect that copies
-// storage into state. The snapshot is the raw stored string (stable between writes) so
-// React can compare by identity; `memory` keeps the form for this visit when storage is
-// unavailable.
-
-type Listener = () => void;
-const listeners = new Set<Listener>();
-let memory: string | null = null;
-let storageListenerAttached = false;
-
-function notify(): void {
-  for (const listener of listeners) listener();
-}
-
-export function subscribeChildForm(listener: Listener): () => void {
-  listeners.add(listener);
-  if (!storageListenerAttached && typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
-      if (e.key === CHILD_STORAGE_KEY) notify();
-    });
-    storageListenerAttached = true;
-  }
-  return () => {
-    listeners.delete(listener);
+/** The stored profile as the form shows it (numbers back to strings, nulls to blanks). */
+export function fromProfile(profile: ChildProfile): ChildForm {
+  return {
+    age_months: String(profile.age_months),
+    weight_kg: String(profile.weight_kg),
+    sex: profile.sex,
+    height_cm: profile.height_cm == null ? "" : String(profile.height_cm),
+    diet_preference: profile.diet_preference,
+    allergies: [...profile.allergies],
+    doctors_note: profile.doctors_note ?? "",
+    activity_level: profile.activity_level,
   };
-}
-
-export function getChildFormSnapshot(): string | null {
-  try {
-    const stored = safeStorage()?.getItem(CHILD_STORAGE_KEY) ?? null;
-    return stored ?? memory;
-  } catch {
-    return memory;
-  }
-}
-
-export function parseChildForm(raw: string | null): ChildForm | null {
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return isChildForm(parsed) ? { ...EMPTY_CHILD_FORM, ...parsed } : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeChildForm(form: ChildForm | null): void {
-  memory = form ? JSON.stringify(form) : null;
-  if (form) saveChildForm(form);
-  else clearChildForm();
-  notify();
-}
-
-function safeStorage(): Storage | undefined {
-  try {
-    return typeof window === "undefined" ? undefined : window.localStorage;
-  } catch {
-    return undefined;
-  }
 }

@@ -1,11 +1,9 @@
-// The client-held feeding log (change 2 design Decision 11): pure list operations, a
-// localStorage mirror, and the external-store pair React reads it through. Entries are
-// `LoggedFeeding`s exactly as the server returned them; nutrients are never computed here.
+// Pure list, day, and sum helpers for the feeding log. Entries are `LoggedFeeding`s exactly
+// as the server returned them; nutrients are never computed here. Since Day 6 the log is
+// saved to the account (`use-feeding-log.ts`), not to this browser.
 
-import type { FeedingEntry, LoggedFeeding, NutrientTotals } from "./api-types";
-import { isLoggedFeeding } from "./api-types";
+import type { LoggedFeeding, NutrientTotals } from "./api-types";
 
-export const FEEDING_LOG_STORAGE_KEY = "child-nutrition:feeding-log:v1";
 export const LOG_RETENTION_DAYS = 14;
 export const MAX_LOG_ENTRIES = 200;
 
@@ -99,93 +97,4 @@ export function sumNutrients(entries: LoggedFeeding[]): NutrientTotals {
     total[key] = Math.round(total[key] * 10) / 10;
   }
   return total;
-}
-
-/** What travels in `ChatRequest.feeding_log`: the entries, not the priced records. */
-export function toRequestEntries(log: LoggedFeeding[]): FeedingEntry[] {
-  return log.map((e) => ({
-    id: e.entry.id,
-    fed_at: e.entry.fed_at,
-    feeding_type: e.entry.feeding_type,
-    food_id: e.entry.food_id ?? null,
-    quantity: e.entry.quantity ?? null,
-    unit: e.entry.unit,
-  }));
-}
-
-export function serialize(log: LoggedFeeding[]): string {
-  return JSON.stringify(log);
-}
-
-export function deserialize(raw: string | null): LoggedFeeding[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isLoggedFeeding).sort(byNewest) : [];
-  } catch {
-    return [];
-  }
-}
-
-// -- external store for useSyncExternalStore (same shape as child-context-store) -----------
-
-type Listener = () => void;
-const listeners = new Set<Listener>();
-let memory: string | null = null;
-let storageListenerAttached = false;
-
-function safeStorage(): Storage | undefined {
-  try {
-    return typeof window === "undefined" ? undefined : window.localStorage;
-  } catch {
-    return undefined;
-  }
-}
-
-function notify(): void {
-  for (const listener of listeners) listener();
-}
-
-export function subscribeFeedingLog(listener: Listener): () => void {
-  listeners.add(listener);
-  if (!storageListenerAttached && typeof window !== "undefined") {
-    window.addEventListener("storage", (e) => {
-      if (e.key === FEEDING_LOG_STORAGE_KEY) notify();
-    });
-    storageListenerAttached = true;
-  }
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-export function getFeedingLogSnapshot(): string | null {
-  try {
-    return safeStorage()?.getItem(FEEDING_LOG_STORAGE_KEY) ?? memory;
-  } catch {
-    return memory;
-  }
-}
-
-export function writeFeedingLog(log: LoggedFeeding[]): void {
-  const raw = serialize(log);
-  memory = raw;
-  try {
-    safeStorage()?.setItem(FEEDING_LOG_STORAGE_KEY, raw);
-  } catch {
-    // Storage unavailable or full; the log still lives for this visit.
-  }
-  notify();
-}
-
-export function currentFeedingLog(): LoggedFeeding[] {
-  return pruneOlderThan(deserialize(getFeedingLogSnapshot()));
-}
-
-export function appendLoggedFeeding(logged: LoggedFeeding): void {
-  writeFeedingLog(addEntry(currentFeedingLog(), logged));
-}
-
-export function deleteLoggedFeeding(id: string): void {
-  writeFeedingLog(removeEntry(currentFeedingLog(), id));
 }

@@ -196,6 +196,12 @@ contract. No Docker Compose file on Day 1.
 instance (Neon/Supabase) removes an environment difference rather than adding one. If a
 local Postgres is preferred later, it is a one-line `.env` change and no code change.
 
+> **Superseded 2026-08-28** by `day-6-auth-and-persistence` Decision 1: Docker was installed
+> and a pinned `postgres:17` service in `docker-compose.yml` backs both the development and
+> the test database. The reasoning above held and its prediction was borne out — switching
+> was a one-line `.env` change and no code change. Deployment still targets a managed
+> instance, reached through the same `DATABASE_URL`.
+
 ### 12. Tests run against real PostgreSQL, not SQLite
 
 **Decision:** pytest fixtures point at a Postgres test database; there is no SQLite

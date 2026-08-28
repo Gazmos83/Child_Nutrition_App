@@ -2,7 +2,8 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
-import type { ChatRequest, ChatTurn, ChildContext, FeedingEntry } from "@/lib/api-types";
+import { notifyUnauthorized, readDetail } from "@/lib/api";
+import type { ChatRequest, ChatTurn, LoggedFeeding } from "@/lib/api-types";
 import {
   applyEvent,
   emptyAssistantMessage,
@@ -12,7 +13,6 @@ import {
   type ChatMessage,
 } from "@/lib/chat-reducer";
 import * as copy from "@/lib/copy";
-import { appendLoggedFeeding } from "@/lib/feeding-log-store";
 import { parseSseFrames } from "@/lib/sse";
 
 const MAX_HISTORY_TURNS = 12;
@@ -39,28 +39,15 @@ export function historyFrom(messages: ChatMessage[], upTo: number): ChatTurn[] {
   return turns.slice(-MAX_HISTORY_TURNS);
 }
 
-async function readDetail(res: Response): Promise<string> {
-  try {
-    const body: unknown = await res.json();
-    const detail = (body as { detail?: unknown }).detail;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      return detail
-        .map((d) => (d && typeof d === "object" && "msg" in d ? String(d.msg) : ""))
-        .filter(Boolean)
-        .join(" ");
-    }
-  } catch {
-    // Not JSON; fall through to the status text.
-  }
-  return res.statusText;
-}
-
-/** What travels with every message besides the text: the side panel and the local log. */
+/**
+ * What travels with every message besides the text. The child's details and log live on
+ * the account; the request names the child and the server reads the rest.
+ */
 export interface RequestContext {
-  child: ChildContext | null;
-  feeding_log: FeedingEntry[];
+  childId: string | null;
   timezone: string;
+  /** A feed the assistant logged mid-answer, to be saved to the account's log. */
+  onFeedLogged: (logged: LoggedFeeding) => void;
 }
 
 export function useChat(getContext: () => RequestContext) {
@@ -79,9 +66,8 @@ export function useChat(getContext: () => RequestContext) {
       const context = getContextRef.current();
       const body: ChatRequest = {
         message: text,
-        child: context.child,
+        child_id: context.childId,
         history,
-        feeding_log: context.feeding_log,
         timezone: context.timezone,
         stream: true,
       };
@@ -94,6 +80,14 @@ export function useChat(getContext: () => RequestContext) {
         });
       } catch {
         patch(assistantId, (m) => reduceAssistant(m, { type: "failed", message: copy.UNREACHABLE }));
+        return;
+      }
+      if (res.status === 401) {
+        // The session ended between page load and send: back to sign-in, message kept.
+        patch(assistantId, (m) =>
+          reduceAssistant(m, { type: "failed", message: copy.SESSION_EXPIRED }),
+        );
+        notifyUnauthorized();
         return;
       }
       if (!res.ok) {
@@ -118,9 +112,9 @@ export function useChat(getContext: () => RequestContext) {
           carry = parsed.carry;
           for (const event of parsed.events) {
             sawEvent = true;
-            // A feed the assistant logged for the parent joins the local log (Decision 11).
+            // A feed the assistant logged for the parent is saved to the account's log.
             const logged = loggedFeedingFrom(event);
-            if (logged) appendLoggedFeeding(logged);
+            if (logged) context.onFeedLogged(logged);
             patch(assistantId, (m) => applyEvent(m, event));
           }
         }

@@ -48,15 +48,45 @@ class Settings(BaseSettings):
             "postgresql+asyncpg://."
         ),
     )
+    # Optional: only the test suite reads it (tests/conftest.py). A separate setting
+    # rather than a name derived from DATABASE_URL, so the fixtures that create and drop
+    # the schema can never be pointed at development data by accident.
+    test_database_url: str | None = Field(
+        default=None,
+        description="PostgreSQL URL of the database the test suite may create and drop.",
+    )
     app_env: Literal["dev", "test", "prod"] = Field(
         default="dev",
         description="Deployment environment.",
     )
+    # Day 6 authentication. Optional at construction so the app still boots and /health
+    # still answers without it; the auth dependency fails with a 503 naming it instead.
+    session_secret: str | None = Field(
+        default=None,
+        min_length=32,
+        description="Secret that signs session tokens. At least 32 characters.",
+    )
+    session_ttl_hours: int = Field(
+        default=24 * 7,
+        ge=1,
+        le=24 * 30,
+        description="How long a signed-in session stays valid.",
+    )
 
-    @field_validator("database_url")
+    @field_validator("session_secret", "test_database_url", mode="before")
     @classmethod
-    def _require_asyncpg_scheme(cls, value: str) -> str:
+    def _blank_optional_is_absent(cls, value: object) -> object:
+        """``SESSION_SECRET=`` (present but empty, as .env.example ships) means unset."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("database_url", "test_database_url")
+    @classmethod
+    def _require_asyncpg_scheme(cls, value: str | None) -> str | None:
         """Normalize the URL scheme to asyncpg, or fail with an actionable message."""
+        if value is None:
+            return None
         url = value.strip()
         if not url:
             raise ValueError("DATABASE_URL must not be empty")

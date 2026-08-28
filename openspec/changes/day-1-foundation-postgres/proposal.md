@@ -62,10 +62,13 @@ None — this is the first change in the project; `openspec/specs/` is empty.
   API router), `alembic/` migration environment, `tests/`.
 - **Dependencies**: adds the FastAPI/SQLAlchemy/Alembic/asyncpg stack to `pyproject.toml`
   and `uv.lock`.
-- **Infrastructure**: requires a reachable PostgreSQL instance. No Postgres server,
-  Docker, or client is installed on the current machine — the connection is configured
-  by `DATABASE_URL` and a managed instance is expected, so this change is written to be
-  verifiable the moment that URL exists.
+- **Infrastructure**: requires a reachable PostgreSQL instance, configured by `DATABASE_URL`
+  only. *Written on Day 1:* no Postgres server, Docker, or client was installed on the
+  machine and a managed instance was expected, so this change was written to be verifiable
+  the moment that URL existed. *Amended 2026-08-28:* Docker was installed and a pinned
+  `postgres:17` service in `docker-compose.yml` now backs both the development and the test
+  database (`day-6-auth-and-persistence`, Decision 1); group 7 was verified against it. The
+  `DATABASE_URL`-only contract held, as Decision 11 predicted — no code changed.
 - **Downstream days**: D2 ingestion writes to Milvus only and does not touch this schema.
   D4 tools read `child_profiles` through auth-scoped repository code. D6 auth attaches
   credential verification to the `users` table already in place.

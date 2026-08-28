@@ -2,15 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { LoggedFeeding } from "../api-types";
 import {
   addEntry,
-  deserialize,
   groupByDay,
   localDay,
   pruneOlderThan,
   removeEntry,
-  serialize,
   sumNutrients,
   todayEntries,
-  toRequestEntries,
 } from "../feeding-log-store";
 
 function logged(id: string, fedAt: string, calories = 100.5): LoggedFeeding {
@@ -68,19 +65,5 @@ describe("feeding log store", () => {
     expect(totals.calories).toBe(201);
     expect(totals.protein_g).toBe(4.2);
     expect(totals.iron_mg).toBe(3.6);
-  });
-
-  it("round-trips through serialize/deserialize and drops garbage", () => {
-    const log = [logged("a", "2026-08-27T08:00:00Z")];
-    expect(deserialize(serialize(log))).toEqual(log);
-    expect(deserialize(null)).toEqual([]);
-    expect(deserialize("not json")).toEqual([]);
-    expect(deserialize(JSON.stringify([{ nope: true }, ...log]))).toEqual(log);
-  });
-
-  it("request entries carry the entry shape only", () => {
-    expect(toRequestEntries([logged("a", "2026-08-27T08:00:00Z")])).toEqual([
-      { id: "a", fed_at: "2026-08-27T08:00:00Z", feeding_type: "formula", food_id: null, quantity: 150, unit: "ml" },
-    ]);
   });
 });

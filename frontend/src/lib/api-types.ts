@@ -1,4 +1,4 @@
-// Wire types for POST /api/chat, mirrored from backend/schemas/chat.py, rag.py, tools.py.
+// Wire types mirrored from backend/schemas/{chat,rag,tools,auth,child}.py.
 
 import type { ActivityLevel, Allergen, DietPreference, FeedingType, Sex } from "./enums";
 
@@ -22,15 +22,37 @@ export interface ChatTurn {
   content: string;
 }
 
+/** The wire body (`ChatRequestBody`). The child's details and log are read server-side. */
 export interface ChatRequest {
   message: string;
-  child?: ChildContext | null;
+  child_id?: string | null;
   history?: ChatTurn[];
-  /** Change 2: the client-held log (entries only) and the browser's IANA time zone. */
-  feeding_log?: FeedingEntry[];
   timezone?: string;
   strategy?: Strategy;
   stream?: boolean;
+}
+
+// -- account and children (backend/schemas/auth.py, child.py) -------------------------------
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+}
+
+export interface Credentials {
+  email: string;
+  password: string;
+}
+
+/** `ChildProfileWrite`: field-for-field the context the chat resolves the profile into. */
+export type ChildProfileWrite = ChildContext;
+
+export interface ChildProfile extends ChildContext {
+  id: string;
+  height_cm: number | null;
+  doctors_note: string | null;
+  doctors_note_recorded_at: string | null;
+  created_at: string;
 }
 
 // -- feeding log (backend/schemas/tools.py; feeding-log spec) ------------------------------
