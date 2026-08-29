@@ -1,14 +1,18 @@
-"""POST /api/ask contract (Day 3 task 6.2; ask-api spec)."""
+"""POST /api/ask contract (Day 3 task 6.2; ask-api spec; Day 7: requires a session)."""
 
 import json
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.api.ask import get_rag_pipeline
-from backend.core.config import get_rag_settings
+from backend.api.deps import get_auth_settings, get_current_user
+from backend.core.config import Settings, get_rag_settings
 from backend.db.knowledge_store import Document
+from backend.db.session import get_db
 from backend.main import create_app
+from backend.models import User
 from backend.rag.llm import reset_pipeline_cache
 from backend.rag.pipeline import RagPipeline
 from backend.rag.prompts import DISCLAIMER, NO_ANSWER_MESSAGE
@@ -44,8 +48,12 @@ def llm() -> RecordingChatModel:
     return RecordingChatModel(responses=[ANSWER, ANSWER, ANSWER])
 
 
-@pytest.fixture
-def client(llm: RecordingChatModel) -> TestClient:
+def _signed_in_parent() -> User:
+    """Stand-in for the session dependency: an account that exists only in memory."""
+    return User(id=uuid.uuid7(), email="parent@example.com", hashed_password="unused")
+
+
+def make_app(llm: RecordingChatModel):
     store = InMemoryKnowledgeStore(CORPUS)
     pipeline = RagPipeline(
         retrievers={"basic": BasicRetriever(store), "advanced": AdvancedRetriever(store, None)},
@@ -53,8 +61,45 @@ def client(llm: RecordingChatModel) -> TestClient:
     )
     app = create_app()
     app.dependency_overrides[get_rag_pipeline] = lambda: pipeline
+    return app
+
+
+@pytest.fixture
+def client(llm: RecordingChatModel) -> TestClient:
+    app = make_app(llm)
+    app.dependency_overrides[get_current_user] = _signed_in_parent
     with TestClient(app) as c:
         yield c
+
+
+class TestAdmission:
+    """Day 7 (ask-api spec): a session is required, and it is the only identity accepted."""
+
+    @pytest.fixture
+    def anonymous_client(self, llm: RecordingChatModel) -> TestClient:
+        """The real session dependency, with no database behind it (none is needed for a 401)."""
+
+        async def no_db():
+            yield None
+
+        app = make_app(llm)
+        app.dependency_overrides[get_db] = no_db
+        app.dependency_overrides[get_auth_settings] = lambda: Settings(
+            database_url="postgresql://u:p@h/db", session_secret="s" * 32, _env_file=None
+        )
+        with TestClient(app) as c:
+            yield c
+
+    def test_no_session_is_401_before_any_work(self, anonymous_client: TestClient, llm) -> None:
+        r = anonymous_client.post("/api/ask", json={"question": "how much iron do infants need"})
+        assert r.status_code == 401
+        assert r.json() == {"detail": "Sign in to continue"}
+        assert llm.calls == []
+
+    def test_identity_in_the_body_is_rejected(self, client: TestClient, llm) -> None:
+        r = client.post("/api/ask", json={"question": "iron?", "user_id": str(uuid.uuid7())})
+        assert r.status_code == 422
+        assert llm.calls == []
 
 
 class TestValidation:
@@ -148,6 +193,7 @@ class TestStreaming:
         pipeline = RagPipeline(retrievers={"basic": BasicRetriever(store)}, chat_model=llm)
         app = create_app()
         app.dependency_overrides[get_rag_pipeline] = lambda: pipeline
+        app.dependency_overrides[get_current_user] = _signed_in_parent
         with TestClient(app) as c:
             events = parse_sse(
                 c.post("/api/ask", json={"question": "iron infants", "strategy": "basic"}).text
@@ -168,7 +214,9 @@ class TestUnconfigured:
         get_rag_settings.cache_clear()
         reset_pipeline_cache()
         try:
-            with TestClient(create_app()) as c:
+            app = create_app()
+            app.dependency_overrides[get_current_user] = _signed_in_parent
+            with TestClient(app) as c:
                 r = c.post("/api/ask", json={"question": "iron?", "stream": False})
                 assert r.status_code == 503
                 assert "OPENROUTER_API_KEY" in r.json()["detail"]
@@ -187,7 +235,9 @@ class TestUnconfigured:
         get_rag_settings.cache_clear()
         reset_pipeline_cache()
         try:
-            with TestClient(create_app()) as c:
+            app = create_app()
+            app.dependency_overrides[get_current_user] = _signed_in_parent
+            with TestClient(app) as c:
                 r = c.post(
                     "/api/ask", json={"question": "iron?", "strategy": "basic", "stream": False}
                 )

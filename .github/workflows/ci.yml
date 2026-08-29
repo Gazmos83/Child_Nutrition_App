@@ -1,0 +1,42 @@
+# Reference §15 (kept simple): lint and the offline test suites on every push and PR.
+# The PostgreSQL-backed `db` tests skip here (TEST_DATABASE_URL unset) and the live
+# OpenRouter tests are opt-in (`-m integration`), so a run spends nothing.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check backend tests scripts
+      - run: uv run pytest -q
+        env:
+          # Never connected to: the engine is built lazily, but the app must be able to
+          # construct Settings for the route-surface tests. No TEST_DATABASE_URL.
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C frontend lint
+      - run: pnpm -C frontend typecheck
+      - run: pnpm -C frontend test
+      - run: pnpm -C frontend build

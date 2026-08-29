@@ -1,7 +1,9 @@
 """``POST /api/ask`` -- ask the nutrition assistant a question (Day 3 ask-api spec).
 
-Not user-scoped: reads no child profile, persists nothing, takes no identity. Streaming
-uses hand-formatted server-sent events over ``StreamingResponse`` (design Decision 10).
+Requires a session since Day 7 -- the answer costs model credit -- but is not user-scoped:
+it reads no child profile, persists nothing, and uses the identity for admission only.
+Streaming uses hand-formatted server-sent events over ``StreamingResponse`` (design
+Decision 10).
 """
 
 import logging
@@ -11,6 +13,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from backend.api.deps import CurrentUser
+from backend.api.rate_limit import rate_limited
 from backend.api.sse import sse
 from backend.core import request_context
 from backend.rag.llm import get_pipeline
@@ -72,6 +76,8 @@ async def _event_stream(pipeline: RagPipeline, request: AskRequest) -> AsyncIter
     "/ask",
     response_model=AskResponse,
     summary="Ask a child-nutrition question",
+    # Runs before every parameter dependency: a refused request costs nothing downstream.
+    dependencies=[Depends(rate_limited("model"))],
     responses={
         200: {
             "description": (
@@ -79,16 +85,20 @@ async def _event_stream(pipeline: RagPipeline, request: AskRequest) -> AsyncIter
                 "`token` events, one `citations` event, then `done` (or `error`)."
             )
         },
+        401: {"description": "No valid session."},
+        429: {"description": "This client has asked too often in the last minute."},
         503: {"description": "Language-model provider or knowledge base is not configured."},
     },
 )
 async def ask(
     request: AskRequest,
     pipeline: Annotated[RagPipeline, Depends(get_rag_pipeline)],
+    _user: CurrentUser,
 ) -> AskResponse | StreamingResponse:
     """Answer from the pediatric-guideline knowledge base with citations and a disclaimer.
 
-    Stateless: nothing about the request is stored and no user data is read.
+    Stateless: nothing about the request is stored and no user data is read. The session
+    only decides whether the caller may spend model credit.
     """
     if request.stream:
         return StreamingResponse(

@@ -1,11 +1,12 @@
 """Aggregate router for versioned API routes, mounted under ``/api``.
 
-Public: ``/api/ask`` (the knowledge base; reads no user data, and the Day 6 evaluation
-harness posts to it without a session), ``/api/foods`` (the committed food table), and
-``/api/auth/register`` and ``/login``. Everything else runs behind the session cookie
-(``backend/api/deps.py``): ``/api/children`` and its feeding log are the user-scoped
-records hard rule 9 binds to the account, and ``/api/chat`` reads the child's details
-and log from those rows rather than from the request body.
+Public: ``/api/foods`` (the committed food table) and ``/api/auth/register``, ``/login``,
+``/logout``. Everything else runs behind the session cookie (``backend/api/deps.py``):
+``/api/children`` and its feeding log are the user-scoped records hard rule 9 binds to the
+account, ``/api/chat`` reads the child's details and log from those rows rather than from
+the request body, and ``/api/ask`` (Day 7) requires a session because an answer spends
+model credit, while still reading no user data. The evaluation harness registers an
+account before its first request.
 """
 
 from fastapi import APIRouter

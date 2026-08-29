@@ -11,10 +11,12 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
+from backend.api.deps import get_current_user
 from backend.core.config import get_rag_settings
 from backend.main import create_app
 from backend.rag.llm import build_pipeline, reset_pipeline_cache
 from backend.rag.prompts import DISCLAIMER, NO_ANSWER_MESSAGE
+from tests.test_api_ask import _signed_in_parent
 
 logger = logging.getLogger(__name__)
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
@@ -81,7 +83,10 @@ def test_api_ask_end_to_end_json() -> None:
         pytest.skip("requires OPENROUTER_API_KEY and a populated milvus.db")
     reset_pipeline_cache()
     try:
-        with TestClient(create_app()) as client:
+        app = create_app()
+        # /api/ask requires a session (Day 7); this test is about the pipeline, not auth.
+        app.dependency_overrides[get_current_user] = _signed_in_parent
+        with TestClient(app) as client:
             r = client.post(
                 "/api/ask",
                 json={"question": "Is honey safe for my 9 month old?", "stream": False},

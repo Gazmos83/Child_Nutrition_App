@@ -4,7 +4,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** early development (Day 6 of 7). PostgreSQL schema and migrations, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, the feeding log with nutrient-gap detection (reference §9b), and accounts with saved child profiles and a persisted feeding log are implemented. Deployment follows on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+> **Status:** Day 7 of 7 — production hardening and deployment in progress. PostgreSQL schema and migrations, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, the feeding log with nutrient-gap detection (reference §9b), and accounts with saved child profiles and a persisted feeding log are implemented. Deployment follows on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
 
 ## Features
 
@@ -67,11 +67,13 @@ Three constraints are load-bearing and worth knowing before touching the schema:
 
 Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles or feeding log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
 
-`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` and `GET /api/foods` stay public — they read no user data, and the Day 6 evaluation harness posts to `/api/ask` without a session.
+`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` requires a session too (Day 7) — not because it reads user data (it doesn't; it persists nothing and uses the identity for admission only) but because every answer spends model credit; the evaluation harness registers an account before its first request. `GET /api/foods` and the register/login routes stay public.
 
 All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
 
-**Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
+**Abuse ceilings (Day 7).** The model-spending routes (`/api/ask` and `/api/chat`, one shared budget) and the credential routes (register, login) are rate-limited per client address — `RATE_LIMIT_MODEL_PER_MINUTE` (default 30) and `RATE_LIMIT_AUTH_PER_MINUTE` (default 10); `0` disables — answering 429 with a `Retry-After` header before any retrieval, model call, or password work (`backend/api/rate_limit.py`, a route dependency). The limiter is in-process, which is exact because the service runs as one instance; behind the hosting proxy the client address comes from `X-Forwarded-For` through uvicorn's `--proxy-headers`, which only the container start script passes. Cross-origin browser access is an explicit allowlist, `ALLOWED_ORIGINS` (comma-separated, default empty, never `*`): the browser reaches the API through the Next.js same-origin rewrite, so nothing is granted unless configured. With `APP_ENV=prod` the application refuses to start without `SESSION_SECRET` and `OPENROUTER_API_KEY` rather than serving 503s.
+
+**Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, the client address, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
 
 Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, doctor's note, rule/source used) for auditability.
 
@@ -100,7 +102,7 @@ Always add dependencies through the package manager (`uv add`, `pnpm add`) and r
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. `APP_ENV=prod` changes that: the session cookie becomes `Secure`, and a missing `SESSION_SECRET` or `OPENROUTER_API_KEY` stops the process at start with the setting's name. `ALLOWED_ORIGINS`, `RATE_LIMIT_MODEL_PER_MINUTE`, and `RATE_LIMIT_AUTH_PER_MINUTE` are described under *Security*. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
 
 ### Knowledge base
 
@@ -120,17 +122,24 @@ Ingestion is incremental: it hashes every document, compares against what `milvu
 uv run uvicorn backend.main:app --reload
 ```
 
+The endpoint requires a session (Day 7), so sign in once into a cookie jar:
+
+```bash
+curl -s -c jar localhost:8000/api/auth/register -H 'content-type: application/json' \
+  -d '{"email": "parent@example.com", "password": "correct horse battery"}'
+```
+
 JSON (used by tests and evaluation):
 
 ```bash
-curl -s localhost:8000/api/ask -H 'content-type: application/json' \
+curl -s -b jar localhost:8000/api/ask -H 'content-type: application/json' \
   -d '{"question": "How much iron does a 9-month-old need?", "strategy": "advanced", "stream": false}'
 ```
 
 Server-sent events (used by the UI): `token` events carry answer fragments, one `citations` event carries citations + retrieval metadata + disclaimer, then `done` (or `error`).
 
 ```bash
-curl -N localhost:8000/api/ask -H 'content-type: application/json' \
+curl -N -b jar localhost:8000/api/ask -H 'content-type: application/json' \
   -d '{"question": "When can babies have honey?"}'
 ```
 

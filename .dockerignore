@@ -1,0 +1,33 @@
+# Secrets and local state never enter the image (production-hardening spec).
+.env
+.env.*
+!.env.example
+milvus.db
+milvus.db.lock
+.milvus.db.lock
+*.jsonl
+
+# Not part of the API image.
+frontend/
+node_modules/
+evals/
+tests/
+openspec/
+scripts/db-init/
+scripts/build_growth_tables.py
+docker-compose.yml
+Dockerfile
+render.yaml
+.github/
+*.md
+!README.md
+
+# Tooling caches and environments.
+.venv/
+__pycache__/
+*.py[oc]
+.pytest_cache/
+.ruff_cache/
+.git/
+*_Summary.md
+*.session.log

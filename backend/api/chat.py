@@ -22,6 +22,7 @@ from backend.api.children import (
     to_feeding_entries,
 )
 from backend.api.deps import CurrentUser, DbSession, owned_child
+from backend.api.rate_limit import rate_limited
 from backend.api.sse import sse
 from backend.chat import copy
 from backend.chat.service import ChatService
@@ -91,6 +92,8 @@ async def _event_stream(service: ChatService, request: ChatRequest) -> AsyncIter
     "/chat",
     response_model=ChatResponse,
     summary="Chat with the child-nutrition assistant",
+    # Runs before every parameter dependency: a refused request costs nothing downstream.
+    dependencies=[Depends(rate_limited("model"))],
     responses={
         200: {
             "description": (
@@ -100,6 +103,7 @@ async def _event_stream(service: ChatService, request: ChatRequest) -> AsyncIter
             )
         },
         401: {"description": "No valid session."},
+        429: {"description": "This client has asked too often in the last minute."},
         503: {"description": "Language-model provider or knowledge base is not configured."},
     },
 )

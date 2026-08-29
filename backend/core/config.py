@@ -17,10 +17,10 @@ store configured at all.
 
 import logging
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # asyncpg is the only driver this application supports (see design.md Decision 1).
 # Provider dashboards hand out bare `postgresql://` URLs, which SQLAlchemy would route
@@ -86,6 +86,50 @@ class Settings(BaseSettings):
             "Unset: they go to the main log with everything else."
         ),
     )
+
+    # Day 7 production hardening (production-hardening spec). Comma-separated in the
+    # environment, hence NoDecode: pydantic-settings would otherwise expect JSON.
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        description=(
+            "Origins allowed to make credentialed cross-origin requests. Empty (default) "
+            "grants none; the browser reaches the API through the same-origin frontend proxy."
+        ),
+    )
+    rate_limit_model_per_minute: int = Field(
+        default=30,
+        ge=0,
+        description=(
+            "Requests per client per minute on /api/ask and /api/chat together; 0 disables."
+        ),
+    )
+    rate_limit_auth_per_minute: int = Field(
+        default=10,
+        ge=0,
+        description="Registrations and sign-in attempts per client per minute; 0 disables.",
+    )
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = [origin.strip() for origin in value.split(",")]
+        if isinstance(value, list):
+            origins = [origin for origin in value if origin]
+            if "*" in origins:
+                raise ValueError(
+                    "ALLOWED_ORIGINS must list origins explicitly; '*' cannot be combined with "
+                    "credentialed requests"
+                )
+            return origins
+        return value
+
+    @model_validator(mode="after")
+    def _production_needs_a_secret(self) -> Settings:
+        """In production a missing secret must stop the deploy, not 503 per request."""
+        if self.app_env == "prod" and self.session_secret is None:
+            raise ValueError("SESSION_SECRET is required when APP_ENV=prod")
+        return self
 
     @field_validator("log_level")
     @classmethod

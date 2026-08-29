@@ -2,11 +2,14 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from backend.api.deps import get_auth_settings
-from backend.core.config import Settings, get_settings
+from backend.core.config import Settings, get_rag_settings, get_settings
 from backend.db.session import reset_engine_cache
 from backend.main import app, create_app
+
+NO_ENV_FILE = {"env_file": None, "env_file_encoding": "utf-8", "extra": "ignore"}
 
 # FastAPI mounts these itself; they are not application routes.
 FASTAPI_BUILTIN_PATHS = {
@@ -99,15 +102,120 @@ class TestHealthDegradesGracefully:
         assert set(body) == {"status", "app_env", "database"}
 
 
+class TestProductionGuard:
+    """Day 7 (production-hardening spec): prod fails at start, dev boots and reports."""
+
+    @pytest.fixture(autouse=True)
+    def _isolated_environment(self, monkeypatch):
+        for name in ("SESSION_SECRET", "OPENROUTER_API_KEY", "APP_ENV"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h/db")
+        monkeypatch.setattr("backend.core.config.Settings.model_config", NO_ENV_FILE)
+        monkeypatch.setattr("backend.core.config.RAGSettings.model_config", NO_ENV_FILE)
+        get_settings.cache_clear()
+        get_rag_settings.cache_clear()
+        reset_engine_cache()
+        try:
+            yield
+        finally:
+            get_settings.cache_clear()
+            get_rag_settings.cache_clear()
+            reset_engine_cache()
+
+    def test_prod_without_a_session_secret_does_not_start(self, monkeypatch) -> None:
+        monkeypatch.setenv("APP_ENV", "prod")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        with pytest.raises(ValidationError) as exc_info:
+            create_app()
+        assert "SESSION_SECRET" in str(exc_info.value)
+
+    def test_prod_without_a_provider_key_does_not_start(self, monkeypatch) -> None:
+        monkeypatch.setenv("APP_ENV", "prod")
+        monkeypatch.setenv("SESSION_SECRET", "s" * 32)
+        with pytest.raises(RuntimeError) as exc_info:
+            create_app()
+        assert "OPENROUTER_API_KEY" in str(exc_info.value)
+
+    def test_prod_fully_configured_starts(self, monkeypatch) -> None:
+        monkeypatch.setenv("APP_ENV", "prod")
+        monkeypatch.setenv("SESSION_SECRET", "s" * 32)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+        with TestClient(create_app()) as client:
+            assert client.get("/health").json()["app_env"] == "prod"
+
+    def test_dev_without_either_boots_and_answers_health(self, monkeypatch) -> None:
+        monkeypatch.setenv("APP_ENV", "dev")
+        with TestClient(create_app()) as client:
+            response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["app_env"] == "dev"
+
+    def test_settings_seam_is_used_verbatim(self) -> None:
+        settings = Settings(database_url="postgresql://u:p@h/db", app_env="test", _env_file=None)
+        with TestClient(create_app(settings=settings)) as client:
+            assert client.get("/health").status_code == 200
+
+
+class TestCors:
+    """Day 7 (production-hardening spec): cross-origin access is an explicit allowlist."""
+
+    ORIGIN = "https://app.example"
+    PREFLIGHT = {
+        "Origin": ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+    }
+
+    @staticmethod
+    def _client(origins: list[str]) -> TestClient:
+        settings = Settings(
+            database_url="postgresql://u:p@h/db", allowed_origins=origins, _env_file=None
+        )
+        return TestClient(create_app(settings=settings))
+
+    def test_allowed_origin_is_granted_with_credentials_and_a_request_id(self) -> None:
+        with self._client([self.ORIGIN]) as client:
+            preflight = client.options("/api/chat", headers=self.PREFLIGHT)
+            actual = client.get("/api/foods", headers={"Origin": self.ORIGIN})
+        assert preflight.status_code == 200
+        assert preflight.headers["access-control-allow-origin"] == self.ORIGIN
+        assert preflight.headers["access-control-allow-credentials"] == "true"
+        assert "x-request-id" in preflight.headers
+        assert actual.headers["access-control-allow-origin"] == self.ORIGIN
+
+    def test_unknown_origin_is_granted_nothing(self) -> None:
+        with self._client([self.ORIGIN]) as client:
+            headers = {**self.PREFLIGHT, "Origin": "https://evil.example"}
+            preflight = client.options("/api/chat", headers=headers)
+            actual = client.get("/api/foods", headers={"Origin": "https://evil.example"})
+        # No allow-origin is the denial a browser acts on; Starlette also answers 400.
+        assert preflight.status_code == 400
+        assert "access-control-allow-origin" not in preflight.headers
+        assert "access-control-allow-origin" not in actual.headers
+
+    def test_default_allowlist_grants_no_origin(self) -> None:
+        with self._client([]) as client:
+            preflight = client.options("/api/chat", headers=self.PREFLIGHT)
+        assert "access-control-allow-origin" not in preflight.headers
+
+    def test_request_without_origin_is_unchanged(self) -> None:
+        with self._client([self.ORIGIN]) as client:
+            response = client.get("/api/foods")
+        assert response.status_code == 200
+        assert "access-control-allow-origin" not in response.headers
+
+
 PUBLIC_PATHS = {
     "/health",
-    "/api/ask",
     "/api/foods",
     "/api/auth/register",
     "/api/auth/login",
     "/api/auth/logout",
 }
+# `/api/ask` reads no user data but has required a session since Day 7 (it spends model
+# credit), so it belongs here: the loop below asserts the 401.
 USER_SCOPED_PATHS = {
+    "/api/ask",
     "/api/auth/me",
     "/api/chat",
     "/api/children",

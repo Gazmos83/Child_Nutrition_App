@@ -9,11 +9,12 @@ cookie nor an acceptable content type.
 
 import datetime as dt
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.api.deps import SESSION_COOKIE, AuthSettings, CurrentUser, DbSession
+from backend.api.rate_limit import rate_limited
 from backend.auth.passwords import hash_password, verify_password
 from backend.auth.tokens import issue_session_token
 from backend.core.config import Settings
@@ -50,7 +51,12 @@ async def _user_by_email(db: DbSession, email: str) -> User | None:
     status_code=status.HTTP_201_CREATED,
     response_model=CurrentUserResponse,
     summary="Create an account and sign in",
-    responses={409: {"description": "An account with this email already exists."}},
+    # Before any hashing: a refused attempt does no password work.
+    dependencies=[Depends(rate_limited("auth"))],
+    responses={
+        409: {"description": "An account with this email already exists."},
+        429: {"description": "Too many attempts from this client in the last minute."},
+    },
 )
 async def register(
     credentials: Credentials, response: Response, db: DbSession, settings: AuthSettings
@@ -74,7 +80,11 @@ async def register(
     "/login",
     response_model=CurrentUserResponse,
     summary="Sign in",
-    responses={401: {"description": "Unknown email or wrong password (not distinguished)."}},
+    dependencies=[Depends(rate_limited("auth"))],
+    responses={
+        401: {"description": "Unknown email or wrong password (not distinguished)."},
+        429: {"description": "Too many attempts from this client in the last minute."},
+    },
 )
 async def login(
     credentials: Credentials, response: Response, db: DbSession, settings: AuthSettings

@@ -127,14 +127,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     client = ServiceClient(base_url)
-    if any(c.endpoint == "chat" for c in cases):
-        try:
-            client.require_database()
-        except ServiceUnavailable as exc:
-            print(f"cannot run: {exc}")
-            return 2
-        client.register()
-        print(f"registered throwaway account {client.account['email']}")
+    # Every case runs under a session: /api/ask has required one since Day 7, and chat
+    # cases additionally save a child and its feeds to the account.
+    try:
+        client.require_database()
+    except ServiceUnavailable as exc:
+        print(f"cannot run: {exc}")
+        return 2
+    client.register()
+    print(f"registered throwaway account {client.account['email']} for every case")
 
     started = dt.datetime.now(dt.UTC)
     stamp = started.strftime("%Y-%m-%d-%H%M%S")

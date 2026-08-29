@@ -120,6 +120,61 @@ class TestLoggingSettings:
         assert settings.audit_log_path is None
 
 
+class TestProductionHardeningSettings:
+    """Day 7: origins, rate limits, and the production guard (production-hardening spec)."""
+
+    DEV = "postgresql+asyncpg://u:p@h/nutrition"
+    ENV = ("ALLOWED_ORIGINS", "RATE_LIMIT_MODEL_PER_MINUTE", "RATE_LIMIT_AUTH_PER_MINUTE")
+
+    @pytest.fixture(autouse=True)
+    def _clear_env(self, monkeypatch) -> None:
+        for name in (*self.ENV, "APP_ENV", "SESSION_SECRET"):
+            monkeypatch.delenv(name, raising=False)
+
+    def test_defaults(self) -> None:
+        settings = Settings(database_url=self.DEV, _env_file=None)
+        assert settings.allowed_origins == []
+        assert settings.rate_limit_model_per_minute == 30
+        assert settings.rate_limit_auth_per_minute == 10
+
+    @pytest.mark.parametrize("raw", ["", "   ", ","])
+    def test_blank_origins_are_an_empty_list(self, raw: str) -> None:
+        settings = Settings(database_url=self.DEV, allowed_origins=raw, _env_file=None)
+        assert settings.allowed_origins == []
+
+    def test_comma_separated_origins_are_split_and_stripped(self, monkeypatch) -> None:
+        monkeypatch.setenv("ALLOWED_ORIGINS", " https://app.example , http://localhost:3000 ")
+        settings = Settings(database_url=self.DEV, _env_file=None)
+        assert settings.allowed_origins == ["https://app.example", "http://localhost:3000"]
+
+    def test_wildcard_origin_is_rejected(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(database_url=self.DEV, allowed_origins="*", _env_file=None)
+        assert "explicitly" in str(exc_info.value)
+
+    def test_negative_limit_is_rejected_and_zero_allowed(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, rate_limit_model_per_minute=-1, _env_file=None)
+        zero = Settings(database_url=self.DEV, rate_limit_auth_per_minute=0, _env_file=None)
+        assert zero.rate_limit_auth_per_minute == 0
+
+    def test_prod_without_a_secret_refuses_to_construct(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            Settings(database_url=self.DEV, app_env="prod", _env_file=None)
+        assert "SESSION_SECRET" in str(exc_info.value)
+        with pytest.raises(ValidationError):
+            Settings(database_url=self.DEV, app_env="prod", session_secret="", _env_file=None)
+
+    def test_prod_with_a_secret_constructs(self) -> None:
+        settings = Settings(
+            database_url=self.DEV, app_env="prod", session_secret="s" * 32, _env_file=None
+        )
+        assert settings.app_env == "prod"
+
+    def test_dev_without_a_secret_still_constructs(self) -> None:
+        assert Settings(database_url=self.DEV, app_env="dev", _env_file=None).session_secret is None
+
+
 class TestMissingConfiguration:
     """Task 3.2: absence of DATABASE_URL must fail loudly and name the field."""
 

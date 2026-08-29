@@ -35,9 +35,10 @@ Environment (read from the repo `.env`): `OPENROUTER_API_KEY`, `OPENROUTER_MODEL
   faithfulness, answer relevancy, context precision, context recall against the reference,
   with the service's cited passages as the contexts.
 
-Categories → endpoint: `rag_basic`, `rag_advanced`, `out_of_domain` → `POST /api/ask`;
-`tool`, `hybrid`, `user_data`, `adversarial` → `POST /api/chat` under a throwaway account
-the runner registers, with the case's child saved and feeds logged first (one child per case,
+Every run first registers a throwaway account — `POST /api/ask` requires a session since
+Day 7 — and sends every case under it. Categories → endpoint: `rag_basic`, `rag_advanced`,
+`out_of_domain` → `POST /api/ask`; `tool`, `hybrid`, `user_data`, `adversarial` →
+`POST /api/chat`, with the case's child saved and feeds logged first (one child per case,
 deleted afterwards).
 
 ## Output

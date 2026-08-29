@@ -25,7 +25,7 @@ class ServiceClient:
         return self.http.get("/health").json()
 
     def require_database(self) -> None:
-        """Chat cases save a child and its feeds, so the database must be reachable."""
+        """Registering the run's account (and saving chat cases' children) needs the database."""
         status = self.health()
         if status.get("database") != "reachable":
             raise ServiceUnavailable(f"database is {status.get('database')!r}; chat cases need it")
