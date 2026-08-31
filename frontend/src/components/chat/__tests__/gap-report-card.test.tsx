@@ -64,6 +64,11 @@ describe("GapReportCard", () => {
     expect(screen.queryByText(copy.GAPS_LOW)).toBeNull();
   });
 
+  it("draws one bar per nutrient, not two", () => {
+    const { container } = render(<GapReportCard report={MEDIUM_IRON_BELOW} />);
+    expect(container.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(3);
+  });
+
   it("low confidence adds the early-look line and the override banner when the note won", () => {
     render(
       <GapReportCard

@@ -78,6 +78,11 @@ describe("MealPlanCard", () => {
     expect(exclusions).toHaveTextContent("infant botulism");
   });
 
+  it("draws one coverage bar per nutrient, not two", () => {
+    const { container } = render(<MealPlanCard plan={BASE} />);
+    expect(container.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(3);
+  });
+
   it("no safe plan shows the headline, both sections, exclusions, and no items", () => {
     const plan: MealPlanResult = {
       ...BASE,

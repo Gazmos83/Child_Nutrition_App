@@ -17,6 +17,7 @@ export const APP_TITLE = "Child Nutrition Assistant";
 export const PANEL_EMPTY = "Tell us about your growing gourmet to get started";
 export const CHAT_EMPTY =
   "Ask us anything about feeding your little one — what to start with, how much, or what a good day of meals looks like";
+export const JUMP_TO_LATEST = "Jump to the latest";
 
 // -- meal-plan card ------------------------------------------------------------------------
 
@@ -63,6 +64,75 @@ export const FROM_LOG = "from your feeding log";
 export const TOOLS_USED = "What we used";
 export const SHOW_DETAILS = "Show details";
 export const HIDE_DETAILS = "Hide details";
+export const TOOL_STEP_PENDING = "Working on it…";
+export const TOOL_STEP_SKIPPED = "Didn't get to it";
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function asText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** One line about what a tool did, from its wire args and result; null when the label
+ * already says it all. Values arrive untyped, so every read is guarded. */
+export function toolSummary(
+  name: string,
+  args: Record<string, unknown>,
+  result: Record<string, unknown> | null,
+): string | null {
+  switch (name) {
+    case "calculate_bmi": {
+      const weight = asNumber(args.weight_kg);
+      const height = asNumber(args.height_cm);
+      return weight !== null && height !== null
+        ? `BMI from ${formatNumber(weight)} kg and ${formatNumber(height)} cm`
+        : null;
+    }
+    case "calculate_calorie_target":
+    case "calculate_protein_target": {
+      const age = asNumber(args.age_months);
+      const weight = asNumber(args.weight_kg);
+      const nutrient = name === "calculate_calorie_target" ? "calories" : "protein";
+      return age !== null && weight !== null
+        ? `Daily ${nutrient} for ${formatNumber(age)} months and ${formatNumber(weight)} kg`
+        : null;
+    }
+    case "lookup_food": {
+      const id = asText(args.food_id);
+      const found = asText(result?.name) ?? (id ? id.replaceAll("_", " ") : null);
+      return found ? `Looked up ${found}` : null;
+    }
+    case "calculate_meal_nutrition": {
+      const items = Array.isArray(args.items) ? args.items.length : 0;
+      if (items === 0) return null;
+      return items === 1 ? "Added up one food" : `Added up ${items} foods`;
+    }
+    case "generate_meal_plan": {
+      const age = asNumber(args.age_months);
+      return age !== null ? `A day of meals for ${formatNumber(age)} months` : null;
+    }
+    case "search_guidelines": {
+      const query = asText(args.query);
+      return query ? `Searched the guidelines for “${query}”` : "Searched the guidelines";
+    }
+    case "log_feeding": {
+      const fed = asText(result?.food_name);
+      return fed ? `Logged ${fed}` : "Logged a feed";
+    }
+    case "get_daily_nutrition":
+      return "Added up today's feeds";
+    case "get_remaining_targets":
+      return "What's left of today's targets";
+    case "detect_nutrient_gaps": {
+      const days = asNumber(result?.window_days);
+      if (days === null || days <= 0) return "Checked recent days";
+      return days === 1 ? "Checked the last day" : `Checked the last ${formatNumber(days)} days`;
+    }
+    default:
+      return null;
+  }
+}
 
 export const INTENT_LABELS = {
   rag: "From the guidelines",

@@ -12,6 +12,24 @@ const RENDERED: string[] = [
   ...Object.values(copy.INTENT_LABELS),
   copy.overrideBody("iron", 8, 11, "mg"),
   copy.UNAVAILABLE("OPENROUTER_API_KEY is not set."),
+  ...[
+    copy.toolSummary("calculate_bmi", { weight_kg: 8.4, height_cm: 68 }, null),
+    copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),
+    copy.toolSummary("calculate_protein_target", { age_months: 8, weight_kg: 8.4 }, null),
+    copy.toolSummary("lookup_food", { food_id: "oatmeal_porridge" }, null),
+    copy.toolSummary("calculate_meal_nutrition", { items: [{}, {}] }, null),
+    copy.toolSummary("calculate_meal_nutrition", { items: [{}] }, null),
+    copy.toolSummary("generate_meal_plan", { age_months: 8 }, null),
+    copy.toolSummary("search_guidelines", { query: "starting solids" }, null),
+    copy.toolSummary("search_guidelines", {}, null),
+    copy.toolSummary("log_feeding", {}, { food_name: "oatmeal porridge" }),
+    copy.toolSummary("log_feeding", {}, null),
+    copy.toolSummary("get_daily_nutrition", {}, null),
+    copy.toolSummary("get_remaining_targets", {}, null),
+    copy.toolSummary("detect_nutrient_gaps", {}, { window_days: 5 }),
+    copy.toolSummary("detect_nutrient_gaps", {}, { window_days: 1 }),
+    copy.toolSummary("detect_nutrient_gaps", {}, null),
+  ].filter((line): line is string => line !== null),
 ];
 
 function tsxFiles(dir: string): string[] {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { isMealPlanResult, isNutrientGapReport } from "@/lib/api-types";
 import type { AssistantMessage as AssistantMessageData } from "@/lib/chat-reducer";
 import * as copy from "@/lib/copy";
+import { toolSteps } from "@/lib/tool-steps";
 import { AnswerText } from "./answer-text";
 import { Citations } from "./citations";
 import { Disclaimer } from "./disclaimer";
@@ -42,7 +43,7 @@ export function AssistantMessage({
           </span>
         )}
       </div>
-      <ToolActivityList tools={message.tools} />
+      <ToolActivityList steps={toolSteps(message)} streaming={streaming} />
       {gapReport && <GapReportCard report={gapReport} />}
       {plan && <MealPlanCard plan={plan} />}
       {message.text && (

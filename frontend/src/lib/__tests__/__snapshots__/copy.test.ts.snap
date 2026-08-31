@@ -77,6 +77,7 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
     "tool": "Worked out for your child",
   },
   "INTERRUPTED": "The connection dropped partway through. What arrived is above — tap retry and we'll finish the thought",
+  "JUMP_TO_LATEST": "Jump to the latest",
   "LOG_ADD": "Add feed",
   "LOG_ADDING": "Adding…",
   "LOG_ADD_FAILED": "That feed didn't save. Check the details and try again",
@@ -153,6 +154,8 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
     "lookup_food": "Food lookup",
     "search_guidelines": "Guideline search",
   },
+  "TOOL_STEP_PENDING": "Working on it…",
+  "TOOL_STEP_SKIPPED": "Didn't get to it",
   "UNAVAILABLE": [Function],
   "UNREACHABLE": "We couldn't reach the chef. Check your connection and try again",
   "adjustedFor": [Function],
@@ -168,5 +171,6 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   "targetsFrom": [Function],
   "todayLine": [Function],
   "toolLabel": [Function],
+  "toolSummary": [Function],
 }
 `;
