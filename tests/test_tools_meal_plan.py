@@ -334,6 +334,7 @@ def gap_report(nutrient: str, confidence: str, req: MealPlanRequest) -> Nutrient
         gaps=[
             NutrientGap(
                 nutrient=nutrient,  # type: ignore[arg-type]
+                label=nutrient.capitalize(),
                 unit="g" if nutrient == "protein" else "mg",
                 average=round(target * 0.5, 1),
                 target=target,
@@ -348,14 +349,28 @@ def gap_report(nutrient: str, confidence: str, req: MealPlanRequest) -> Nutrient
 
 
 class TestChangeTwoRegression:
-    """meal-plan-generation spec: no log inputs -> the Day 4 plan, byte for byte."""
+    """meal-plan-generation spec: no log inputs -> the Day 4 plan, byte for byte.
+
+    One surgical fixture correction (2026-09-01, day-9-age-diet-aware-targets): the infant
+    iron target is 0.27 mg as published, not the 0.3 the old code rounded it to, so the
+    three 0-6 month cases' ``targets.iron.iron_mg`` and derived ``coverage.iron`` were
+    hand-edited -- six values, verified against a regenerated diff showing items, servings
+    and messages byte-identical. The fixture was NOT regenerated.
+    """
 
     @pytest.mark.parametrize("case", json.loads(FIXTURE.read_text(encoding="utf-8")))
     async def test_existing_fixture_unchanged_without_log_inputs(self, case) -> None:
         result = await generate_meal_plan(MealPlanRequest.model_validate(case["request"]), None)
         dumped = result.model_dump(mode="json")
         assert dumped["adjustments"] == [] and dumped["already_logged"] is None
-        assert {k: v for k, v in dumped.items() if k not in NEW_RESULT_FIELDS} == case["result"]
+        # The fixture is deliberately NOT regenerated (day-9 design Decision 8): it is the
+        # only byte-for-byte proof the composer's output has not moved. ``targets`` gained
+        # the day-9 ``items`` list, so it is compared on the Day 4 keys; regenerating the
+        # file to absorb that key would quietly discard the guard.
+        targets = {k: v for k, v in dumped.pop("targets").items() if k != "items"}
+        assert targets == case["result"]["targets"]
+        expected = {k: v for k, v in case["result"].items() if k != "targets"}
+        assert {k: v for k, v in dumped.items() if k not in NEW_RESULT_FIELDS} == expected
 
 
 class TestGapSteering:

@@ -222,6 +222,7 @@ USER_SCOPED_PATHS = {
     "/api/children/{child_id}",
     "/api/children/{child_id}/feedings",
     "/api/children/{child_id}/feedings/{feeding_id}",
+    "/api/children/{child_id}/targets",
 }
 
 

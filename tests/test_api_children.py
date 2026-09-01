@@ -5,6 +5,7 @@ boundary"; Day 1 task 7.10): an owner sees exactly their own records, a non-owne
 same answer as for a record that does not exist, and no session means no data.
 """
 
+import datetime as dt
 import uuid
 
 import pytest
@@ -151,6 +152,118 @@ class TestOwnership:
             response = await api_client.get(path)
             assert response.status_code == 401
             assert response.json() == {"detail": "Sign in to continue"}
+
+
+class TestDailyTargets:
+    """GET /api/children/{id}/targets (day-9 child-profile spec): a derived, owner-only read."""
+
+    async def test_owner_reads_the_ordered_set_with_disclaimer(
+        self, auth_client: AsyncClient
+    ) -> None:
+        child = await create_child(auth_client)  # 8 months, 8.5 kg, omnivore
+        response = await auth_client.get(f"/api/children/{child['id']}/targets")
+        assert response.status_code == 200
+        body = response.json()
+        # Display order: iron is promoted ahead of protein for infants.
+        assert [row["nutrient"] for row in body["targets"]["items"]] == [
+            "calories",
+            "iron",
+            "protein",
+            "vitamin_d",
+            "zinc",
+            "calcium",
+        ]
+        assert body["diet_preference"] == "omnivore"
+        assert body["doctors_note_present"] is False
+        assert "not" in body["disclaimer"] and "pediatrician" in body["disclaimer"]
+
+    async def test_deterministic_and_unflagged_with_no_logged_days(
+        self, auth_client: AsyncClient
+    ) -> None:
+        """No language-model call and no log read: byte-identical, and never a flag."""
+        child = await create_child(auth_client, doctors_note="Limit to 650 kcal per day.")
+        first = await auth_client.get(f"/api/children/{child['id']}/targets")
+        second = await auth_client.get(f"/api/children/{child['id']}/targets")
+        assert first.status_code == second.status_code == 200
+        assert first.content == second.content
+        body = first.json()
+        assert body["doctors_note_present"] is True
+        # The note is disclosed, not applied (Decision 6): calories stay the general 678.
+        assert body["targets"]["calories"]["calories"] == 678
+        for row in body["targets"]["items"]:
+            assert row["flag"] is None and row["intake_average"] is None, row["nutrient"]
+
+    async def test_logged_days_put_flags_on_tracked_rows_only(
+        self, auth_client: AsyncClient
+    ) -> None:
+        """chat-ui spec: a tracked target shows progress and flag once complete days exist."""
+        child = await create_child(auth_client)
+        for days_ago in (1, 2, 3):
+            fed_at = dt.datetime.now(dt.UTC) - dt.timedelta(days=days_ago)
+            await log_feed(auth_client, child["id"], fed_at=fed_at.isoformat())
+        body = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
+        rows = {row["nutrient"]: row for row in body["targets"]["items"]}
+        for key in ("calories", "protein", "iron", "calcium"):
+            assert rows[key]["flag"] in {"below", "adequate", "above"}, key
+            assert rows[key]["intake_average"] is not None, key
+        # 150 ml of formula a day is far below the 678 kcal target.
+        assert rows["calories"]["flag"] == "below"
+        for key in ("vitamin_d", "zinc"):
+            assert rows[key]["flag"] is None and rows[key]["intake_average"] is None, key
+
+    async def test_vegan_profile_gains_b12_and_the_dha_advisory(
+        self, auth_client: AsyncClient
+    ) -> None:
+        child = await create_child(
+            auth_client, age_months=30, weight_kg=13, diet_preference="vegan"
+        )
+        body = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
+        rows = {row["nutrient"]: row for row in body["targets"]["items"]}
+        assert rows["vitamin_b12"]["amount"] == 0.9 and rows["vitamin_b12"]["unit"] == "µg"
+        assert rows["dha"]["amount"] is None and rows["dha"]["advisory"]
+
+    async def test_changing_diet_changes_the_set_but_never_a_number(
+        self, auth_client: AsyncClient
+    ) -> None:
+        child = await create_child(auth_client, age_months=30, weight_kg=13)
+        before = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
+        replaced = await auth_client.put(
+            f"/api/children/{child['id']}",
+            json={**CHILD, "age_months": 30, "weight_kg": 13, "diet_preference": "vegan"},
+        )
+        assert replaced.status_code == 200
+        after = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
+        before_rows = {row["nutrient"]: row for row in before["targets"]["items"]}
+        after_rows = {row["nutrient"]: row for row in after["targets"]["items"]}
+        assert "vitamin_b12" not in before_rows and "vitamin_b12" in after_rows
+        assert "dha" not in before_rows and "dha" in after_rows
+        for key in before_rows.keys() & after_rows.keys():
+            assert before_rows[key]["amount"] == after_rows[key]["amount"], key
+
+    async def test_non_owner_gets_the_same_refusal_as_a_direct_read(
+        self, api_client: AsyncClient, user: User, other_user: User
+    ) -> None:
+        sign_in(api_client, user)
+        mine = await create_child(api_client)
+
+        sign_in(api_client, other_user)
+        as_non_owner = await api_client.get(f"/api/children/{mine['id']}/targets")
+        direct_read = await api_client.get(f"/api/children/{mine['id']}")
+        as_nonexistent = await api_client.get(f"/api/children/{NOWHERE}/targets")
+        assert as_non_owner.status_code == 404
+        assert as_non_owner.status_code == direct_read.status_code == as_nonexistent.status_code
+        assert as_non_owner.content == as_nonexistent.content
+        # No target value, age, or diet preference is disclosed (hard rule 9).
+        for fragment in ("678", "amount", "diet", "age"):
+            assert fragment not in as_non_owner.text
+
+    async def test_unauthenticated_is_refused(self, api_client: AsyncClient, user: User) -> None:
+        sign_in(api_client, user)
+        mine = await create_child(api_client)
+        api_client.cookies.clear()
+        response = await api_client.get(f"/api/children/{mine['id']}/targets")
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Sign in to continue"}
 
 
 class TestFeedingLog:

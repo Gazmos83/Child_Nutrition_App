@@ -16,6 +16,7 @@ from backend.schemas.tools import (
     _WEIGHT,
     HEIGHT_REQUIRED_FROM_MONTHS,
     MAX_HEIGHT_CM,
+    NutrientTargets,
 )
 
 MAX_DOCTORS_NOTE_CHARS = 4000
@@ -63,3 +64,19 @@ class ChildProfileResponse(BaseModel):
     doctors_note_recorded_at: dt.datetime | None
     activity_level: ActivityLevel
     created_at: dt.datetime
+
+
+class DailyTargetsResponse(BaseModel):
+    """The child's daily reference targets, for the side panel (child-profile spec).
+
+    Deterministic: computed from the stored profile and the nutrient registry alone. The
+    doctor's note is disclosed via ``doctors_note_present``, never applied here -- it takes
+    effect when meal plans are generated (day-9 design Decision 6).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    targets: NutrientTargets
+    diet_preference: DietPreference
+    doctors_note_present: bool
+    disclaimer: str

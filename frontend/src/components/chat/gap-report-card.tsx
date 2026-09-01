@@ -39,7 +39,7 @@ export function GapReportCard({ report }: { report: NutrientGapReport }) {
               {report.gaps.map((gap) => (
                 <li key={gap.nutrient} data-testid="gap-row" data-flag={gap.flag}>
                   <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-                    <span>{copy.COVERAGE_LABELS[gap.nutrient]}</span>
+                    <span>{gap.label}</span>
                     <Badge variant="outline" className={FLAG_CLASS[gap.flag]}>
                       {copy.FLAG_LABELS[gap.flag]}
                     </Badge>
@@ -50,7 +50,7 @@ export function GapReportCard({ report }: { report: NutrientGapReport }) {
                   <Progress
                     value={Math.min(gap.ratio * 100, 100)}
                     max={100}
-                    aria-label={copy.COVERAGE_LABELS[gap.nutrient]}
+                    aria-label={gap.label}
                   >
                     <ProgressTrack>
                       <ProgressIndicator />

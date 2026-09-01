@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { FeedingEntry, LoggedFeeding } from "@/lib/api-types";
+import { dailyTargetsKey } from "@/hooks/use-daily-targets";
 import { fetchJson } from "@/lib/api";
 import { addEntry, browserTimeZone, removeEntry, todayEntries } from "@/lib/feeding-log-store";
 
@@ -31,6 +32,8 @@ export function useFeedingLog(childId: string | null) {
       }),
     onSuccess: (logged) => {
       queryClient.setQueryData<LoggedFeeding[]>(key, (current) => addEntry(current ?? [], logged));
+      // The daily-targets panel's tracked rows carry flags computed from this log.
+      queryClient.invalidateQueries({ queryKey: dailyTargetsKey(childId) });
     },
   });
   const remove = useMutation({
@@ -38,6 +41,7 @@ export function useFeedingLog(childId: string | null) {
       fetchJson<void>(`/api/children/${childId}/feedings/${id}`, { method: "DELETE" }),
     onSuccess: (_, id) => {
       queryClient.setQueryData<LoggedFeeding[]>(key, (current) => removeEntry(current ?? [], id));
+      queryClient.invalidateQueries({ queryKey: dailyTargetsKey(childId) });
     },
   });
 

@@ -1,8 +1,33 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { MealPlanResult } from "@/lib/api-types";
+import type { MealPlanResult, NutrientTargetRow } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 import { MealPlanCard } from "../meal-plan-card";
+
+function targetRow(overrides: Partial<NutrientTargetRow>): NutrientTargetRow {
+  return {
+    nutrient: "calories",
+    label: "Calories",
+    unit: "kcal",
+    amount: 650,
+    reference_type: "EER",
+    band: "7–12 months",
+    source: "NIH DRI",
+    upper_limit: null,
+    tracked: true,
+    derivation: "",
+    per_kg: null,
+    activity_level: null,
+    advisory: null,
+    advisory_source_date: null,
+    display_note: "",
+    not_tracked_reason: null,
+    intake_average: null,
+    ratio: null,
+    flag: null,
+    ...overrides,
+  };
+}
 
 const BASE: MealPlanResult = {
   outcome: "plan",
@@ -31,6 +56,11 @@ const BASE: MealPlanResult = {
     calories: { calories: 650, band: "7–12 months", formula: "EER", activity_level: null, source: "NIH DRI" },
     protein: { protein_g: 9.4, grams_per_kg: 1.1, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
     iron: { iron_mg: 11, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
+    items: [
+      targetRow({}),
+      targetRow({ nutrient: "protein", label: "Protein", unit: "g", amount: 9.4, reference_type: "RDA", per_kg: 1.1 }),
+      targetRow({ nutrient: "iron", label: "Iron", unit: "mg", amount: 11, reference_type: "RDA" }),
+    ],
   },
   coverage: { calories: 0.95, protein: 0.97, iron: 0.93 },
   note_extraction: {

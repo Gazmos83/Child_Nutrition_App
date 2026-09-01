@@ -15,6 +15,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 
+from backend.nutrition.nutrients import REGISTRY
 from backend.rag.retrievers import _content_text
 from backend.schemas.tools import (
     UNIT_FOR_NUTRIENT,
@@ -28,17 +29,26 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TOLERANCE = 0.05
 
-EXTRACT_SYSTEM_PROMPT = """You read a short note written by a child's doctor and extract ONE
+# The prompt's nutrient vocabulary and unit rules come from the registry's overridable rows,
+# so the text the model sees and the validation that bounds its reply cannot drift apart.
+_OVERRIDABLE = tuple(spec for spec in REGISTRY if spec.overridable)
+_NUTRIENT_NAMES = ", ".join(f'"{spec.key}"' for spec in _OVERRIDABLE)
+_UNIT_RULES = ", ".join(f'"{spec.unit}" for {spec.key}' for spec in _OVERRIDABLE)
+_NUTRIENT_PHRASE = (
+    ", ".join(spec.key for spec in _OVERRIDABLE[:-1]) + f", or {_OVERRIDABLE[-1].key}"
+)
+
+EXTRACT_SYSTEM_PROMPT = f"""You read a short note written by a child's doctor and extract ONE
 numeric daily nutrient instruction from it, if there is one.
 
 Return ONLY a JSON object with exactly these keys, or the JSON value null if the note
 contains no numeric daily target for one of the supported nutrients:
-- "nutrient": one of "calories", "protein", "iron"
+- "nutrient": one of {_NUTRIENT_NAMES}
 - "direction": "max" (an upper limit: "no more than", "limit to", "under"),
                "min" (a lower limit: "at least", "no less than"),
                or "target" (a specific amount to aim for)
 - "value": a positive number
-- "unit": "kcal" for calories, "g" for protein, "mg" for iron
+- "unit": {_UNIT_RULES}
 
 Rules:
 - Convert units to the ones above if needed (e.g. 1 g = 1000 mg).
@@ -94,7 +104,7 @@ async def extract_override(note: str | None, chat_model: BaseChatModel | None) -
     if override is None:
         return NoteExtraction(
             status="no_numeric_target",
-            detail="the note contains no numeric daily target for calories, protein, or iron",
+            detail=f"the note contains no numeric daily target for {_NUTRIENT_PHRASE}",
         )
     return NoteExtraction(status="applied", override=override)
 
@@ -122,7 +132,7 @@ def apply_override(
     if override is None:
         return targets, OverrideOutcome(conflict=False, source="general_target")
 
-    general = _general_value(targets, override.nutrient)
+    general = targets.amount_of(override.nutrient)
     unit = UNIT_FOR_NUTRIENT[override.nutrient]
     conflict = False
     if override.direction == "max":
@@ -145,7 +155,12 @@ def apply_override(
             ),
         )
 
-    applied = _with_value(targets, override.nutrient, override.value)
+    applied = targets.with_amount(
+        override.nutrient,
+        override.value,
+        source="doctor's note (overrides general target)",
+        derivation="doctor's note",
+    )
     return applied, OverrideOutcome(
         conflict=True,
         source="doctors_note",
@@ -157,27 +172,3 @@ def apply_override(
             f"general target of {general:g} {unit}; the note's value is used"
         ),
     )
-
-
-def _general_value(targets: NutrientTargets, nutrient: str) -> float:
-    if nutrient == "calories":
-        return float(targets.calories.calories)
-    if nutrient == "protein":
-        return targets.protein.protein_g
-    return targets.iron.iron_mg
-
-
-def _with_value(targets: NutrientTargets, nutrient: str, value: float) -> NutrientTargets:
-    note_source = "doctor's note (overrides general target)"
-    if nutrient == "calories":
-        calories = targets.calories.model_copy(
-            update={"calories": round(value), "source": note_source, "formula": "doctor's note"}
-        )
-        return targets.model_copy(update={"calories": calories})
-    if nutrient == "protein":
-        protein = targets.protein.model_copy(
-            update={"protein_g": round(value, 1), "source": note_source}
-        )
-        return targets.model_copy(update={"protein": protein})
-    iron = targets.iron.model_copy(update={"iron_mg": round(value, 1), "source": note_source})
-    return targets.model_copy(update={"iron": iron})

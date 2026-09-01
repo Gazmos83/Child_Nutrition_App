@@ -1,13 +1,43 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { NutrientGapReport } from "@/lib/api-types";
+import type { NutrientGapReport, NutrientTargetRow } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 import { GapReportCard } from "../gap-report-card";
+
+function targetRow(overrides: Partial<NutrientTargetRow>): NutrientTargetRow {
+  return {
+    nutrient: "calories",
+    label: "Calories",
+    unit: "kcal",
+    amount: 678,
+    reference_type: "EER",
+    band: "7–12 months",
+    source: "NIH DRI",
+    upper_limit: null,
+    tracked: true,
+    derivation: "",
+    per_kg: null,
+    activity_level: null,
+    advisory: null,
+    advisory_source_date: null,
+    display_note: "",
+    not_tracked_reason: null,
+    intake_average: null,
+    ratio: null,
+    flag: null,
+    ...overrides,
+  };
+}
 
 const TARGETS: NutrientGapReport["targets"] = {
   calories: { calories: 678, band: "7–12 months", formula: "EER", activity_level: null, source: "NIH DRI" },
   protein: { protein_g: 10.2, grams_per_kg: 1.2, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
   iron: { iron_mg: 11, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
+  items: [
+    targetRow({}),
+    targetRow({ nutrient: "protein", label: "Protein", unit: "g", amount: 10.2, reference_type: "RDA", per_kg: 1.2 }),
+    targetRow({ nutrient: "iron", label: "Iron", unit: "mg", amount: 11, reference_type: "RDA" }),
+  ],
 };
 
 const INSUFFICIENT: NutrientGapReport = {
@@ -33,9 +63,9 @@ const MEDIUM_IRON_BELOW: NutrientGapReport = {
   partial_days: 1,
   as_of: "2026-08-27",
   gaps: [
-    { nutrient: "calories", unit: "kcal", average: 640, target: 678, ratio: 0.94, flag: "adequate", target_source: "NIH DRI", target_band: "7–12 months" },
-    { nutrient: "protein", unit: "g", average: 9.8, target: 10.2, ratio: 0.96, flag: "adequate", target_source: "NIH DRI", target_band: "7–12 months" },
-    { nutrient: "iron", unit: "mg", average: 6.2, target: 11, ratio: 0.56, flag: "below", target_source: "NIH DRI", target_band: "7–12 months" },
+    { nutrient: "calories", label: "Calories", unit: "kcal", average: 640, target: 678, ratio: 0.94, flag: "adequate", target_source: "NIH DRI", target_band: "7–12 months" },
+    { nutrient: "protein", label: "Protein", unit: "g", average: 9.8, target: 10.2, ratio: 0.96, flag: "adequate", target_source: "NIH DRI", target_band: "7–12 months" },
+    { nutrient: "iron", label: "Iron", unit: "mg", average: 6.2, target: 11, ratio: 0.56, flag: "below", target_source: "NIH DRI", target_band: "7–12 months" },
   ],
   targets: TARGETS,
   note_extraction: null,
@@ -67,6 +97,22 @@ describe("GapReportCard", () => {
   it("draws one bar per nutrient, not two", () => {
     const { container } = render(<GapReportCard report={MEDIUM_IRON_BELOW} />);
     expect(container.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(3);
+  });
+
+  it("renders a nutrient it has no local name for from the payload's label", () => {
+    // Calcium joined the trackable set on day 9; the label rides the payload
+    // (design Decision 10), so a new nutrient can never render a blank name.
+    const withCalcium: NutrientGapReport = {
+      ...MEDIUM_IRON_BELOW,
+      gaps: [
+        ...MEDIUM_IRON_BELOW.gaps,
+        { nutrient: "calcium", label: "Calcium", unit: "mg", average: 210, target: 260, ratio: 0.81, flag: "adequate", target_source: "NIH DRI", target_band: "7–12 months" },
+      ],
+    };
+    const { container } = render(<GapReportCard report={withCalcium} />);
+    expect(screen.getByText("Calcium")).toBeInTheDocument();
+    expect(screen.getByText(copy.gapLine(210, 260, "mg"))).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(4);
   });
 
   it("low confidence adds the early-look line and the override banner when the note won", () => {

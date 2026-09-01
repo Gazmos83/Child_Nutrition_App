@@ -350,6 +350,30 @@ export const REMAINING_COVERED = "Covered for today";
 export const PLAN_TARGETS_MET_TITLE = "Today's already covered";
 export const PLAN_REST_OF_DAY = "The rest of the day";
 
+// -- daily targets panel (day 9) -------------------------------------------------------------
+
+export const TARGETS_TITLE = "Daily targets";
+export const TARGETS_NEEDS_CHILD =
+  "Save your little one's details and their daily targets will appear right here";
+export const TARGETS_SAVE_FIRST =
+  "Save the details first — targets always come from the saved profile, never a draft";
+// Direct: touches a doctor's instruction (hard rule 3 — disclosure, never silence).
+export const TARGETS_NOTE_ON_FILE =
+  "Your doctor's note is on file. These are the general targets; the note is applied when meal plans are made";
+export const TARGETS_UNAVAILABLE =
+  "We couldn't load the targets. Check your connection and try again";
+export const TARGETS_LOADING = "Fetching the day's targets…";
+export const TARGETS_DISPLAY_ONLY = "Shown without a score";
+export function targetValue(amount: number, unit: string): string {
+  return `${formatNumber(amount)} ${unit} a day`;
+}
+export function referenceLine(referenceType: string, band: string): string {
+  return `${referenceType} · ${band}`;
+}
+export function advisoryFrom(source: string, year: string): string {
+  return `From ${source} (${year})`;
+}
+
 // -- marketing (Little Gourmant site) -------------------------------------------------------
 
 export const SITE_WORDMARK = "Little Gourmant";

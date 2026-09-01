@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { MessageInput } from "@/components/chat/message-input";
 import { MessageList } from "@/components/chat/message-list";
 import { ChildContextForm } from "@/components/side-panel/child-context-form";
+import { DailyTargets } from "@/components/side-panel/daily-targets";
 import { FeedingLogTab } from "@/components/side-panel/feeding-log-tab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -76,6 +77,7 @@ export function ChatPage({ user, onSignOut }: Props) {
               save={childContext.save}
               clear={childContext.clear}
             />
+            <DailyTargets childId={childId} dirty={childContext.dirty} />
           </TabsContent>
           <TabsContent value="log">
             <FeedingLogTab log={feedingLog} />
