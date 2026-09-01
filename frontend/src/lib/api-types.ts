@@ -237,16 +237,28 @@ export interface IronTargetResult {
   source: string;
 }
 
-// One row of the ordered day-9 target set. Minimal for now: the side-panel change (6.1)
-// completes it (advisories, reasons, display notes) while the three legacy members live.
+// One row of the ordered day-9 target set (backend NutrientTarget). The three legacy
+// members below stay while the compatibility façade lives.
 export interface NutrientTargetRow {
   nutrient: string;
   label: string;
   unit: string;
   amount: number | null;
+  reference_type: "AI" | "RDA" | "EER" | null;
   band: string;
   source: string;
+  upper_limit: number | null;
   tracked: boolean;
+  derivation: string;
+  per_kg: number | null;
+  activity_level: ActivityLevel | null;
+  advisory: string | null;
+  advisory_source_date: string | null;
+  display_note: string;
+  not_tracked_reason: string | null;
+  intake_average: number | null;
+  ratio: number | null;
+  flag: GapFlag | null;
 }
 
 export interface NutrientTargets {
@@ -254,6 +266,13 @@ export interface NutrientTargets {
   protein: ProteinTargetResult;
   iron: IronTargetResult;
   items: NutrientTargetRow[];
+}
+
+export interface DailyTargetsResponse {
+  targets: NutrientTargets;
+  diet_preference: DietPreference;
+  doctors_note_present: boolean;
+  disclaimer: string;
 }
 
 export interface NutrientCoverage {

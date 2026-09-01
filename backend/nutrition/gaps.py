@@ -83,6 +83,37 @@ def select_window(daily: Mapping[dt.date, DayTotals], as_of: dt.date) -> WindowS
     )
 
 
+def targets_with_intake(
+    daily: Mapping[dt.date, DayTotals], targets: NutrientTargets, as_of: dt.date
+) -> NutrientTargets:
+    """The target set with window-average intake and flags on the tracked rows.
+
+    The targets endpoint's read side of the same §9b window rule the gap report uses: with
+    no complete day in range the set is returned untouched, so a profile with no logged
+    days carries no flags. Rows that are not tracked are never given intake (their
+    validators forbid it), which is what keeps vitamin D unflagged by construction.
+    """
+    selection = select_window(daily, as_of)
+    if selection.confidence is None:
+        return targets
+    rows = []
+    for row in targets.items:
+        if not row.tracked:
+            rows.append(row)
+            continue
+        field = SPECS[row.nutrient].intake_field
+        assert field is not None  # tracked_for() requires a declared intake field
+        assert row.amount is not None  # a tracked row always has a numeric target
+        average = sum(getattr(d.totals, field) for d in selection.recent) / selection.window_days
+        ratio = round(average / row.amount, 2) if row.amount > 0 else 0.0
+        rows.append(
+            row.model_copy(
+                update={"intake_average": round(average, 1), "ratio": ratio, "flag": _flag(ratio)}
+            )
+        )
+    return NutrientTargets(items=tuple(rows))
+
+
 def compute_gap_report(
     daily: Mapping[dt.date, DayTotals], targets: NutrientTargets, as_of: dt.date
 ) -> NutrientGapReport:

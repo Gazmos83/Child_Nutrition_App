@@ -57,6 +57,8 @@ export function useChildContext() {
     },
     onSuccess: (saved) => {
       queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, [saved]);
+      // The saved profile is what the daily-targets panel reads (design Decision 9).
+      queryClient.invalidateQueries({ queryKey: ["daily-targets"] });
       setDraft(null);
     },
   });
@@ -68,6 +70,7 @@ export function useChildContext() {
     onSuccess: () => {
       queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, []);
       queryClient.removeQueries({ queryKey: ["feedings"] });
+      queryClient.removeQueries({ queryKey: ["daily-targets"] });
       setDraft(null);
     },
   });

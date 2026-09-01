@@ -85,59 +85,59 @@
 
 ## 5. Targets endpoint
 
-- [ ] 5.1 Add `GET /api/children/{child_id}/targets` to `backend/api/children.py` behind the
+- [x] 5.1 Add `GET /api/children/{child_id}/targets` to `backend/api/children.py` behind the
   existing `OwnedChild` dependency, reusing the child-context conversion. **Authorization
   boundary: the route resolves the profile only through the signed-in account's ownership
   dependency; a non-owner receives the same refusal as a direct profile read and no target
   value, age or diet preference is disclosed (hard rule 9).**
-- [ ] 5.2 Return the ordered target set plus the diet preference, a flag stating whether a
+- [x] 5.2 Return the ordered target set plus the diet preference, a flag stating whether a
   doctor's note is on file, and the not-medical-advice disclaimer; make no language-model
   call (design Decision 6); verify the response is byte-identical across two calls
-- [ ] 5.3 Add the route to the user-scoped path list in `tests/test_app.py` so it is
+- [x] 5.3 Add the route to the user-scoped path list in `tests/test_app.py` so it is
   automatically covered by the unauthenticated-refusal test; verify that test passes
-- [ ] 5.4 Add API tests: owner receives 200; **a second account requesting the first
+- [x] 5.4 Add API tests: owner receives 200; **a second account requesting the first
   account's child receives the same refusal as a direct read**; an unauthenticated request is
   refused; a vegan profile's response contains B12 and the DHA advisory; a profile with no
   logged days returns targets with no flags
 
 ## 6. Side panel
 
-- [ ] 6.1 Add the target row and response types to `frontend/src/lib/api-types.ts`, keeping
+- [x] 6.1 Add the target row and response types to `frontend/src/lib/api-types.ts`, keeping
   the three legacy members while the façade lives; verify `pnpm -C frontend typecheck` passes
-- [ ] 6.2 Add the copy entries for the panel title, the saved-profile hint, the note-on-file
+- [x] 6.2 Add the copy entries for the panel title, the saved-profile hint, the note-on-file
   disclosure and the display-only reasons; verify `pnpm -C frontend test -u` and review the
   copy snapshot diff line by line rather than accepting it wholesale
-- [ ] 6.3 Add `frontend/src/hooks/use-daily-targets.ts` keyed on the saved child id, and
+- [x] 6.3 Add `frontend/src/hooks/use-daily-targets.ts` keyed on the saved child id, and
   invalidate it from the existing profile-save, profile-clear and feeding-log mutations;
   verify a test asserts the query refetches after a profile save
-- [ ] 6.4 Add `frontend/src/components/side-panel/daily-targets.tsx` rendering rows in server
+- [x] 6.4 Add `frontend/src/components/side-panel/daily-targets.tsx` rendering rows in server
   order: tracked rows with a progress indicator and flag, display-only rows with their reason
   and **no** progress indicator, advisory rows as text with source and publication date
-- [ ] 6.5 Mount the panel under the child form in `frontend/src/app/chat-page.tsx`, showing
+- [x] 6.5 Mount the panel under the child form in `frontend/src/app/chat-page.tsx`, showing
   the save-first hint while the form holds unsaved edits (design Decision 9)
-- [ ] 6.6 Add `daily-targets.test.tsx` covering: 9-month omnivore has six rows and no B12;
+- [x] 6.6 Add `daily-targets.test.tsx` covering: 9-month omnivore has six rows and no B12;
   30-month vegan shows B12 with no progress track and a DHA advisory with no value; vitamin D
   shows its reason; no saved child shows the explanation and no numbers; exactly one progress
   track per tracked row
 
 ## 7. Verification
 
-- [ ] 7.1 Run the full gate — `uv run pytest`, `uv run ruff check`,
+- [x] 7.1 Run the full gate — `uv run pytest`, `uv run ruff check`,
   `pnpm -C frontend typecheck`, `pnpm -C frontend lint`, `pnpm -C frontend test` — and confirm
   all pass
-- [ ] 7.2 Run `openspec validate day-9-age-diet-aware-targets --strict` and confirm it passes
-- [ ] 7.3 Print the target set for 3, 9, 18, 30 and 48 months across omnivore, vegetarian and
+- [x] 7.2 Run `openspec validate day-9-age-diet-aware-targets --strict` and confirm it passes
+- [x] 7.3 Print the target set for 3, 9, 18, 30 and 48 months across omnivore, vegetarian and
   vegan, and check every value line by line against
   `knowledge-base/nih-dri-micronutrients.md`. Confirm specifically: calcium 700 mg at 24
   months (not the infant 260 mg), B12 in micrograms (0.9 µg, not mg), vitamin D in
   international units (600 IU, not 15 µg), iron ahead of protein at 9 months. Automated tests
   will not catch a figure that is internally consistent but wrong
-- [ ] 7.4 Print a generated meal plan's totals against the widened target set for 9, 24 and
+- [x] 7.4 Print a generated meal plan's totals against the widened target set for 9, 24 and
   48 months and confirm no nutrient sits at an implausible fraction of target, which would
   indicate wrong food data rather than a wrong child
-- [ ] 7.5 Run the app (`uv run uvicorn` and `pnpm -C frontend dev`), open the child tab for a
+- [x] 7.5 Run the app (`uv run uvicorn` and `pnpm -C frontend dev`), open the child tab for a
   vegan 30-month-old, and read the B12 and DHA guidance as a parent would; confirm the
   note-on-file disclosure appears for a profile carrying a doctor's note
-- [ ] 7.6 Confirm the deliberately-unchanged list holds: no diff in the composer's algorithm,
+- [x] 7.6 Confirm the deliberately-unchanged list holds: no diff in the composer's algorithm,
   `NutrientCoverage`, the meal-plan card's coverage rows, `today-summary.tsx`,
   `RemainingNutrients`, the safety filter, the diet filter, or `nutrition-data/foods.yaml`

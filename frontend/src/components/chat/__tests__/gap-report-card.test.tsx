@@ -1,17 +1,42 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { NutrientGapReport } from "@/lib/api-types";
+import type { NutrientGapReport, NutrientTargetRow } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 import { GapReportCard } from "../gap-report-card";
+
+function targetRow(overrides: Partial<NutrientTargetRow>): NutrientTargetRow {
+  return {
+    nutrient: "calories",
+    label: "Calories",
+    unit: "kcal",
+    amount: 678,
+    reference_type: "EER",
+    band: "7–12 months",
+    source: "NIH DRI",
+    upper_limit: null,
+    tracked: true,
+    derivation: "",
+    per_kg: null,
+    activity_level: null,
+    advisory: null,
+    advisory_source_date: null,
+    display_note: "",
+    not_tracked_reason: null,
+    intake_average: null,
+    ratio: null,
+    flag: null,
+    ...overrides,
+  };
+}
 
 const TARGETS: NutrientGapReport["targets"] = {
   calories: { calories: 678, band: "7–12 months", formula: "EER", activity_level: null, source: "NIH DRI" },
   protein: { protein_g: 10.2, grams_per_kg: 1.2, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
   iron: { iron_mg: 11, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
   items: [
-    { nutrient: "calories", label: "Calories", unit: "kcal", amount: 678, band: "7–12 months", source: "NIH DRI", tracked: true },
-    { nutrient: "protein", label: "Protein", unit: "g", amount: 10.2, band: "7–12 months", source: "NIH DRI", tracked: true },
-    { nutrient: "iron", label: "Iron", unit: "mg", amount: 11, band: "7–12 months", source: "NIH DRI", tracked: true },
+    targetRow({}),
+    targetRow({ nutrient: "protein", label: "Protein", unit: "g", amount: 10.2, reference_type: "RDA", per_kg: 1.2 }),
+    targetRow({ nutrient: "iron", label: "Iron", unit: "mg", amount: 11, reference_type: "RDA" }),
   ],
 };
 

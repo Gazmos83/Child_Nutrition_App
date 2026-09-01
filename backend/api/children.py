@@ -18,12 +18,20 @@ from sqlalchemy.exc import IntegrityError
 from backend.api.deps import CurrentUser, DbSession, OwnedChild
 from backend.models import ChildProfile, Feeding
 from backend.models.enums import FeedingType
-from backend.nutrition.feeding import FeedingEntryError
+from backend.nutrition.feeding import (
+    FeedingEntryError,
+    daily_totals,
+    group_by_day,
+    normalise_entry,
+)
 from backend.nutrition.foods import FoodNotFoundError, get_food_table
+from backend.nutrition.gaps import targets_with_intake
+from backend.rag.prompts import DISCLAIMER
 from backend.schemas.chat import ChildContext
-from backend.schemas.child import ChildProfileResponse, ChildProfileWrite
+from backend.schemas.child import ChildProfileResponse, ChildProfileWrite, DailyTargetsResponse
 from backend.schemas.tools import MAX_LOG_ENTRIES, FeedingEntry, LoggedFeeding
 from backend.tools.feeding_log import log_feeding
+from backend.tools.targets_resolution import general_targets
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +180,40 @@ async def delete_child(child: OwnedChild, db: DbSession) -> None:
     """Removes the profile, its allergies, and its feeding log (ON DELETE CASCADE)."""
     await db.delete(child)
     await db.commit()
+
+
+@router.get(
+    "/{child_id}/targets",
+    response_model=DailyTargetsResponse,
+    summary="The child's daily reference targets",
+)
+async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
+    """The general reference targets for the stored profile, in display order, with the
+    logged window's intake and flag on each tracked row (chat-ui spec).
+
+    Deterministic: no language-model call and no doctor's-note extraction (day-9 design
+    Decision 6) -- the note is disclosed and takes effect when meal plans are generated.
+    ``OwnedChild`` resolves the profile only through the signed-in account's ownership, so
+    a non-owner gets the same refusal as a direct profile read (hard rule 9).
+    """
+    targets = general_targets(to_child_context(child))
+    table = get_food_table()
+    normalised = []
+    for row in await recent_feedings(db, child, DEFAULT_LOG_DAYS):
+        try:
+            normalised.append(normalise_entry(to_feeding_entry(row), table))
+        except (FoodNotFoundError, FeedingEntryError):
+            # Same stance as the feeding list: a stored id the table no longer knows is
+            # logged and skipped rather than failing the whole panel.
+            logger.warning("Feeding %s names a food the table no longer has", row.id)
+    daily = daily_totals(group_by_day(normalised, "UTC"))
+    as_of = dt.datetime.now(dt.UTC).date()
+    return DailyTargetsResponse(
+        targets=targets_with_intake(daily, targets, as_of),
+        diet_preference=child.diet_preference,
+        doctors_note_present=child.doctors_note is not None,
+        disclaimer=DISCLAIMER,
+    )
 
 
 # -- feeding log ------------------------------------------------------------------------------
