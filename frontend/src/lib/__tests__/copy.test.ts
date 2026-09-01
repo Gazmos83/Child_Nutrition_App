@@ -10,8 +10,15 @@ const RENDERED: string[] = [
     typeof v === "string" ? [v] : Array.isArray(v) ? v.filter((x) => typeof x === "string") : [],
   ),
   ...Object.values(copy.INTENT_LABELS),
+  ...Object.values(copy.GROWTH_INDICATOR_LABELS),
+  ...Object.values(copy.GROWTH_BAND_LABELS),
   copy.overrideBody("iron", 8, 11, "mg"),
   copy.UNAVAILABLE("OPENROUTER_API_KEY is not set."),
+  copy.growthReference(6.3, 7.9, 10.2, "kg"),
+  copy.growthWhoLabel("stunted"),
+  copy.ordinal(50),
+  copy.ordinal(0.4),
+  copy.ordinal(99.8),
   ...[
     copy.toolSummary("calculate_bmi", { weight_kg: 8.4, height_cm: 68 }, null),
     copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),
@@ -60,6 +67,22 @@ describe("product copy", () => {
 
   it("disclaimer fallback matches the backend verbatim", () => {
     expect(copy.DISCLAIMER_FALLBACK).toBe(backend.disclaimer);
+  });
+
+  it("growth trend note names the standard's known limits", () => {
+    expect(copy.GROWTH_TREND_NOTE.toLowerCase()).toContain("preterm birth");
+    expect(copy.GROWTH_TREND_NOTE).toContain("birth size");
+    expect(copy.GROWTH_TREND_NOTE).toContain("pediatrician");
+    expect(copy.GROWTH_TREND_NOTE).toContain("not a diagnosis");
+  });
+
+  it("percentile ordinals read the way a chart does", () => {
+    expect(copy.ordinal(50)).toBe("50th");
+    expect(copy.ordinal(62.4)).toBe("62nd");
+    expect(copy.ordinal(11)).toBe("11th");
+    expect(copy.ordinal(3.2)).toBe("3rd");
+    expect(copy.ordinal(0.4)).toBe("below the 1st");
+    expect(copy.ordinal(99.9)).toBe("above the 99th");
   });
 
   it("override body names both values", () => {

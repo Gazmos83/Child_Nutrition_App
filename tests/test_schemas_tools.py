@@ -1,11 +1,13 @@
 """Tool input validation rejects bad input before any calculation (task 1.1; hard rule 7)."""
 
 from datetime import UTC, datetime
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
 
 from backend.models.enums import FeedingType, Sex
+from backend.nutrition.growth import GrowthIndicator
 from backend.schemas.tools import (
     BmiInput,
     CalorieTargetInput,
@@ -13,6 +15,8 @@ from backend.schemas.tools import (
     DoctorsNoteOverride,
     FeedingEntry,
     GapDetectionRequest,
+    GrowthAssessmentInput,
+    GrowthIndicatorKey,
     MealItem,
     MealPlanRequest,
     ProteinTargetInput,
@@ -64,6 +68,38 @@ class TestAgeAndBodyMeasurements:
     def test_unknown_field_rejected(self) -> None:
         with pytest.raises(ValidationError):
             ProteinTargetInput(age_months=8, weight_kg=8, age_years=1)  # type: ignore[call-arg]
+
+
+class TestGrowthAssessmentInput:
+    """growth-assessment spec: inputs are validated before any lookup (hard rules 1, 2, 7)."""
+
+    def test_valid_input_with_and_without_height(self) -> None:
+        with_height = GrowthAssessmentInput(
+            age_months=8, sex=Sex.FEMALE, weight_kg=8.5, height_cm=69
+        )
+        assert with_height.height_cm == 69
+        without = GrowthAssessmentInput(age_months=8, sex=Sex.FEMALE, weight_kg=8.5)
+        assert without.height_cm is None
+
+    def test_age_above_60_months_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GrowthAssessmentInput(age_months=61, sex=Sex.FEMALE, weight_kg=10)
+
+    def test_zero_weight_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GrowthAssessmentInput(age_months=8, sex=Sex.FEMALE, weight_kg=0)
+
+    def test_height_above_sanity_limit_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GrowthAssessmentInput(age_months=8, sex=Sex.FEMALE, weight_kg=8.5, height_cm=151)
+
+    def test_off_vocabulary_sex_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            GrowthAssessmentInput(age_months=8, sex="other", weight_kg=8.5)  # type: ignore[arg-type]
+
+    def test_indicator_vocabulary_matches_the_enum(self) -> None:
+        """The schemas' Literal and the growth module's StrEnum must never drift."""
+        assert set(get_args(GrowthIndicatorKey)) == {i.value for i in GrowthIndicator}
 
 
 class TestControlledVocabularies:

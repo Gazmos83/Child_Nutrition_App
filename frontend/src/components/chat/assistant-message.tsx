@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { isMealPlanResult, isNutrientGapReport } from "@/lib/api-types";
+import { isGrowthAssessmentResult, isMealPlanResult, isNutrientGapReport } from "@/lib/api-types";
 import type { AssistantMessage as AssistantMessageData } from "@/lib/chat-reducer";
 import * as copy from "@/lib/copy";
 import { toolSteps } from "@/lib/tool-steps";
@@ -9,6 +9,7 @@ import { AnswerText } from "./answer-text";
 import { Citations } from "./citations";
 import { Disclaimer } from "./disclaimer";
 import { GapReportCard } from "./gap-report-card";
+import { GrowthCard } from "./growth-card";
 import { IntentChip } from "./intent-chip";
 import { MealPlanCard } from "./meal-plan-card";
 import { ToolActivityList } from "./tool-activity";
@@ -30,6 +31,10 @@ export function AssistantMessage({
     .filter((t) => t.name === "detect_nutrient_gaps" && t.status === "ok")
     .map((t) => t.result as unknown)
     .find(isNutrientGapReport);
+  const growth = message.tools
+    .filter((t) => t.name === "assess_growth" && t.status === "ok")
+    .map((t) => t.result as unknown)
+    .find(isGrowthAssessmentResult);
   const streaming = message.status === "streaming";
   const troubled = message.status === "error" || message.status === "interrupted";
 
@@ -44,6 +49,7 @@ export function AssistantMessage({
         )}
       </div>
       <ToolActivityList steps={toolSteps(message)} streaming={streaming} />
+      {growth && <GrowthCard result={growth} />}
       {gapReport && <GapReportCard report={gapReport} />}
       {plan && <MealPlanCard plan={plan} />}
       {message.text && (

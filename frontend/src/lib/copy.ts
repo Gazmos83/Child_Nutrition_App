@@ -207,6 +207,7 @@ export const DISCLAIMER_FALLBACK =
 
 export const TOOL_LABELS: Record<string, string> = {
   calculate_bmi: "BMI",
+  assess_growth: "Growth check",
   calculate_calorie_target: "Calorie target",
   calculate_protein_target: "Protein target",
   lookup_food: "Food lookup",
@@ -349,6 +350,43 @@ export function alreadyLogged(kcal: number, protein: number, iron: number): stri
 export const REMAINING_COVERED = "Covered for today";
 export const PLAN_TARGETS_MET_TITLE = "Today's already covered";
 export const PLAN_REST_OF_DAY = "The rest of the day";
+
+// -- growth card (day-6-growth-assessment; direct voice — weight status is never a joke) ----
+
+export const GROWTH_TITLE = "How growth measures up";
+export const GROWTH_INDICATOR_LABELS: Record<string, string> = {
+  weight_for_age: "Weight for age",
+  length_height_for_age: "Length/height for age",
+  weight_for_length_height: "Weight for length/height",
+  bmi_for_age: "BMI for age",
+};
+export const GROWTH_BAND_LABELS: Record<string, string> = {
+  well_below: "Well below the expected range",
+  below: "Below the expected range",
+  expected: "In the expected range",
+  above: "Above the expected range",
+  well_above: "Well above the expected range",
+};
+export const GROWTH_TREND_NOTE =
+  "Based on the WHO 2006 growth standards — a reference, not a diagnosis. Preterm birth, birth size, and family background all shift where a healthy child falls. Ask your pediatrician to interpret the trend.";
+export const GROWTH_SOURCE_LINE = "Reference: WHO Child Growth Standards (2006)";
+
+export function growthReference(lo: number, median: number, hi: number, unit: string): string {
+  return `WHO range for this age and sex: ${formatNumber(lo)}–${formatNumber(hi)} ${unit}, median ${formatNumber(median)}`;
+}
+export function growthWhoLabel(label: string): string {
+  return `WHO's term for this range is “${label}” — one to discuss with your pediatrician`;
+}
+/** A percentile as parents read it on a chart; the extremes say so rather than rounding to 0 or 100. */
+export function ordinal(percentile: number): string {
+  const n = Math.round(percentile);
+  if (n < 1) return "below the 1st";
+  if (n > 99) return "above the 99th";
+  const tens = n % 100;
+  const suffix =
+    tens >= 11 && tens <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
 
 // -- daily targets panel (day 9) -------------------------------------------------------------
 

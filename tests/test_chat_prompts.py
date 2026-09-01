@@ -3,13 +3,30 @@
 import json
 
 from backend.chat.prompts import (
+    ANSWER_WITH_TOOLS_SYSTEM_PROMPT,
     NO_CHILD_CONTEXT_LINE,
+    ROUTER_SYSTEM_PROMPT,
     build_tools_answer_prompt,
     format_child_context,
     format_history,
     format_tool_results,
 )
 from backend.schemas.chat import ChatTurn, ChildContext, ToolActivity
+
+
+def test_both_system_prompts_name_growth_once() -> None:
+    """day-6-growth-assessment task 3.1: the router and the answer prompt each carry
+    exactly one growth passage, so a growth question reaches the tool, not the search."""
+    assert ROUTER_SYSTEM_PROMPT.count("Growth questions") == 1
+    assert "assess_growth" in ROUTER_SYSTEM_PROMPT
+    assert "normal for their age" in ROUTER_SYSTEM_PROMPT
+    assert ANSWER_WITH_TOOLS_SYSTEM_PROMPT.count("growth assessment") == 1
+    assert "WHO label only when the band is not `expected`" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
+    assert "snapshot" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
+
+
+def test_answer_prompt_still_forbids_recomputation() -> None:
+    assert "Never recompute" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
 
 
 def test_child_block_lists_age_in_months_and_sorted_allergens() -> None:

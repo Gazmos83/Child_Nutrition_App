@@ -1,4 +1,4 @@
-"""The five deterministic nutrient tools (deterministic-nutrient-tools spec).
+"""The deterministic nutrient tools (deterministic-nutrient-tools spec).
 
 Each takes a validated Pydantic input and reads only the DRI formulas or the food table.
 No model call, no persistence. ``lookup_food`` and ``calculate_meal_nutrition`` accept a
@@ -6,14 +6,17 @@ No model call, no persistence. ``lookup_food`` and ``calculate_meal_nutrition`` 
 table.
 """
 
-from backend.nutrition import targets
+from backend.nutrition import growth, targets
 from backend.nutrition.foods import FoodItem, FoodNotFoundError, LoadedFoodTable, get_food_table
+from backend.nutrition.growth import LoadedGrowthTable, get_growth_table
 from backend.schemas.tools import (
     BmiInput,
     BmiResult,
     CalorieTargetInput,
     CalorieTargetResult,
     FoodLookupInput,
+    GrowthAssessmentInput,
+    GrowthAssessmentResult,
     MealItem,
     MealNutritionInput,
     MealNutritionResult,
@@ -25,6 +28,14 @@ from backend.schemas.tools import (
 
 def calculate_bmi(params: BmiInput) -> BmiResult:
     return targets.calculate_bmi(params)
+
+
+def assess_growth(
+    params: GrowthAssessmentInput, table: LoadedGrowthTable | None = None
+) -> GrowthAssessmentResult:
+    """The child on the WHO growth standards; indicators the inputs cannot support are
+    reported as skipped, never as a failure."""
+    return growth.assess_growth(params, table or get_growth_table())
 
 
 def calculate_calorie_target(params: CalorieTargetInput) -> CalorieTargetResult:

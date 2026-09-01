@@ -230,6 +230,51 @@ class TestStream:
         assert final["citations"][0]["source"] == "Iron Source"
         assert final["retrieval"]["kept"] == 1
 
+    async def test_growth_without_height_is_ok_with_skipped_indicators(self) -> None:
+        """day-6-growth-assessment task 3.2: a missing height degrades, never errors."""
+        service, _ = make_service(
+            [
+                AIMessage(content="", tool_calls=[call("assess_growth")]),
+                "She's tracking around the middle of the WHO chart for weight.",
+            ]
+        )
+        request = ChatRequest.model_validate(
+            {"message": "is her weight normal for her age?", "child": CHILD}
+        )
+        events = await collect(service, request)
+        assert [k for k, _ in events][-1] == "done"
+        tool = next(d for k, d in events if k == "tool")
+        assert tool["status"] == "ok"
+        assert [i["indicator"] for i in tool["result"]["indicators"]] == ["weight_for_age"]
+        assert len(tool["result"]["skipped"]) == 3
+        final = next(d for k, d in events if k == "final")
+        assert final["tools"] == [{"name": "assess_growth", "status": "ok"}]
+
+    async def test_growth_without_child_context_gives_the_side_panel_hint(self, tools) -> None:
+        request = ChatRequest.model_validate({"message": "what's her percentile?"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="assess_growth", args={})), request, tools
+        )
+        assert activity.status == "error"
+        assert activity.error == copy.MISSING_CHILD_INFO_HINT
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            {"age_months": None, "sex": None, "weight_kg": None, "height_cm": None},
+            {"age_months": 0, "sex": "female", "weight_kg": 0},  # observed live: gpt-4o-mini
+        ],
+    )
+    async def test_model_typed_placeholders_read_as_missing_details(self, tools, args) -> None:
+        """Some models write null or zero placeholders instead of leaving arguments absent;
+        the parent must still get the side-panel hint, not a generic failure."""
+        request = ChatRequest.model_validate({"message": "is her weight normal?"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="assess_growth", args=args)), request, tools
+        )
+        assert activity.status == "error"
+        assert activity.error == copy.MISSING_CHILD_INFO_HINT
+
     async def test_failing_tool_still_ends_in_done(self) -> None:
         service, _ = make_service(
             [

@@ -341,6 +341,64 @@ export function isMealPlanResult(value: unknown): value is MealPlanResult {
   );
 }
 
+// -- growth assessment (backend/schemas/tools.py; growth-assessment spec) ------------------
+
+export type GrowthIndicatorKey =
+  | "weight_for_age"
+  | "length_height_for_age"
+  | "weight_for_length_height"
+  | "bmi_for_age";
+
+export type GrowthBand = "well_below" | "below" | "expected" | "above" | "well_above";
+
+export interface LmsReference {
+  sd2neg: number;
+  median: number;
+  sd2pos: number;
+}
+
+export interface GrowthIndicatorResult {
+  indicator: GrowthIndicatorKey;
+  measurement: number;
+  unit: string;
+  z_score: number;
+  percentile: number;
+  band: GrowthBand;
+  who_label: string | null;
+  reference: LmsReference;
+}
+
+export interface SkippedIndicator {
+  indicator: GrowthIndicatorKey;
+  reason: string;
+}
+
+export interface GrowthAssessmentResult {
+  age_months: number;
+  sex: Sex;
+  weight_kg: number;
+  height_cm: number | null;
+  indicators: GrowthIndicatorResult[];
+  skipped: SkippedIndicator[];
+  source: string;
+  source_url: string;
+  note: string;
+}
+
+export function isGrowthAssessmentResult(value: unknown): value is GrowthAssessmentResult {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    Array.isArray(v.indicators) &&
+    Array.isArray(v.skipped) &&
+    typeof v.note === "string" &&
+    typeof v.source === "string" &&
+    v.indicators.every(
+      (i) => i && typeof i === "object" && "z_score" in (i as Record<string, unknown>),
+    )
+  );
+}
+
 // -- server-sent events (design.md Decision 6) --------------------------------------------
 
 export interface RouteEvent {

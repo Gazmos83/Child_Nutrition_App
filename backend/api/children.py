@@ -202,7 +202,7 @@ async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
     for row in await recent_feedings(db, child, DEFAULT_LOG_DAYS):
         try:
             normalised.append(normalise_entry(to_feeding_entry(row), table))
-        except (FoodNotFoundError, FeedingEntryError):
+        except FoodNotFoundError, FeedingEntryError:
             # Same stance as the feeding list: a stored id the table no longer knows is
             # logged and skipped rather than failing the whole panel.
             logger.warning("Feeding %s names a food the table no longer has", row.id)

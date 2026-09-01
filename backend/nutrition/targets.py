@@ -122,6 +122,6 @@ def calculate_bmi(params: BmiInput) -> BmiResult:
         source=BMI_SOURCE,
         note=(
             "For children, BMI is interpreted as an age- and sex-specific percentile on a "
-            "growth chart, which this tool does not compute."
+            "growth chart; ask assess_growth for the percentile."
         ),
     )

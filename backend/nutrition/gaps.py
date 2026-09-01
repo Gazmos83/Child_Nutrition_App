@@ -30,6 +30,7 @@ WINDOWS: tuple[tuple[int, int | None, GapConfidence], ...] = (
     (1, None, "low"),
 )
 
+
 def _flag(ratio: float) -> GapFlag:
     if ratio < GAP_BELOW:
         return "below"

@@ -100,11 +100,11 @@ before computation, and results that carry their source. `log_feeding` SHALL val
 normalise an entry and return it with its identifier and table-derived nutrients, and
 SHALL NOT persist anything until the feeding-log table ships.
 
-#### Scenario: Ten tools with typed schemas
+#### Scenario: Eleven tools with typed schemas
 
 - **WHEN** the tool set is built
-- **THEN** it contains exactly the six existing tools plus the four feeding-log tools, each
-  with a typed argument schema
+- **THEN** it contains exactly the six existing tools plus the four feeding-log tools and
+  the growth assessment, each with a typed argument schema
 
 #### Scenario: Invalid entry rejected before computation
 

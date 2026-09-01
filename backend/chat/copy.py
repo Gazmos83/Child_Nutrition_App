@@ -54,6 +54,21 @@ def unknown_food(food_id: str) -> str:
     return f"We don't know a food called “{food_id}” yet — try picking one from the list"
 
 
+# Growth assessment: reasons an indicator is skipped, never failed (growth-assessment spec).
+GROWTH_NEEDS_HEIGHT = (
+    "We need your child's length or height for this one — pop it in the side panel and "
+    "we'll place it on the WHO chart"
+)
+
+
+def GROWTH_HEIGHT_OUT_OF_RANGE(lo_cm: float, hi_cm: float) -> str:  # noqa: N802 — copy name
+    """Names the covered range, so the parent can see why the number sits outside it."""
+    return (
+        f"The WHO weight-for-length/height table covers {lo_cm:g}–{hi_cm:g} cm, so we "
+        "couldn't place this measurement on it — the other indicators still stand"
+    )
+
+
 # The meal planner's ``targets_met`` outcome (change 2 design Decisions 7 and 12).
 TARGETS_MET_MESSAGE = (
     "Today's already covered — what you've logged meets the day's targets. Nothing more to "

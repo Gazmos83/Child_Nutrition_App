@@ -18,6 +18,7 @@ from backend.schemas.tools import (
     FeedingEntry,
     FoodLookupInput,
     GapDetectionRequest,
+    GrowthAssessmentInput,
     MealNutritionInput,
     MealPlanRequest,
     ProteinTargetInput,
@@ -35,6 +36,9 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
 
     def bmi(**kwargs):
         return nutrient_tools.calculate_bmi(BmiInput(**kwargs))
+
+    def growth(**kwargs):
+        return nutrient_tools.assess_growth(GrowthAssessmentInput(**kwargs))
 
     def calorie_target(**kwargs):
         return nutrient_tools.calculate_calorie_target(CalorieTargetInput(**kwargs))
@@ -69,9 +73,23 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             name="calculate_bmi",
             description=(
                 "Compute a child's BMI from weight in kilograms and height in centimetres. "
-                "Returns the BMI value only, not a growth-chart percentile."
+                "Returns the BMI value only; for the growth-chart percentile use "
+                "assess_growth."
             ),
             args_schema=BmiInput,
+        ),
+        StructuredTool.from_function(
+            func=growth,
+            name="assess_growth",
+            description=(
+                "Place a child on the WHO growth chart: BMI-for-age, weight-for-age, "
+                "length/height-for-age, and weight-for-length/height as z-scores and "
+                "percentiles with WHO reference values and cut-off bands. Use for BMI, "
+                "percentile, or whether a child's weight or length is normal for their "
+                "age. Needs age in months, sex, and weight; length/height is optional -- "
+                "without it weight-for-age is still assessed."
+            ),
+            args_schema=GrowthAssessmentInput,
         ),
         StructuredTool.from_function(
             func=calorie_target,

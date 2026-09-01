@@ -134,9 +134,7 @@ class TestTrackability:
         assert next(g for g in report.gaps if g.nutrient == "calories").target == 678
         assert next(g for g in report.gaps if g.nutrient == "iron").target == 11.0
 
-    @pytest.mark.parametrize(
-        ("days", "confidence"), [(1, "low"), (3, "medium"), (8, "high")]
-    )
+    @pytest.mark.parametrize(("days", "confidence"), [(1, "low"), (3, "medium"), (8, "high")])
     async def test_vitamin_d_is_never_flagged_at_any_confidence(
         self, days: int, confidence: str
     ) -> None:

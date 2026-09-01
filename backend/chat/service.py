@@ -67,7 +67,15 @@ def _first_error(exc: ValidationError) -> str:
 def _validation_message(exc: ValidationError, request: ChatRequest) -> str:
     """The parent-facing line for a rejected argument set (design.md Decision 5)."""
     errors = exc.errors()
-    missing = [str(e["loc"][0]) for e in errors if e["type"] == "missing" and e["loc"]]
+    # An argument the model typed as null or zero is as absent as one it left out: the
+    # router is told to leave unknown fields empty, but some models write null or 0
+    # placeholders instead. A real but out-of-range value (say, 72 months) stays a
+    # generic failure -- the parent may genuinely have said it.
+    missing = [
+        str(e["loc"][0])
+        for e in errors
+        if e["loc"] and (e["type"] == "missing" or e.get("input") is None or e.get("input") == 0)
+    ]
     profile_missing = [f for f in missing if f in PROFILE_FIELDS]
     height_rule = any("height_cm is required" in e["msg"] for e in errors)
     if request.child is None and (profile_missing or height_rule):

@@ -70,7 +70,84 @@ class BmiResult(_Frozen):
     height_cm: float
     source: str
     note: str = Field(
-        description="BMI alone is not interpretable for a child; a percentile needs a growth chart."
+        description=(
+            "BMI alone is not interpretable for a child; `assess_growth` supplies the "
+            "age- and sex-specific percentile."
+        )
+    )
+
+
+# -- Growth assessment (growth-assessment spec) ----------------------------------------------
+
+GrowthBand = Literal["well_below", "below", "expected", "above", "well_above"]
+
+# Mirrors backend.nutrition.growth.GrowthIndicator; a Literal here keeps this module from
+# importing the computation module it feeds (the layering nutrients.py already follows),
+# and a registry-style invariant test asserts the two vocabularies agree.
+GrowthIndicatorKey = Literal[
+    "weight_for_age",
+    "length_height_for_age",
+    "weight_for_length_height",
+    "bmi_for_age",
+]
+
+
+class GrowthAssessmentInput(_Strict):
+    """Height is optional on purpose: the assessment computes what it can and reports the
+    rest as skipped, so a parent who knows only the weight still gets weight-for-age."""
+
+    age_months: int = _AGE
+    sex: Sex
+    weight_kg: float = _WEIGHT
+    height_cm: float | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_HEIGHT_CM,
+        description=(
+            "Length/height in centimetres; optional. Read as recumbent length under "
+            "24 months and standing height from 24 months."
+        ),
+    )
+
+
+class LmsReference(_Frozen):
+    """WHO's −2 SD, median, and +2 SD for the child's sex and age, in the measurement's unit."""
+
+    sd2neg: float
+    median: float
+    sd2pos: float
+
+
+class GrowthIndicatorResult(_Frozen):
+    indicator: GrowthIndicatorKey
+    measurement: float = Field(description="The value placed on the standard.")
+    unit: str
+    z_score: float = Field(description="WHO LMS z-score, two decimals.")
+    percentile: float = Field(ge=0, le=100, description="One decimal.")
+    band: GrowthBand = Field(description="WHO cut-offs at −3, −2, +2, +3 SD.")
+    who_label: str | None = Field(
+        default=None,
+        description="WHO's own classification term, only where WHO publishes one.",
+    )
+    reference: LmsReference
+
+
+class SkippedIndicator(_Frozen):
+    indicator: GrowthIndicatorKey
+    reason: str = Field(description="Parent-facing; names the missing or out-of-range input.")
+
+
+class GrowthAssessmentResult(_Frozen):
+    age_months: int
+    sex: Sex
+    weight_kg: float
+    height_cm: float | None
+    indicators: list[GrowthIndicatorResult]
+    skipped: list[SkippedIndicator]
+    source: str = Field(description="Names the standard and its year (hard rule 5).")
+    source_url: str
+    note: str = Field(
+        description="States the completed-month granularity and the length/height reading."
     )
 
 
@@ -425,9 +502,7 @@ OverrideDirection = Literal["max", "min", "target"]
 
 # Derived from the registry's overridable rows so the map cannot drift from them; the
 # closed ``OverridableNutrient`` literal above is the same set, asserted by test.
-UNIT_FOR_NUTRIENT: dict[str, str] = {
-    spec.key: spec.unit for spec in REGISTRY if spec.overridable
-}
+UNIT_FOR_NUTRIENT: dict[str, str] = {spec.key: spec.unit for spec in REGISTRY if spec.overridable}
 
 
 class DoctorsNoteOverride(_Strict):

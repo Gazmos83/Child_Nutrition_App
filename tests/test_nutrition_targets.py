@@ -28,6 +28,10 @@ class TestBmi:
         result = calculate_bmi(BmiInput(weight_kg=10.0, height_cm=75.0))
         assert result.bmi == 17.78
 
+    def test_note_points_to_the_percentile_tool(self) -> None:
+        result = calculate_bmi(BmiInput(weight_kg=9.0, height_cm=72.0))
+        assert "assess_growth" in result.note
+
 
 class TestEnergyBands:
     @pytest.mark.parametrize(

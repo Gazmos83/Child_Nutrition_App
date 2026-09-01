@@ -149,13 +149,14 @@ Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-ve
 
 ## Deterministic tools (Day 4)
 
-Ten tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
+Eleven tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
 model for a number. `backend/tools/langchain_tools.py::build_tools(chat_model)` exposes
 them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 
 | Tool | What it does | Source of the numbers |
 |---|---|---|
-| `calculate_bmi` | weight / height² | CDC definition |
+| `calculate_bmi` | weight / height²; its note points to `assess_growth` for the percentile | CDC definition |
+| `assess_growth` | z-scores, percentiles, WHO cut-off bands and reference values for weight-for-age, length/height-for-age, weight-for-length/height, and BMI-for-age; indicators the inputs cannot support are skipped with a reason, never failed | `nutrition-data/who-growth-standards.yaml` |
 | `calculate_calorie_target` | Estimated Energy Requirement by age band; height + activity from 36 months | 2005 DRI EER equations |
 | `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
 | `lookup_food` | one row of the food table: nutrients, allergens, safety flags, minimum age, source | `nutrition-data/foods.yaml` |
@@ -171,6 +172,13 @@ USDA FoodData Central figures per serving) carrying the "big nine" allergens and
 choking-hazard / honey / unpasteurised flags the safety filter reads. The whole file is
 rejected if any entry is invalid. The safety filter (`backend/nutrition/safety.py`) has no
 switch that disables a rule and runs on both the candidates and the finished plan.
+
+`nutrition-data/who-growth-standards.yaml` holds the WHO Child Growth Standards (2006)
+LMS parameters per indicator, sex, and completed month (0.1 cm of length/height for
+weight-for-length/height), generated from WHO's published z-score tables with per-file
+URL, sha256, and retrieval date recorded. Rebuild it with
+`uv run --with openpyxl scripts/build_growth_tables.py`; the app reads only the
+committed YAML and validates it whole at load.
 
 A doctor's note is extracted by the chat model into a bounded structure (nutrient ∈
 calories/protein/iron, direction, value, unit) and applied by plain Python: on conflict the

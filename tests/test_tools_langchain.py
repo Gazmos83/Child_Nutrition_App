@@ -10,6 +10,7 @@ from backend.tools.langchain_tools import build_tools
 
 EXPECTED_NAMES = {
     "calculate_bmi",
+    "assess_growth",
     "calculate_calorie_target",
     "calculate_protein_target",
     "lookup_food",
@@ -28,7 +29,7 @@ def tools():
     return {t.name: t for t in build_tools(None)}
 
 
-def test_ten_tools_with_unique_names_and_schemas(tools) -> None:
+def test_eleven_tools_with_unique_names_and_schemas(tools) -> None:
     assert set(tools) == EXPECTED_NAMES
     assert len(build_tools(None)) == len(EXPECTED_NAMES)
     for tool in tools.values():
@@ -46,6 +47,27 @@ def test_bmi_invoke_returns_rounded_value(tools) -> None:
 def test_invalid_arguments_rejected_by_schema(tools) -> None:
     with pytest.raises(ValidationError):
         tools["calculate_protein_target"].invoke({"age_months": 72, "weight_kg": 20})
+
+
+def test_assess_growth_invoke_and_optional_height(tools) -> None:
+    result = tools["assess_growth"].invoke(
+        {"age_months": 8, "sex": "female", "weight_kg": 8.5, "height_cm": 69.0}
+    )
+    assert [i.indicator for i in result.indicators] == [
+        "weight_for_age",
+        "length_height_for_age",
+        "weight_for_length_height",
+        "bmi_for_age",
+    ]
+    without_height = tools["assess_growth"].invoke(
+        {"age_months": 8, "sex": "female", "weight_kg": 8.5}
+    )
+    assert len(without_height.skipped) == 3  # success, not failure (intent-routing spec)
+
+
+def test_assess_growth_rejects_off_vocabulary_sex_before_any_lookup(tools) -> None:
+    with pytest.raises(ValidationError):
+        tools["assess_growth"].invoke({"age_months": 8, "sex": "other", "weight_kg": 8.5})
 
 
 def test_lookup_and_meal_nutrition(tools) -> None:
