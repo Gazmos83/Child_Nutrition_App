@@ -16,7 +16,7 @@ export function MealPlanCard({ plan }: { plan: MealPlanResult }) {
   const targetsMet = plan.outcome === "targets_met";
   const title = noSafePlan ? plan.message : targetsMet ? copy.PLAN_TARGETS_MET_TITLE : copy.PLAN_TITLE;
   return (
-    <Card className="mt-3" data-testid="meal-plan-card" data-outcome={plan.outcome}>
+    <Card className="ink-outline mt-3" data-testid="meal-plan-card" data-outcome={plan.outcome}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {!noSafePlan && <p className="text-sm text-muted-foreground">{plan.message}</p>}

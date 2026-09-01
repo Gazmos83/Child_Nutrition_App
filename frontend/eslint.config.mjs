@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate Lovable-generated mockup scaffold, not part of this app.
+    "Frontend-mockup/**",
   ]),
 ]);
 

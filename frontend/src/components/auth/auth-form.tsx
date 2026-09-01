@@ -35,7 +35,7 @@ export function AuthForm({ session }: { session: Session }) {
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm ink-outline">
         <CardHeader>
           <CardTitle>{copy.AUTH_TITLE}</CardTitle>
           <CardDescription>{copy.AUTH_INTRO}</CardDescription>

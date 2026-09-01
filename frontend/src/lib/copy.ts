@@ -10,7 +10,7 @@ import type { GapConfidence, GapFlag, OverridableNutrient } from "./api-types";
 
 // -- app ----------------------------------------------------------------------------------
 
-export const APP_TITLE = "Child Nutrition Assistant";
+export const APP_TITLE = "Little Gourmant";
 
 // -- empty states --------------------------------------------------------------------------
 
@@ -349,6 +349,63 @@ export function alreadyLogged(kcal: number, protein: number, iron: number): stri
 export const REMAINING_COVERED = "Covered for today";
 export const PLAN_TARGETS_MET_TITLE = "Today's already covered";
 export const PLAN_REST_OF_DAY = "The rest of the day";
+
+// -- marketing (Little Gourmant site) -------------------------------------------------------
+
+export const SITE_WORDMARK = "Little Gourmant";
+export const NAV_HOME = "Home";
+export const NAV_ABOUT = "About Us";
+export const NAV_RECIPES = "Recipes";
+export const NAV_CONTACT = "Contact Us";
+export const NAV_LOGIN = "Login";
+
+export const SITE_TAGLINE = "Nutrition for little eaters";
+export const HERO_TITLE = "Every little bite, a happy little story";
+export const HERO_SUBCOPY =
+  "Little Gourmant helps you cook, offer and celebrate wholesome food with your baby — warm plans, no worry, plenty of applause.";
+export const HERO_CTA = "Start our kitchen";
+export const HERO_FLIPBOOK_HOVER_HINT = "Hover to watch the first taste";
+export const HERO_FLIPBOOK_PLAYING_HINT = "Yum — keep watching…";
+
+export const FEATURES_TITLE = "A kitchen that cheers along";
+export const FEATURES: readonly { title: string; body: string }[] = [
+  {
+    title: "Tiny tastes, big smiles",
+    body: "Age-by-age meal ideas built from real ingredients, ready in minutes on a busy evening.",
+  },
+  {
+    title: "Gentle tracking",
+    body: "Log bites, textures and new flavours in a tap and watch patterns appear without pressure.",
+  },
+  {
+    title: "Grown with guidance",
+    body: "Dietitian-reviewed milestones that meet your child exactly where they are today.",
+  },
+];
+
+export const ABOUT_TITLE = "About Us";
+export const ABOUT_PARAGRAPHS: readonly string[] = [
+  "Little Gourmant began at a kitchen table, with a wobbly high chair and a bowl of carrots. We believe first foods should feel like a warm story rather than a chore — playful, unhurried and full of encouragement.",
+  "Our team of parents, cooks and paediatric dietitians turns trusted nutrition guidance into tiny, doable steps for every stage from first spoon to fussy toddler.",
+];
+
+export const RECIPES_TITLE = "Little Recipes";
+export const RECIPES: readonly { name: string; age: string; time: string }[] = [
+  { name: "Sunny Carrot Mash", age: "6+ months", time: "10 min" },
+  { name: "Little Broccoli Trees", age: "8+ months", time: "12 min" },
+  { name: "Tomato & Lentil Cuddle", age: "10+ months", time: "20 min" },
+];
+
+export const CONTACT_TITLE = "Contact Us";
+export const CONTACT_INTRO = "Tell us about your little eater — we answer every note within two days.";
+export const CONTACT_NAME_PLACEHOLDER = "Your name";
+export const CONTACT_EMAIL_PLACEHOLDER = "Email";
+export const CONTACT_MESSAGE_PLACEHOLDER = "How can we help?";
+export const CONTACT_SUBMIT = "Send a note";
+
+export function footerCopyright(year: number): string {
+  return `© ${year} Little Gourmant — made with warm hands.`;
+}
 
 // -- helpers -------------------------------------------------------------------------------
 

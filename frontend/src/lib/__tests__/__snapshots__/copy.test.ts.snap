@@ -2,7 +2,12 @@
 
 exports[`product copy > is reviewed as one snapshot 1`] = `
 {
-  "APP_TITLE": "Child Nutrition Assistant",
+  "ABOUT_PARAGRAPHS": [
+    "Little Gourmant began at a kitchen table, with a wobbly high chair and a bowl of carrots. We believe first foods should feel like a warm story rather than a chore — playful, unhurried and full of encouragement.",
+    "Our team of parents, cooks and paediatric dietitians turns trusted nutrition guidance into tiny, doable steps for every stage from first spoon to fussy toddler.",
+  ],
+  "ABOUT_TITLE": "About Us",
+  "APP_TITLE": "Little Gourmant",
   "AUTH_CREATE": "Create account",
   "AUTH_EMAIL": "Email",
   "AUTH_FAILED": "That didn't go through. Check the details and try again",
@@ -22,6 +27,12 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
     "low": "Early look",
     "medium": "Getting clearer",
   },
+  "CONTACT_EMAIL_PLACEHOLDER": "Email",
+  "CONTACT_INTRO": "Tell us about your little eater — we answer every note within two days.",
+  "CONTACT_MESSAGE_PLACEHOLDER": "How can we help?",
+  "CONTACT_NAME_PLACEHOLDER": "Your name",
+  "CONTACT_SUBMIT": "Send a note",
+  "CONTACT_TITLE": "Contact Us",
   "COVERAGE_LABELS": {
     "calories": "Calories",
     "iron": "Iron",
@@ -29,6 +40,21 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   },
   "DAY_TODAY": "Today",
   "DISCLAIMER_FALLBACK": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
+  "FEATURES": [
+    {
+      "body": "Age-by-age meal ideas built from real ingredients, ready in minutes on a busy evening.",
+      "title": "Tiny tastes, big smiles",
+    },
+    {
+      "body": "Log bites, textures and new flavours in a tap and watch patterns appear without pressure.",
+      "title": "Gentle tracking",
+    },
+    {
+      "body": "Dietitian-reviewed milestones that meet your child exactly where they are today.",
+      "title": "Grown with guidance",
+    },
+  ],
+  "FEATURES_TITLE": "A kitchen that cheers along",
   "FEED_LOGGED": "Logged. One more piece of the picture",
   "FLAG_BELOW_NOTE": "Averages, not a verdict — one lighter day is fine. This is a nudge toward foods rich in it",
   "FLAG_LABELS": {
@@ -67,6 +93,11 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   "GAPS_INSUFFICIENT": "We need a few full days of feeds before we can spot patterns. Keep logging and we'll say when we can see enough",
   "GAPS_LOW": "Early days — here's a first look. Take it lightly until there's more to go on",
   "GAPS_TITLE": "How the last few days have gone",
+  "HERO_CTA": "Start our kitchen",
+  "HERO_FLIPBOOK_HOVER_HINT": "Hover to watch the first taste",
+  "HERO_FLIPBOOK_PLAYING_HINT": "Yum — keep watching…",
+  "HERO_SUBCOPY": "Little Gourmant helps you cook, offer and celebrate wholesome food with your baby — warm plans, no worry, plenty of applause.",
+  "HERO_TITLE": "Every little bite, a happy little story",
   "HIDE_DETAILS": "Hide details",
   "HIDE_PASSAGE": "Hide passage",
   "INCOMPLETE": "Incomplete",
@@ -106,6 +137,11 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
     "milk feed": "Milk feeds",
     "snack": "Snack",
   },
+  "NAV_ABOUT": "About Us",
+  "NAV_CONTACT": "Contact Us",
+  "NAV_HOME": "Home",
+  "NAV_LOGIN": "Login",
+  "NAV_RECIPES": "Recipes",
   "NO_SAFE_PLAN_CHECK": "Worth checking",
   "NO_SAFE_PLAN_CHECKLIST": [
     "Age in months",
@@ -124,6 +160,24 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   "PLAN_REST_OF_DAY": "The rest of the day",
   "PLAN_TARGETS_MET_TITLE": "Today's already covered",
   "PLAN_TITLE": "A day of meals",
+  "RECIPES": [
+    {
+      "age": "6+ months",
+      "name": "Sunny Carrot Mash",
+      "time": "10 min",
+    },
+    {
+      "age": "8+ months",
+      "name": "Little Broccoli Trees",
+      "time": "12 min",
+    },
+    {
+      "age": "10+ months",
+      "name": "Tomato & Lentil Cuddle",
+      "time": "20 min",
+    },
+  ],
+  "RECIPES_TITLE": "Little Recipes",
   "REMAINING_COVERED": "Covered for today",
   "RETRY": "Retry",
   "SEND": "Send",
@@ -133,6 +187,8 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   "SHOW_DETAILS": "Show details",
   "SHOW_PASSAGE": "Show passage",
   "SIGN_OUT": "Sign out",
+  "SITE_TAGLINE": "Nutrition for little eaters",
+  "SITE_WORDMARK": "Little Gourmant",
   "SOURCES_TITLE": "Sources",
   "TAB_CHILD": "Child",
   "TAB_LOG": "Feeding log",
@@ -161,6 +217,7 @@ exports[`product copy > is reviewed as one snapshot 1`] = `
   "adjustedFor": [Function],
   "alreadyLogged": [Function],
   "coverageLine": [Function],
+  "footerCopyright": [Function],
   "formatNumber": [Function],
   "gapLine": [Function],
   "gapsWindow": [Function],

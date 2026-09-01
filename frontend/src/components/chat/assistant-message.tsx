@@ -34,7 +34,7 @@ export function AssistantMessage({
   const troubled = message.status === "error" || message.status === "interrupted";
 
   return (
-    <article className="rounded-lg border bg-card p-4 text-card-foreground" data-status={message.status}>
+    <article className="ink-outline rounded-lg bg-card p-4 text-card-foreground" data-status={message.status}>
       <div className="flex flex-wrap items-center gap-2">
         <IntentChip intent={message.intent} />
         {streaming && (

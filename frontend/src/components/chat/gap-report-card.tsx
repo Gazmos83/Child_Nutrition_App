@@ -16,7 +16,7 @@ export function GapReportCard({ report }: { report: NutrientGapReport }) {
   const anyBelow = report.gaps.some((g) => g.flag === "below");
   const first = report.gaps[0];
   return (
-    <Card className="mt-3" data-testid="gap-report-card" data-status={report.status}>
+    <Card className="ink-outline mt-3" data-testid="gap-report-card" data-status={report.status}>
       <CardHeader>
         <CardTitle>{copy.GAPS_TITLE}</CardTitle>
         {!insufficient && report.confidence && (

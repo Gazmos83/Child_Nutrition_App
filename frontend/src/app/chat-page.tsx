@@ -1,5 +1,6 @@
 "use client";
 
+import { ChefHat } from "lucide-react";
 import { useCallback, useState } from "react";
 import { MessageInput } from "@/components/chat/message-input";
 import { MessageList } from "@/components/chat/message-list";
@@ -83,7 +84,12 @@ export function ChatPage({ user, onSignOut }: Props) {
       </aside>
       <main className="flex max-h-dvh flex-col">
         <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
-          <h1 className="text-lg font-semibold">{APP_TITLE}</h1>
+          <span className="flex items-center gap-2">
+            <span className="flex size-8 items-center justify-center rounded-full border-[3px] border-ink bg-card text-ink">
+              <ChefHat className="size-4" strokeWidth={2.5} />
+            </span>
+            <h1 className="text-lg leading-none text-tomato">{APP_TITLE}</h1>
+          </span>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="truncate" data-testid="account-email">
               {user.email}
