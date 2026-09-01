@@ -40,6 +40,13 @@ def test_unknown_food_quotes_the_identifier() -> None:
     assert "“nope”" in copy.unknown_food("nope")
 
 
+def test_unknown_food_offers_the_suggested_names() -> None:
+    text = copy.unknown_food("x", ["banana_mashed (Banana, mashed)"])
+    assert "did you mean" in text
+    assert "Banana, mashed" in text
+    assert "banana_mashed" not in text  # the parent sees names, not slugs
+
+
 def test_nothing_reads_as_a_missing_child() -> None:
     source = inspect.getsource(copy).lower()
     assert "missing child" not in source.replace("missing_child_info", "")

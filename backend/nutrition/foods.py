@@ -5,7 +5,9 @@ load with an error naming it, and no partial table is ever handed to callers. A 
 missing its safety flags would otherwise be *admitted* to infant plans.
 """
 
+import difflib
 import logging
+import re
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -88,9 +90,50 @@ class FoodTable(BaseModel):
 
 
 class FoodNotFoundError(LookupError):
-    def __init__(self, food_id: str) -> None:
-        super().__init__(f"Unknown food id {food_id!r}")
+    """The string as given, plus ``"id (Name)"`` candidates the caller may surface.
+
+    The message prefix is load-bearing: the chat layer classifies tool failures by
+    ``startswith("Unknown food")``.
+    """
+
+    def __init__(self, food_id: str, suggestions: tuple[str, ...] = ()) -> None:
+        message = f"Unknown food id {food_id!r}"
+        if suggestions:
+            message += ". Closest matches: " + ", ".join(suggestions)
+        super().__init__(message)
         self.food_id = food_id
+        self.suggestions = suggestions
+
+
+# Filler words in display names ("Sweet potato, cooked and mashed") that carry no food
+# identity. Preparation words (cooked, mashed, raw, whole) are deliberately NOT here:
+# they separate e.g. carrot_cooked_mashed from raw_carrot_sticks.
+_STOPWORDS = frozenset("a and as from in its made of or the to until with".split())
+
+_MAX_SUGGESTIONS = 5
+
+
+def _normalize(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _variants(token: str) -> frozenset[str]:
+    """The token plus naive singular forms, applied to both sides so plurals meet."""
+    forms = {token}
+    if token.endswith("es"):
+        forms.add(token[:-2])
+    if token.endswith("s"):
+        forms.add(token[:-1])
+    return frozenset(forms)
+
+
+def _tokenize(text: str) -> frozenset[str]:
+    return frozenset(
+        variant
+        for token in _normalize(text).split()
+        if token not in _STOPWORDS
+        for variant in _variants(token)
+    )
 
 
 class LoadedFoodTable:
@@ -99,6 +142,14 @@ class LoadedFoodTable:
     def __init__(self, table: FoodTable) -> None:
         self.table = table
         self._by_id = table.by_id()
+        # Resolution index: each food's normalized id/name forms and its token pool
+        # (id and name tokens with plural variants), built once -- the table is frozen.
+        self._forms: dict[str, FoodItem] = {}
+        self._token_pools: list[tuple[FoodItem, frozenset[str]]] = []
+        for food in table.foods:
+            for form in (_normalize(food.id), _normalize(food.name)):
+                self._forms.setdefault(form, food)
+            self._token_pools.append((food, _tokenize(f"{food.id} {food.name}")))
 
     @property
     def version(self) -> str:
@@ -115,6 +166,47 @@ class LoadedFoodTable:
         except KeyError:
             raise FoodNotFoundError(food_id) from None
 
+    def resolve(self, query: str) -> FoodItem:
+        """Resolve an exact id or a plain-language name to exactly one food.
+
+        Deterministic and code-only: exact id, then normalized id/name equality, then a
+        token-subset match that must single out one food. Anything ambiguous or unknown
+        raises ``FoodNotFoundError`` carrying ``"id (Name)"`` suggestions -- never a
+        lookalike (food-composition-data spec).
+        """
+        if query in self._by_id:
+            return self._by_id[query]
+
+        normalized = _normalize(query)
+        exact = self._forms.get(normalized)
+        if exact is not None:
+            return exact
+
+        query_tokens = [
+            _variants(token) for token in normalized.split() if token not in _STOPWORDS
+        ]
+        if query_tokens:
+            contained = [
+                food
+                for food, pool in self._token_pools
+                if all(variants & pool for variants in query_tokens)
+            ]
+            if len(contained) == 1:
+                return contained[0]
+            if contained:
+                raise FoodNotFoundError(query, _suggestions(contained))
+
+        return self._raise_with_close_matches(query, normalized)
+
+    def _raise_with_close_matches(self, query: str, normalized: str) -> FoodItem:
+        close = difflib.get_close_matches(normalized, self._forms, n=_MAX_SUGGESTIONS)
+        candidates: list[FoodItem] = []
+        for form in close:
+            food = self._forms[form]
+            if food not in candidates:
+                candidates.append(food)
+        raise FoodNotFoundError(query, _suggestions(candidates))
+
     def source_for(self, food: FoodItem) -> str:
         return self.table.source_for(food)
 
@@ -123,6 +215,10 @@ class LoadedFoodTable:
 
     def __contains__(self, food_id: object) -> bool:
         return food_id in self._by_id
+
+
+def _suggestions(foods: list[FoodItem]) -> tuple[str, ...]:
+    return tuple(f"{food.id} ({food.name})" for food in foods[:_MAX_SUGGESTIONS])
 
 
 def load_food_table(path: str | Path = DEFAULT_FOOD_TABLE_PATH) -> LoadedFoodTable:

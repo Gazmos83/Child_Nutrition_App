@@ -114,9 +114,11 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             func=food_lookup,
             name="lookup_food",
             description=(
-                "Look up a food by its identifier in the curated infant/toddler food table: "
-                "per-serving calories, protein, fat, carbohydrate, iron, calcium, allergens, "
-                "choking-hazard/honey/unpasteurised flags, minimum age in months, and source."
+                "Look up a food by its identifier or common name in the curated "
+                "infant/toddler food table: per-serving calories, protein, fat, "
+                "carbohydrate, iron, calcium, allergens, choking-hazard/honey/unpasteurised "
+                "flags, minimum age in months, and source. An unknown or ambiguous name "
+                "fails with the closest matches."
             ),
             args_schema=FoodLookupInput,
         ),
@@ -124,8 +126,9 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             func=meal_nutrition,
             name="calculate_meal_nutrition",
             description=(
-                "Sum the nutrients of a meal given a list of food identifiers and servings. "
-                "Unknown identifiers are reported in 'missing', never silently dropped."
+                "Sum the nutrients of a meal given a list of foods (identifier or common "
+                "name) and servings. Unknown foods are reported in 'missing', never "
+                "silently dropped."
             ),
             args_schema=MealNutritionInput,
         ),

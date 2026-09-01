@@ -55,7 +55,7 @@ class FoodRecord(FoodItem):
 def lookup_food(params: FoodLookupInput, table: LoadedFoodTable | None = None) -> FoodRecord:
     """The food's nutrient and safety record, or ``FoodNotFoundError`` -- never a substitute."""
     table = table or get_food_table()
-    food = table.get(params.food_id)
+    food = table.resolve(params.food_id)
     return FoodRecord(**food.model_dump(), resolved_source=table.source_for(food))
 
 
@@ -69,7 +69,7 @@ def calculate_meal_nutrition(
     missing: list[str] = []
     for item in params.items:
         try:
-            food = table.get(item.food_id)
+            food = table.resolve(item.food_id)
         except FoodNotFoundError:
             missing.append(item.food_id)
             continue

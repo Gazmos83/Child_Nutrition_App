@@ -163,7 +163,7 @@ async def _invoke(
             status="error",
             args=args,
             used_context=used,
-            error=copy.unknown_food(exc.food_id),
+            error=copy.unknown_food(exc.food_id, exc.suggestions),
             detail=str(exc),
         )
     except UnsafePlanError as exc:

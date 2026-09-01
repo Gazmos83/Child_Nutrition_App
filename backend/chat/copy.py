@@ -8,6 +8,8 @@ child. The Day 3 RAG prompt, ``DISCLAIMER``, and ``NO_ANSWER_MESSAGE`` are froze
 Day 6 evaluation and deliberately do not live here.
 """
 
+from collections.abc import Sequence
+
 MISSING_CHILD_INFO_HINT = "Your little one's details go in the side panel — then we're good to go"
 
 SAFETY_STOP = (
@@ -50,8 +52,19 @@ def missing_field_hint(field: str) -> str:
     )
 
 
-def unknown_food(food_id: str) -> str:
-    return f"We don't know a food called “{food_id}” yet — try picking one from the list"
+def unknown_food(food_id: str, suggestions: Sequence[str] = ()) -> str:
+    if suggestions:
+        names = ", ".join(_display_name(s) for s in suggestions)
+        return f"We don't know a food called “{food_id}” — did you mean {names}?"
+    return f"We don't know a food called “{food_id}” yet"
+
+
+def _display_name(suggestion: str) -> str:
+    """The human name from a ``"id (Name)"`` suggestion, or the string as given."""
+    open_paren = suggestion.find("(")
+    if open_paren != -1 and suggestion.endswith(")"):
+        return suggestion[open_paren + 1 : -1]
+    return suggestion
 
 
 # Growth assessment: reasons an indicator is skipped, never failed (growth-assessment spec).

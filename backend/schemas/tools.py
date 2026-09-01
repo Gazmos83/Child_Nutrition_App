@@ -464,11 +464,20 @@ def _row_from_legacy(
 
 
 class FoodLookupInput(_Strict):
-    food_id: str = Field(min_length=1, description="Stable identifier from the food table.")
+    food_id: str = Field(
+        min_length=1,
+        description=(
+            "Stable identifier from the food table, or the food's plain name as the "
+            "parent said it (e.g. 'bananas'); resolved deterministically in code."
+        ),
+    )
 
 
 class MealItem(_Strict):
-    food_id: str = Field(min_length=1)
+    food_id: str = Field(
+        min_length=1,
+        description="Food-table identifier, or the food's plain name as the parent said it.",
+    )
     servings: float = Field(gt=0, le=20, description="Multiples of the food's table serving.")
 
 
