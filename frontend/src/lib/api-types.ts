@@ -86,12 +86,13 @@ export interface FoodSummary {
   min_age_months: number;
 }
 
-export type GapNutrient = "calories" | "protein" | "iron";
+export type GapNutrient = "calories" | "protein" | "iron" | "calcium";
 export type GapFlag = "below" | "adequate" | "above";
 export type GapConfidence = "low" | "medium" | "high";
 
 export interface NutrientGap {
   nutrient: GapNutrient;
+  label: string;
   unit: "kcal" | "g" | "mg";
   average: number;
   target: number;
@@ -236,10 +237,23 @@ export interface IronTargetResult {
   source: string;
 }
 
+// One row of the ordered day-9 target set. Minimal for now: the side-panel change (6.1)
+// completes it (advisories, reasons, display notes) while the three legacy members live.
+export interface NutrientTargetRow {
+  nutrient: string;
+  label: string;
+  unit: string;
+  amount: number | null;
+  band: string;
+  source: string;
+  tracked: boolean;
+}
+
 export interface NutrientTargets {
   calories: CalorieTargetResult;
   protein: ProteinTargetResult;
   iron: IronTargetResult;
+  items: NutrientTargetRow[];
 }
 
 export interface NutrientCoverage {

@@ -31,6 +31,11 @@ const BASE: MealPlanResult = {
     calories: { calories: 650, band: "7–12 months", formula: "EER", activity_level: null, source: "NIH DRI" },
     protein: { protein_g: 9.4, grams_per_kg: 1.1, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
     iron: { iron_mg: 11, reference_type: "RDA", band: "7–12 months", source: "NIH DRI" },
+    items: [
+      { nutrient: "calories", label: "Calories", unit: "kcal", amount: 650, band: "7–12 months", source: "NIH DRI", tracked: true },
+      { nutrient: "protein", label: "Protein", unit: "g", amount: 9.4, band: "7–12 months", source: "NIH DRI", tracked: true },
+      { nutrient: "iron", label: "Iron", unit: "mg", amount: 11, band: "7–12 months", source: "NIH DRI", tracked: true },
+    ],
   },
   coverage: { calories: 0.95, protein: 0.97, iron: 0.93 },
   note_extraction: {

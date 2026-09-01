@@ -13,9 +13,18 @@ import datetime as dt
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    model_validator,
+)
 
 from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
+from backend.nutrition.nutrients import REGISTRY, NutrientKey, NutrientUnit, ReferenceType
 
 MIN_AGE_MONTHS = 0
 MAX_AGE_MONTHS = 60
@@ -120,18 +129,258 @@ class ProteinTargetResult(_Frozen):
 
 
 class IronTargetResult(_Frozen):
-    iron_mg: float = Field(ge=0, description="mg/day, one decimal.")
+    iron_mg: float = Field(ge=0, description="mg/day, as published in the DRI table.")
     reference_type: Literal["AI", "RDA"]
     band: str
     source: str
 
 
-class NutrientTargets(_Frozen):
-    """The three daily targets a meal plan is composed against."""
+# Defined here rather than beside the gap report because a target row carries its flag.
+GapFlag = Literal["below", "adequate", "above"]
 
-    calories: CalorieTargetResult
-    protein: ProteinTargetResult
-    iron: IronTargetResult
+
+class NutrientTarget(_Frozen):
+    """One daily target: the number (or advisory), its provenance, and how it may be used.
+
+    The invariants are enforced, not documented: a row that is not tracked can never carry
+    intake or a flag, so an unobservable nutrient reading as a deficit is a validation
+    error at the boundary rather than a bug on a parent's screen.
+    """
+
+    nutrient: NutrientKey
+    label: str
+    unit: NutrientUnit
+    amount: float | None = Field(
+        default=None, ge=0, description="None only for an advisory, which carries text instead."
+    )
+    reference_type: ReferenceType | None = None
+    band: str = ""
+    source: str = Field(description="Citation including publication date (hard rule 5).")
+    upper_limit: float | None = Field(
+        default=None, gt=0, description="Tolerable upper intake level, where published."
+    )
+    tracked: bool = Field(description="Whether logged intake is compared with this target.")
+    derivation: str = Field(
+        default="", description="How the number was produced, for the tool-activity display."
+    )
+    per_kg: float | None = Field(default=None, description="Set for per-kg-of-bodyweight targets.")
+    activity_level: ActivityLevel | None = None
+    advisory: str | None = None
+    advisory_source_date: str | None = None
+    display_note: str = ""
+    not_tracked_reason: str | None = None
+    intake_average: float | None = Field(default=None, ge=0)
+    ratio: float | None = None
+    flag: GapFlag | None = None
+
+    @model_validator(mode="after")
+    def _amount_or_advisory(self) -> NutrientTarget:
+        if (self.amount is None) == (self.advisory is None):
+            raise ValueError("a target carries exactly one of amount or advisory")
+        if self.advisory is not None and not self.advisory_source_date:
+            raise ValueError("an advisory carries its source's publication date (hard rule 5)")
+        return self
+
+    @model_validator(mode="after")
+    def _tracking_invariants(self) -> NutrientTarget:
+        if self.tracked and self.amount is None:
+            raise ValueError("a tracked nutrient must have a numeric target")
+        if not self.tracked:
+            if self.intake_average is not None or self.ratio is not None or self.flag is not None:
+                raise ValueError("a nutrient that is not tracked can never carry intake or a flag")
+            if self.advisory is None and not self.not_tracked_reason:
+                raise ValueError("an unscored numeric target carries a parent-facing reason")
+        return self
+
+
+_COMPOSED_NUTRIENTS = ("calories", "protein", "iron")
+
+
+class NutrientTargets(_Frozen):
+    """The child's daily targets, in display priority order. One definition, one shape.
+
+    ``items`` is authoritative. The ``calories``/``protein``/``iron`` computed properties,
+    the legacy keyword constructor, and the ``model_copy`` translation exist so that every
+    pre-existing consumer -- the composer, the override, gap detection, the frontend --
+    keeps compiling and emitting the same JSON (a superset: ``items`` plus the three).
+    TODO(day-10): drop the façade once the frontend reads ``items[]`` directly.
+    """
+
+    items: tuple[NutrientTarget, ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_shape(cls, data: object) -> object:
+        """Synthesize ``items`` from the Day 4 three-field construction or serialization."""
+        if not isinstance(data, dict) or "items" in data:
+            return data
+        legacy = {key: data.get(key) for key in _COMPOSED_NUTRIENTS}
+        if any(value is None for value in legacy.values()):
+            return data
+        rows = []
+        for key, value in legacy.items():
+            result = (
+                _LEGACY_RESULTS[key].model_validate(value) if isinstance(value, dict) else value
+            )
+            rows.append(_row_from_legacy(key, result))
+        return {"items": tuple(rows)}
+
+    @model_validator(mode="after")
+    def _well_formed(self) -> NutrientTargets:
+        keys = [row.nutrient for row in self.items]
+        if len(keys) != len(set(keys)):
+            raise ValueError("a nutrient appears at most once in a target set")
+        missing = [key for key in _COMPOSED_NUTRIENTS if key not in keys]
+        if missing:
+            raise ValueError(
+                f"targets always include the composed-against three; missing {missing}"
+            )
+        return self
+
+    # -- keyed access -------------------------------------------------------------------
+
+    def get(self, key: NutrientKey) -> NutrientTarget | None:
+        return next((row for row in self.items if row.nutrient == key), None)
+
+    def require(self, key: NutrientKey) -> NutrientTarget:
+        row = self.get(key)
+        if row is None:
+            raise KeyError(key)
+        return row
+
+    def amount_of(self, key: NutrientKey) -> float:
+        amount = self.require(key).amount
+        assert amount is not None  # advisories are never composed against or overridden
+        return amount
+
+    def tracked(self) -> tuple[NutrientTarget, ...]:
+        return tuple(row for row in self.items if row.tracked)
+
+    def with_amount(
+        self, key: NutrientKey, value: float, *, source: str, derivation: str = ""
+    ) -> NutrientTargets:
+        """One nutrient's amount replaced; the doctor's-note override and nothing else."""
+        rounded = float(round(value)) if key == "calories" else round(value, 1)
+        rows = tuple(
+            row.model_copy(update={"amount": rounded, "source": source, "derivation": derivation})
+            if row.nutrient == key
+            else row
+            for row in self.items
+        )
+        return NutrientTargets(items=rows)
+
+    # -- legacy façade (serialized, so the wire JSON stays a superset of Day 4's) --------
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def calories(self) -> CalorieTargetResult:
+        row = self.require("calories")
+        assert row.amount is not None
+        return CalorieTargetResult(
+            calories=round(row.amount),
+            band=row.band,
+            formula=row.derivation,
+            activity_level=row.activity_level,
+            source=row.source,
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def protein(self) -> ProteinTargetResult:
+        row = self.require("protein")
+        assert row.amount is not None and row.per_kg is not None
+        assert row.reference_type in ("AI", "RDA")
+        return ProteinTargetResult(
+            protein_g=row.amount,
+            grams_per_kg=row.per_kg,
+            reference_type=row.reference_type,
+            band=row.band,
+            source=row.source,
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def iron(self) -> IronTargetResult:
+        row = self.require("iron")
+        assert row.amount is not None
+        assert row.reference_type in ("AI", "RDA")
+        return IronTargetResult(
+            iron_mg=row.amount,
+            reference_type=row.reference_type,
+            band=row.band,
+            source=row.source,
+        )
+
+    def model_copy(
+        self, *, update: dict[str, object] | None = None, deep: bool = False
+    ) -> NutrientTargets:
+        """Translate legacy ``update={"calories": ...}`` copies into row surgery.
+
+        A computed property silently swallows ``model_copy`` updates, so without this the
+        Day 4 call sites would keep the old numbers while appearing to succeed.
+        """
+        if update and any(key in update for key in _COMPOSED_NUTRIENTS):
+            update = dict(update)
+            rows = list(self.items)
+            for key in _COMPOSED_NUTRIENTS:
+                if key not in update:
+                    continue
+                result = update.pop(key)
+                index = next(i for i, row in enumerate(rows) if row.nutrient == key)
+                rows[index] = _row_from_legacy(key, result, rows[index])
+            update["items"] = tuple(rows)
+        return super().model_copy(update=update, deep=deep)
+
+
+_LEGACY_RESULTS: dict[str, type[_Frozen]] = {
+    "calories": CalorieTargetResult,
+    "protein": ProteinTargetResult,
+    "iron": IronTargetResult,
+}
+
+# Display metadata for rows synthesized from the legacy three-field shape, which carries
+# none of its own. Matches the registry rows in backend.nutrition.nutrients.
+_LEGACY_ROW_DEFAULTS: dict[str, tuple[str, str]] = {
+    "calories": ("Calories", "kcal"),
+    "protein": ("Protein", "g"),
+    "iron": ("Iron", "mg"),
+}
+
+
+def _row_from_legacy(
+    key: str, result: object, existing: NutrientTarget | None = None
+) -> NutrientTarget:
+    update: dict[str, object]
+    if isinstance(result, CalorieTargetResult):
+        update = {
+            "amount": float(result.calories),
+            "band": result.band,
+            "source": result.source,
+            "derivation": result.formula,
+            "activity_level": result.activity_level,
+            "reference_type": "EER",
+        }
+    elif isinstance(result, ProteinTargetResult):
+        update = {
+            "amount": result.protein_g,
+            "band": result.band,
+            "source": result.source,
+            "per_kg": result.grams_per_kg,
+            "reference_type": result.reference_type,
+        }
+    elif isinstance(result, IronTargetResult):
+        update = {
+            "amount": result.iron_mg,
+            "band": result.band,
+            "source": result.source,
+            "reference_type": result.reference_type,
+        }
+    else:
+        raise TypeError(f"cannot build a {key} target row from {type(result).__name__}")
+    if existing is not None:
+        return existing.model_copy(update=update)
+    label, unit = _LEGACY_ROW_DEFAULTS[key]
+    return NutrientTarget(nutrient=key, label=label, unit=unit, tracked=True, **update)  # type: ignore[arg-type]
 
 
 # -- Food lookup and meal nutrition ---------------------------------------------------------
@@ -173,9 +422,12 @@ class MealNutritionResult(_Frozen):
 
 OverridableNutrient = Literal["calories", "protein", "iron"]
 OverrideDirection = Literal["max", "min", "target"]
-NutrientUnit = Literal["kcal", "g", "mg"]
 
-UNIT_FOR_NUTRIENT: dict[str, str] = {"calories": "kcal", "protein": "g", "iron": "mg"}
+# Derived from the registry's overridable rows so the map cannot drift from them; the
+# closed ``OverridableNutrient`` literal above is the same set, asserted by test.
+UNIT_FOR_NUTRIENT: dict[str, str] = {
+    spec.key: spec.unit for spec in REGISTRY if spec.overridable
+}
 
 
 class DoctorsNoteOverride(_Strict):
@@ -305,12 +557,17 @@ class DailyNutritionResult(_Frozen):
 
 
 class _ChildForTargets(_Strict):
-    """The child fields target resolution needs -- the planner's, minus diet and allergies."""
+    """The child fields target resolution needs.
+
+    Diet selects which targets are displayed and their order; it never changes a number
+    (day-9 design Decision 5 -- there is no vegan RDA, and the registry cannot express one).
+    """
 
     age_months: int = _AGE
     weight_kg: float = _WEIGHT
     sex: Sex
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
+    diet_preference: DietPreference = DietPreference.default()
     doctors_note: str | None = Field(default=None, max_length=4000)
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
 
@@ -351,8 +608,9 @@ class RemainingTargetsResult(_Frozen):
 
 # -- Nutrient-gap detection (nutrient-gap-detection spec) ----------------------------------
 
-GapNutrient = Literal["calories", "protein", "iron"]
-GapFlag = Literal["below", "adequate", "above"]
+# The registry's trackable keys: every nutrient that can appear in a gap report. The
+# composer still emits adjustments only for protein and iron (design Decision 7).
+GapNutrient = Literal["calories", "protein", "iron", "calcium"]
 GapConfidence = Literal["low", "medium", "high"]
 
 
@@ -366,6 +624,7 @@ class GapDetectionRequest(_ChildForTargets):
 
 class NutrientGap(_Frozen):
     nutrient: GapNutrient
+    label: str = Field(description="Parent-facing name from the registry (design Decision 10).")
     unit: NutrientUnit
     average: float = Field(ge=0, description="Window average per day, one decimal.")
     target: float = Field(gt=0)

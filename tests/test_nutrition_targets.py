@@ -154,7 +154,7 @@ class TestIronTarget:
     @pytest.mark.parametrize(
         ("age", "band", "mg"),
         [
-            (3, "0–6 months", 0.3),
+            (3, "0–6 months", 0.27),
             (8, "7–12 months", 11.0),
             (24, "1–3 years", 7.0),
             (50, "4–8 years", 10.0),

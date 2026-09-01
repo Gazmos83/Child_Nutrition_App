@@ -4,7 +4,9 @@ import json
 import logging
 from datetime import UTC, date, datetime, timedelta
 
-from backend.models.enums import FeedingType, Sex
+import pytest
+
+from backend.models.enums import DietPreference, FeedingType, Sex
 from backend.schemas.tools import FeedingEntry, GapDetectionRequest
 from backend.tools.nutrient_gaps import detect_nutrient_gaps
 from tests.fixtures.fake_llm import RecordingChatModel
@@ -104,7 +106,8 @@ class TestAudit:
         assert record["input"]["timezone"] == "UTC" and record["as_of"] == "2026-08-27"
         assert record["days_logged"] == 3 and record["window_days"] == 3
         assert record["confidence"] == "medium" and record["partial_days"] == 0
-        assert {g["nutrient"] for g in record["gaps"]} == {"calories", "protein", "iron"}
+        # Calcium joined the trackable set on day 9 (nutrient-gap-detection delta spec).
+        assert {g["nutrient"] for g in record["gaps"]} == {"calories", "protein", "iron", "calcium"}
         assert all(g["target_source"] for g in record["gaps"])
         assert record["override"]["conflict"] is False
 
@@ -113,3 +116,62 @@ class TestAudit:
         await detect_nutrient_gaps(request([]), None)
         [record] = audit_records(caplog)
         assert record["status"] == "insufficient_data" and record["gaps"] == []
+
+
+class TestTrackability:
+    """day-9 nutrient-gap-detection delta spec: the flagged set is the trackable subset."""
+
+    async def test_calcium_joins_the_report_with_label_and_unit(self) -> None:
+        report = await detect_nutrient_gaps(
+            request([cereal_day(1, 100), cereal_day(2, 100), cereal_day(3, 100)]), None
+        )
+        calcium = next(g for g in report.gaps if g.nutrient == "calcium")
+        # 7-12 months AI from nih-dri-micronutrients.md; the label rides the payload
+        # (design Decision 10) so the renderer never needs a local name map.
+        assert calcium.target == 260 and calcium.label == "Calcium" and calcium.unit == "mg"
+        assert calcium.flag == "above"  # ~667 mg/day of fortified cereal against 260
+        # The original three are still reported with their previously asserted figures.
+        assert next(g for g in report.gaps if g.nutrient == "calories").target == 678
+        assert next(g for g in report.gaps if g.nutrient == "iron").target == 11.0
+
+    @pytest.mark.parametrize(
+        ("days", "confidence"), [(1, "low"), (3, "medium"), (8, "high")]
+    )
+    async def test_vitamin_d_is_never_flagged_at_any_confidence(
+        self, days: int, confidence: str
+    ) -> None:
+        entries = [cereal_day(i, 100) for i in range(1, days + 1)]
+        report = await detect_nutrient_gaps(request(entries), None)
+        assert report.confidence == confidence
+        assert "vitamin_d" not in {g.nutrient for g in report.gaps}
+        # Displayed with its target, unscored, and carrying the parent-facing reason.
+        vitamin_d = report.targets.require("vitamin_d")
+        assert vitamin_d.tracked is False and vitamin_d.not_tracked_reason
+
+    async def test_vegan_b12_is_absent_not_below(self) -> None:
+        entries = [cereal_day(1, 100), cereal_day(2, 100), cereal_day(3, 100)]
+        report = await detect_nutrient_gaps(
+            request(entries, diet_preference=DietPreference.VEGAN), None
+        )
+        assert "vitamin_b12" not in {g.nutrient for g in report.gaps}
+        b12 = report.targets.require("vitamin_b12")
+        assert b12.tracked is False
+        assert "supplement" in b12.display_note
+
+    async def test_diet_edit_changes_trackability_and_nothing_else(self) -> None:
+        entries = [cereal_day(1, 100), cereal_day(2, 100), cereal_day(3, 100)]
+        vegetarian = await detect_nutrient_gaps(
+            request(entries, diet_preference=DietPreference.VEGETARIAN), None
+        )
+        vegan = await detect_nutrient_gaps(
+            request(entries, diet_preference=DietPreference.VEGAN), None
+        )
+        for report in (vegetarian, vegan):
+            flagged = {g.nutrient for g in report.gaps}
+            assert flagged == {r.nutrient for r in report.targets.tracked()}
+            assert "vitamin_b12" not in flagged  # no loggable source yet for either diet
+        shared = {g.nutrient for g in vegetarian.gaps} & {g.nutrient for g in vegan.gaps}
+        for key in shared:
+            before = next(g for g in vegetarian.gaps if g.nutrient == key)
+            after = next(g for g in vegan.gaps if g.nutrient == key)
+            assert (before.average, before.flag) == (after.average, after.flag), key

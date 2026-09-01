@@ -1,17 +1,23 @@
 """Doctor's-note extraction and deterministic override application (tasks 4.1, 4.2)."""
 
+from typing import get_args
+
 import pytest
 
-from backend.models.enums import Sex
+from backend.models.enums import DietPreference, Sex
+from backend.nutrition.nutrients import REGISTRY, displayed_specs
 from backend.nutrition.targets import (
     calculate_calorie_target,
     calculate_protein_target,
     iron_target,
 )
 from backend.schemas.tools import (
+    UNIT_FOR_NUTRIENT,
     CalorieTargetInput,
     DoctorsNoteOverride,
+    GapDetectionRequest,
     NutrientTargets,
+    OverridableNutrient,
     ProteinTargetInput,
 )
 from backend.tools.doctors_note import (
@@ -20,6 +26,7 @@ from backend.tools.doctors_note import (
     apply_override,
     extract_override,
 )
+from backend.tools.targets_resolution import general_targets, resolve_targets
 from tests.fixtures.fake_llm import RecordingChatModel
 
 NOTE = "Please limit intake to 650 kcal per day while we monitor weight gain."
@@ -191,3 +198,59 @@ class TestApplyOverride:
         )
         assert applied.calories.calories in {500, general.calories.calories}
         assert applied.calories.calories == 500
+
+
+class TestPromptDerivation:
+    """Prompt and unit map derive from the registry's overridable rows (day-9 task 3.2)."""
+
+    def test_prompt_names_exactly_the_overridable_nutrients(self) -> None:
+        for spec in REGISTRY:
+            assert (f'"{spec.key}"' in EXTRACT_SYSTEM_PROMPT) == spec.overridable, spec.key
+
+    def test_unit_map_is_the_overridable_rows(self) -> None:
+        assert UNIT_FOR_NUTRIENT == {"calories": "kcal", "protein": "g", "iron": "mg"}
+        assert {s.key: s.unit for s in REGISTRY if s.overridable} == UNIT_FOR_NUTRIENT
+
+
+class TestOverrideBoundary:
+    """doctors-note-override delta spec: the overridable set does not follow the displayed set."""
+
+    def displayed_child(self, age: int, note: str | None = None) -> GapDetectionRequest:
+        return GapDetectionRequest(
+            age_months=age, weight_kg=12.0, sex=Sex.FEMALE, doctors_note=note
+        )
+
+    async def test_calcium_note_is_rejected_like_any_unknown_nutrient(self) -> None:
+        llm = model('{"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}')
+        result = await extract_override("Limit calcium to 500 mg daily.", llm)
+        assert result.status == "unparsed"
+        assert result.override is None
+        assert "nutrient" in result.detail
+
+    async def test_calcium_note_leaves_the_displayed_target_general(self) -> None:
+        request = self.displayed_child(24, note="Limit calcium to 500 mg daily.")
+        llm = model('{"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}')
+        targets, extraction, override = await resolve_targets(request, llm)
+        assert extraction.status == "unparsed"
+        assert override.conflict is False and override.source == "general_target"
+        # Calcium is displayed with the general 1-3 years RDA, not the note's 500.
+        assert targets.require("calcium").amount == 700.0
+        assert targets == general_targets(request)
+
+    def test_overridable_set_stays_three_as_the_displayed_set_widens(self) -> None:
+        overridable = {s.key for s in REGISTRY if s.overridable}
+        assert overridable == {"calories", "protein", "iron"}
+        assert overridable == set(get_args(OverridableNutrient))
+        assert len(displayed_specs(30, DietPreference.VEGAN)) > 3
+
+    def test_override_on_a_widened_set_changes_only_the_named_row(self) -> None:
+        general = general_targets(self.displayed_child(8))
+        assert len(general.items) == 6  # calories, iron, protein, vitamin D, zinc, calcium
+        applied, outcome = apply_override(
+            general,
+            DoctorsNoteOverride(nutrient="calories", direction="max", value=650, unit="kcal"),
+        )
+        assert outcome.conflict is True
+        assert applied.amount_of("calories") == 650.0
+        untouched = [row for row in applied.items if row.nutrient != "calories"]
+        assert untouched == [row for row in general.items if row.nutrient != "calories"]

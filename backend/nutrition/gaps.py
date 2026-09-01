@@ -7,16 +7,16 @@ function has no I/O: its tests are tables of daily totals and expected reports.
 
 import datetime as dt
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from backend.nutrition.feeding import DayTotals
+from backend.nutrition.nutrients import SPECS
 from backend.schemas.tools import (
     GapConfidence,
     GapFlag,
-    GapNutrient,
     NutrientGap,
     NutrientGapReport,
     NutrientTargets,
-    NutrientUnit,
 )
 
 GAP_BELOW = 0.80  # ratio under this is "below"
@@ -30,22 +30,6 @@ WINDOWS: tuple[tuple[int, int | None, GapConfidence], ...] = (
     (1, None, "low"),
 )
 
-# (report nutrient, NutrientTotals field, unit)
-_NUTRIENTS: tuple[tuple[GapNutrient, str, NutrientUnit], ...] = (
-    ("calories", "calories", "kcal"),
-    ("protein", "protein_g", "g"),
-    ("iron", "iron_mg", "mg"),
-)
-
-
-def _target(targets: NutrientTargets, nutrient: GapNutrient) -> tuple[float, str, str]:
-    if nutrient == "calories":
-        return float(targets.calories.calories), targets.calories.source, targets.calories.band
-    if nutrient == "protein":
-        return targets.protein.protein_g, targets.protein.source, targets.protein.band
-    return targets.iron.iron_mg, targets.iron.source, targets.iron.band
-
-
 def _flag(ratio: float) -> GapFlag:
     if ratio < GAP_BELOW:
         return "below"
@@ -54,10 +38,20 @@ def _flag(ratio: float) -> GapFlag:
     return "adequate"
 
 
-def compute_gap_report(
-    daily: Mapping[dt.date, DayTotals], targets: NutrientTargets, as_of: dt.date
-) -> NutrientGapReport:
-    """Compare window averages with the child's targets.
+@dataclass(frozen=True, slots=True)
+class WindowSelection:
+    """Which complete days a gap report averages over, and how confidently."""
+
+    recent: tuple[DayTotals, ...]
+    days_logged: int
+    window_days: int
+    partial_days: int
+    confidence: GapConfidence | None
+    """``None`` means insufficient data: no complete day in range."""
+
+
+def select_window(daily: Mapping[dt.date, DayTotals], as_of: dt.date) -> WindowSelection:
+    """The §9b window rule, reusable outside the report (e.g. the targets endpoint).
 
     Days strictly before ``as_of`` and within ``LOOKBACK_DAYS`` count; the reference day
     itself is never in the window (lunch has not happened yet). Days with an unmeasured
@@ -70,43 +64,71 @@ def compute_gap_report(
     days_logged = len(complete)
 
     if days_logged == 0:
-        return NutrientGapReport(
-            status="insufficient_data",
+        return WindowSelection(
+            recent=(),
             days_logged=0,
             window_days=0,
             partial_days=partial_days,
-            as_of=as_of,
-            targets=targets,
+            confidence=None,
         )
 
     _, window, confidence = next(row for row in WINDOWS if days_logged >= row[0])
     window_days = window or days_logged
-    recent = complete[:window_days]
+    return WindowSelection(
+        recent=tuple(complete[:window_days]),
+        days_logged=days_logged,
+        window_days=window_days,
+        partial_days=partial_days,
+        confidence=confidence,
+    )
 
+
+def compute_gap_report(
+    daily: Mapping[dt.date, DayTotals], targets: NutrientTargets, as_of: dt.date
+) -> NutrientGapReport:
+    """Compare window averages with the child's targets (window rule: ``select_window``)."""
+    selection = select_window(daily, as_of)
+    if selection.confidence is None:
+        return NutrientGapReport(
+            status="insufficient_data",
+            days_logged=0,
+            window_days=0,
+            partial_days=selection.partial_days,
+            as_of=as_of,
+            targets=targets,
+        )
+
+    recent, window_days = selection.recent, selection.window_days
+
+    # The flagged set is whatever the target set declares trackable for this child
+    # (design Decision 3): a display-only row cannot reach a flag by construction.
     gaps: list[NutrientGap] = []
-    for nutrient, field, unit in _NUTRIENTS:
+    for row in targets.tracked():
+        field = SPECS[row.nutrient].intake_field
+        assert field is not None  # tracked_for() requires a declared intake field
+        assert row.amount is not None  # a tracked row always has a numeric target
         average = sum(getattr(d.totals, field) for d in recent) / window_days
-        target, source, band = _target(targets, nutrient)
-        ratio = round(average / target, 2) if target > 0 else 0.0
+        ratio = round(average / row.amount, 2) if row.amount > 0 else 0.0
         gaps.append(
             NutrientGap(
-                nutrient=nutrient,
-                unit=unit,
+                nutrient=row.nutrient,
+                label=row.label,
+                unit=row.unit,
                 average=round(average, 1),
-                target=target,
+                target=row.amount,
                 ratio=ratio,
                 flag=_flag(ratio),
-                target_source=source,
-                target_band=band,
+                target_source=row.source,
+                target_band=row.band,
             )
         )
     return NutrientGapReport(
         status="ok",
-        confidence=confidence,
-        directional=confidence == "low",
-        days_logged=days_logged,
+        confidence=selection.confidence,
+        directional=selection.confidence == "low",
+        days_logged=selection.days_logged,
         window_days=window_days,
-        partial_days=partial_days,
+        partial_days=selection.partial_days,
         as_of=as_of,
         gaps=gaps,
         targets=targets,

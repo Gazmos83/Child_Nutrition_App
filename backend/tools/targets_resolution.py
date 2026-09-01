@@ -2,27 +2,26 @@
 
 The meal planner, ``get_remaining_targets``, and ``detect_nutrient_gaps`` all measure
 against the same thing: the DRI targets for this child with the doctor's note applied on
-conflict (hard rule 3). Extracted from ``generate_meal_plan`` unchanged so that a
-prescribed calorie limit is never reported as a deficit anywhere.
+conflict (hard rule 3).
+
+Since day 9 the targets are the registry's displayed set, in display order, as one ordered
+collection of uniform rows (design Decisions 1-2). ``NutrientTargets.calories``/``protein``/
+``iron`` are computed views of the same rows, so every pre-existing consumer keeps its
+three-field picture of the set this module now widens. Diet selects which rows appear and
+their order; it never changes a number.
 """
 
 from typing import Protocol
 
 from langchain_core.language_models import BaseChatModel
 
-from backend.models.enums import Sex
-from backend.nutrition.targets import (
-    calculate_calorie_target,
-    calculate_protein_target,
-    iron_target,
-)
+from backend.models.enums import ActivityLevel, DietPreference, Sex
+from backend.nutrition.nutrients import TargetInputs, displayed_specs, evaluate
 from backend.schemas.tools import (
-    ActivityLevel,
-    CalorieTargetInput,
     NoteExtraction,
+    NutrientTarget,
     NutrientTargets,
     OverrideOutcome,
-    ProteinTargetInput,
 )
 from backend.tools.doctors_note import apply_override, extract_override
 
@@ -42,25 +41,44 @@ class ChildForTargets(Protocol):
     def doctors_note(self) -> str | None: ...
     @property
     def activity_level(self) -> ActivityLevel: ...
+    @property
+    def diet_preference(self) -> DietPreference: ...
 
 
 def general_targets(child: ChildForTargets) -> NutrientTargets:
-    """The DRI targets before any doctor's note."""
-    return NutrientTargets(
-        calories=calculate_calorie_target(
-            CalorieTargetInput(
-                age_months=child.age_months,
-                weight_kg=child.weight_kg,
-                sex=child.sex,
-                height_cm=child.height_cm,
-                activity_level=child.activity_level,
-            )
-        ),
-        protein=calculate_protein_target(
-            ProteinTargetInput(age_months=child.age_months, weight_kg=child.weight_kg)
-        ),
-        iron=iron_target(child.age_months),
+    """The DRI reference targets before any doctor's note, as the ordered displayed set."""
+    diet = child.diet_preference
+    inputs = TargetInputs(
+        age_months=child.age_months,
+        weight_kg=child.weight_kg,
+        sex=child.sex,
+        height_cm=child.height_cm,
+        activity_level=child.activity_level,
     )
+    rows = []
+    for spec in displayed_specs(child.age_months, diet):
+        evaluated = evaluate(spec, inputs)
+        rows.append(
+            NutrientTarget(
+                nutrient=spec.key,
+                label=spec.label,
+                unit=spec.unit,
+                amount=evaluated.amount,
+                reference_type=evaluated.reference_type,
+                band=evaluated.band,
+                source=spec.source,
+                upper_limit=evaluated.upper_limit,
+                tracked=spec.tracked_for(diet),
+                derivation=evaluated.derivation,
+                per_kg=evaluated.per_kg,
+                activity_level=evaluated.activity_level,
+                advisory=evaluated.advisory,
+                advisory_source_date=evaluated.advisory_source_date,
+                display_note=spec.note_for(diet),
+                not_tracked_reason=spec.not_tracked_reason or None,
+            )
+        )
+    return NutrientTargets(items=tuple(rows))
 
 
 async def resolve_targets(

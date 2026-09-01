@@ -195,7 +195,7 @@
   "result": {
    "coverage": {
     "calories": 0.98,
-    "iron": 0.67,
+    "iron": 0.74,
     "protein": 0.76
    },
    "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
@@ -578,7 +578,7 @@
     },
     "iron": {
      "band": "0–6 months",
-     "iron_mg": 0.3,
+     "iron_mg": 0.27,
      "reference_type": "AI",
      "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
     },
@@ -609,7 +609,7 @@
   "result": {
    "coverage": {
     "calories": 1.0,
-    "iron": 0.67,
+    "iron": 0.74,
     "protein": 1.04
    },
    "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
@@ -992,7 +992,7 @@
     },
     "iron": {
      "band": "0–6 months",
-     "iron_mg": 0.3,
+     "iron_mg": 0.27,
      "reference_type": "AI",
      "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
     },
@@ -1023,7 +1023,7 @@
   "result": {
    "coverage": {
     "calories": 1.04,
-    "iron": 30.0,
+    "iron": 33.33,
     "protein": 1.68
    },
    "disclaimer": "This is general information from published pediatric nutrition guidelines, not medical advice. Please consult your pediatrician about your child's individual needs.",
@@ -1188,7 +1188,7 @@
     },
     "iron": {
      "band": "0–6 months",
-     "iron_mg": 0.3,
+     "iron_mg": 0.27,
      "reference_type": "AI",
      "source": "Institute of Medicine, Dietary Reference Intakes: Elements (iron, 2001), via NIH ODS tables"
     },

@@ -138,15 +138,19 @@ function Coverage({ plan }: { plan: MealPlanResult }) {
     <ul className="space-y-2">
       {rows.map(({ key, target }) => {
         const percent = plan.coverage[key] * 100;
+        // Label and unit come from the server's target row (day-9 design Decision 10).
+        const meta = plan.targets.items.find((row) => row.nutrient === key);
+        const label = meta?.label ?? copy.COVERAGE_LABELS[key];
+        const unit = meta?.unit ?? UNIT_FOR_NUTRIENT[key];
         return (
           <li key={key}>
             <div className="mb-1 flex justify-between">
-              <span>{copy.COVERAGE_LABELS[key]}</span>
+              <span>{label}</span>
               <span className="tabular-nums text-muted-foreground">
-                {copy.coverageLine(percent, target, UNIT_FOR_NUTRIENT[key])}
+                {copy.coverageLine(percent, target, unit)}
               </span>
             </div>
-            <Progress value={Math.min(percent, 100)} max={100} aria-label={copy.COVERAGE_LABELS[key]}>
+            <Progress value={Math.min(percent, 100)} max={100} aria-label={label}>
               <ProgressTrack>
                 <ProgressIndicator />
               </ProgressTrack>
