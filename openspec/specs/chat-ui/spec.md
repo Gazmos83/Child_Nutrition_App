@@ -2,9 +2,10 @@
 
 ## Purpose
 
-The browser application a parent uses: a child-context form, a streamed chat, and for every
-assistant message the sources it cites, the tools it ran, any meal plan it produced, and the
-not-medical-advice disclaimer.
+The browser application a parent uses: a full-page tabbed layout (child-context form,
+feeding log, daily targets), a streamed chat opened as a popup from a floating launcher,
+and for every assistant message the sources it cites, the tools it ran, any meal plan it
+produced, and the not-medical-advice disclaimer.
 
 ## Requirements
 
@@ -38,6 +39,32 @@ allergies or diet preference SHALL NOT be possible.
 
 - **WHEN** the parent changes a saved field and has not pressed Save
 - **THEN** the form shows that the details are not saved yet and offers Save
+
+### Requirement: The chat opens as a popup over the page
+
+The UI SHALL present the tabbed page (Child, Feeding log, Daily targets) as the full page
+and the chat as a panel opened by a floating launcher button fixed to the bottom-right of
+the viewport. The panel SHALL cover only part of the screen on desktop, leaving the page
+usable behind it (full-screen on small viewports is acceptable), and SHALL offer a close
+control. Closing and reopening the panel SHALL NOT lose the conversation or a draft
+message. The launcher and panel SHALL NOT obscure the popup lists of the page's own
+controls.
+
+#### Scenario: Chat starts out of the way
+
+- **WHEN** the parent opens the app
+- **THEN** the tabs fill the page, no chat panel is shown, and the launcher button is
+  visible at the bottom-right
+
+#### Scenario: The conversation survives closing
+
+- **WHEN** the parent exchanges messages, types a draft, closes the panel, and reopens it
+- **THEN** the messages and the unsent draft are still there
+
+#### Scenario: The page stays usable while chatting
+
+- **WHEN** the panel is open on a desktop viewport
+- **THEN** the tabs remain visible and operable beside it
 
 ### Requirement: Answers stream and show their provenance
 
@@ -123,7 +150,7 @@ interrupted.
 #### Scenario: Nothing to show yet
 
 - **WHEN** the parent opens the app with no child details and no messages
-- **THEN** the side panel invites them to tell us about their child and the chat invites a
+- **THEN** the Child tab invites them to tell us about their child and the chat invites a
   first question, each in one warm sentence that ends with what to do
 
 ### Requirement: Product copy is warm by default and direct about safety and errors
@@ -156,19 +183,37 @@ verbatim.
 
 ### Requirement: The parent can log feeds and see today's intake
 
-The UI SHALL provide a Feeding-log tab with a form to log a feed (feeding type from the
-controlled vocabulary; a food picker offering only foods from the food table, filtered to
-milk feeds for breast milk and formula and hidden for water; quantity with the unit set
-from the chosen food; time defaulting to now), a list of logged entries grouped by day
-with their nutrients and a way to delete one, and "today so far" totals. The log SHALL be
-read from and written to the signed-in account's child; when no child is saved yet the tab
-SHALL say so instead of offering the form.
+The UI SHALL provide a Feeding-log tab with a form to log a feed, a list of logged entries
+grouped by day with their nutrients and a way to delete one, and "today so far" totals.
+The form SHALL ask only which food, how much, and when: it SHALL NOT ask for a feeding
+type — the type is derived from the choice (Breastfed → breast milk; a milk-feed food →
+breast milk or formula; the Water entry → water; anything else → solid) and stays within
+the controlled vocabulary. "When" SHALL be the five named moments Breakfast, Lunch,
+Dinner, Snack, and Breastfed — never a date or time control; each moment maps to a
+representative local time on the current day (Breastfed to the current time), since the
+tools reduce every timestamp to the local calendar day. The food picker SHALL be a search
+box suggesting at most seven matches from the food table plus a single Water entry, with
+the quantity unit set from the chosen food. The log SHALL be read from and written to the
+signed-in account's child; when no child is saved yet the tab SHALL say so instead of
+offering the form.
 
 #### Scenario: Picker offers only table foods
 
-- **WHEN** the parent logs a solid
-- **THEN** the food choices are exactly the foods returned by the food listing, and no
-  free-text food can be entered
+- **WHEN** the parent searches for a food
+- **THEN** the suggestions are foods returned by the food listing (plus the Water entry),
+  at most seven appear, and no free-text food can be submitted
+
+#### Scenario: Breastfed asks the least
+
+- **WHEN** the parent picks the Breastfed moment
+- **THEN** the food search is not shown, the amount may stay blank, and adding the feed
+  logs an unmeasured breast-milk feed at the current time
+
+#### Scenario: A moment becomes a sensible time
+
+- **WHEN** the parent logs a food under Lunch
+- **THEN** the entry is recorded on today's date at the representative lunch time, and no
+  calendar or time field was ever shown
 
 #### Scenario: Entry appears with nutrients
 
@@ -264,38 +309,36 @@ signing in again and retrying will continue it.
 - **WHEN** the parent signs out
 - **THEN** the sign-in screen appears and the child's details and log are no longer shown
 
-### Requirement: The side panel shows the child's daily nutrient targets
+### Requirement: A Daily-targets tab shows the child's daily nutrient targets
 
-The UI SHALL show, in the side panel beside the child's details, a persistent Daily-targets
-section listing the child's nutrient targets in the order the server returns them, each with
-its value, unit, reference type, age band, and source. The section SHALL read the signed-in
-account's saved child; when no child is saved yet it SHALL say so instead of showing
-numbers. The UI SHALL NOT compute, reorder, or round any target itself, since no nutrient
-number a parent sees may originate in the browser.
+The UI SHALL provide a Daily-targets tab, alongside the Child and Feeding-log tabs, listing
+the child's nutrient targets in the order the server returns them, each with its value,
+unit, reference type, age band, and source. The tab SHALL read the signed-in account's
+saved child; when no child is saved yet it SHALL say so instead of showing numbers. The UI
+SHALL NOT compute, reorder, or round any target itself, since no nutrient number a parent
+sees may originate in the browser.
 
 #### Scenario: Targets appear in server order
 
-- **WHEN** the parent opens the child tab for a saved 9-month-old
-- **THEN** the Daily-targets section lists the targets in the order received, without
-  client-side sorting
+- **WHEN** the parent opens the Daily-targets tab for a saved 9-month-old
+- **THEN** the tab lists the targets in the order received, without client-side sorting
 - **AND** each row shows its value with unit, its reference type, and its source
 
 #### Scenario: No child yet
 
-- **WHEN** the account has no saved child and the parent opens the child tab
-- **THEN** the Daily-targets section explains that the child's details come first and shows
-  no target values
+- **WHEN** the account has no saved child and the parent opens the Daily-targets tab
+- **THEN** the tab explains that the child's details come first and shows no target values
 
 #### Scenario: Unsaved edits do not produce numbers
 
 - **WHEN** the parent edits the child's age in the form without saving
-- **THEN** the Daily-targets section does not show targets for the unsaved age, and says
-  the details must be saved first
+- **THEN** the Daily-targets tab does not show targets for the unsaved age, and says the
+  details must be saved first
 
 #### Scenario: Targets refresh after a profile change
 
 - **WHEN** the parent saves a change to the child's age or diet preference
-- **THEN** the Daily-targets section reflects the saved profile without a page reload
+- **THEN** the Daily-targets tab reflects the saved profile without a page reload
 
 ### Requirement: Display-only targets and advisories are visually distinct from tracked ones
 
@@ -306,41 +349,41 @@ source and publication date, and SHALL NOT be given a value or a progress indica
 
 #### Scenario: Vitamin D shows a reason and no progress bar
 
-- **WHEN** the Daily-targets section renders vitamin D
+- **WHEN** the Daily-targets tab renders vitamin D
 - **THEN** it shows the target value and a reason explaining that intake comes from
   supplements and sunlight rather than logged food
 - **AND** it renders no progress indicator and no flag badge
 
 #### Scenario: A vegan child's B12 and DHA read as guidance
 
-- **WHEN** the Daily-targets section renders for a vegan child
+- **WHEN** the Daily-targets tab renders for a vegan child
 - **THEN** vitamin B12 shows its value with supplement guidance and no progress indicator
 - **AND** the omega-3 DHA entry shows guidance text with its source and publication date,
   and no value
 
 #### Scenario: A tracked target keeps its progress indicator
 
-- **WHEN** the Daily-targets section renders calcium for a child with complete logged days
+- **WHEN** the Daily-targets tab renders calcium for a child with complete logged days
 - **THEN** calcium shows its progress against target and its flag
 - **AND** exactly one progress track is drawn for that row
 
 ### Requirement: The panel says when a doctor's note is on file but not applied to it
 
-Because the Daily-targets section reports general reference targets rather than
-note-adjusted ones, the UI SHALL state when a doctor's note is on file for the child and
-that the note is applied when meal plans are generated, so a parent is never left to infer
-that the note was ignored (hard rule 3).
+Because the Daily-targets tab reports general reference targets rather than note-adjusted
+ones, the UI SHALL state when a doctor's note is on file for the child and that the note
+is applied when meal plans are generated, so a parent is never left to infer that the note
+was ignored (hard rule 3).
 
 #### Scenario: A note on file is disclosed
 
-- **WHEN** the child's profile carries a doctor's note and the parent opens the child tab
-- **THEN** the Daily-targets section states that a note is on file and that it is applied
-  when planning meals
+- **WHEN** the child's profile carries a doctor's note and the parent opens the
+  Daily-targets tab
+- **THEN** the tab states that a note is on file and that it is applied when planning meals
 
 #### Scenario: No note, no claim
 
 - **WHEN** the child's profile carries no doctor's note
-- **THEN** the Daily-targets section makes no statement about a note
+- **THEN** the Daily-targets tab makes no statement about a note
 
 ### Requirement: Growth assessments render as a structured card in the direct voice
 

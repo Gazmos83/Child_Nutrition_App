@@ -2,8 +2,7 @@
 
 import { ChefHat } from "lucide-react";
 import { useCallback, useState } from "react";
-import { MessageInput } from "@/components/chat/message-input";
-import { MessageList } from "@/components/chat/message-list";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import { ChildContextForm } from "@/components/side-panel/child-context-form";
 import { DailyTargets } from "@/components/side-panel/daily-targets";
 import { FeedingLogTab } from "@/components/side-panel/feeding-log-tab";
@@ -20,6 +19,7 @@ import {
   SIGN_OUT,
   TAB_CHILD,
   TAB_LOG,
+  TAB_TARGETS,
 } from "@/lib/copy";
 
 interface Props {
@@ -56,12 +56,29 @@ export function ChatPage({ user, onSignOut }: Props) {
   const [tab, setTab] = useState("child");
 
   return (
-    <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[22rem_1fr]">
-      <aside className="border-b md:border-b-0 md:border-r md:overflow-y-auto md:max-h-dvh">
+    <div className="flex min-h-dvh flex-col">
+      <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
+        <span className="flex items-center gap-2">
+          <span className="flex size-8 items-center justify-center rounded-full border-[3px] border-ink bg-card text-ink">
+            <ChefHat className="size-4" strokeWidth={2.5} />
+          </span>
+          <h1 className="text-lg leading-none text-tomato">{APP_TITLE}</h1>
+        </span>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span className="truncate" data-testid="account-email">
+            {user.email}
+          </span>
+          <Button type="button" variant="ghost" size="sm" onClick={onSignOut}>
+            {SIGN_OUT}
+          </Button>
+        </div>
+      </header>
+      <main className="mx-auto w-full max-w-2xl flex-1 pb-36">
         <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="gap-0">
           <TabsList className="mx-4 mt-4 w-auto">
             <TabsTrigger value="child">{TAB_CHILD}</TabsTrigger>
             <TabsTrigger value="log">{TAB_LOG}</TabsTrigger>
+            <TabsTrigger value="targets">{TAB_TARGETS}</TabsTrigger>
           </TabsList>
           <TabsContent value="child">
             <ChildContextForm
@@ -77,38 +94,16 @@ export function ChatPage({ user, onSignOut }: Props) {
               save={childContext.save}
               clear={childContext.clear}
             />
-            <DailyTargets childId={childId} dirty={childContext.dirty} />
           </TabsContent>
           <TabsContent value="log">
             <FeedingLogTab log={feedingLog} />
           </TabsContent>
+          <TabsContent value="targets">
+            <DailyTargets childId={childId} dirty={childContext.dirty} />
+          </TabsContent>
         </Tabs>
-      </aside>
-      <main className="flex max-h-dvh flex-col">
-        <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
-          <span className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-full border-[3px] border-ink bg-card text-ink">
-              <ChefHat className="size-4" strokeWidth={2.5} />
-            </span>
-            <h1 className="text-lg leading-none text-tomato">{APP_TITLE}</h1>
-          </span>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="truncate" data-testid="account-email">
-              {user.email}
-            </span>
-            <Button type="button" variant="ghost" size="sm" onClick={onSignOut}>
-              {SIGN_OUT}
-            </Button>
-          </div>
-        </header>
-        {feedNotice && (
-          <p className="border-b bg-muted px-4 py-2 text-sm" role="status" data-testid="feed-notice">
-            {feedNotice}
-          </p>
-        )}
-        <MessageList messages={chat.messages} onRetry={chat.retry} retryDisabled={chat.isPending} />
-        <MessageInput onSend={chat.send} disabled={chat.isPending} />
       </main>
+      <ChatWidget chat={chat} feedNotice={feedNotice} />
     </div>
   );
 }

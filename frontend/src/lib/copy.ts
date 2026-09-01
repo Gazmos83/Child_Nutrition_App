@@ -177,6 +177,11 @@ export const INPUT_PLACEHOLDER = "Ask about feeding your little one…";
 export const SEND = "Send";
 export const SENDING = "Thinking…";
 
+// -- chat widget ----------------------------------------------------------------------------
+
+export const CHAT_OPEN_LABEL = "Open the chat";
+export const CHAT_CLOSE_LABEL = "Close the chat";
+
 // -- account (Day 6; direct: signing in guards a child's health record) --------------------
 
 export const AUTH_TITLE = "Welcome";
@@ -265,6 +270,7 @@ export const INCOMPLETE = "Incomplete";
 
 export const TAB_CHILD = "Child";
 export const TAB_LOG = "Feeding log";
+export const TAB_TARGETS = "Daily targets";
 export const LOG_TITLE = "Feeding log";
 export const LOG_EMPTY =
   "Nothing logged yet. Add a feed whenever you like — the more days we see, the more we can tell you";
@@ -280,10 +286,19 @@ export const CHAT_FEED_SAVE_FAILED =
 export const FEED_LOGGED = "Logged. One more piece of the picture";
 export const TODAY_TITLE = "Today so far";
 export const LOG_ADD_TITLE = "Log a feed";
-export const LOG_TYPE_LABEL = "What";
 export const LOG_FOOD_LABEL = "Which food";
+export const LOG_FOOD_SEARCH_PLACEHOLDER = "Type to search foods…";
+export const LOG_FOOD_NO_MATCH = "No foods match — try fewer letters";
 export const LOG_QUANTITY_LABEL = "How much";
 export const LOG_TIME_LABEL = "When";
+/** The moments a parent can file a feed under; timestamps are derived, never asked for. */
+export const LOG_WHEN_OPTIONS = [
+  { value: "breakfast", label: "Breakfast" },
+  { value: "lunch", label: "Lunch" },
+  { value: "dinner", label: "Dinner" },
+  { value: "snack", label: "Snack" },
+  { value: "breastfed", label: "Breastfed" },
+] as const;
 export const LOG_ADD = "Add feed";
 export const LOG_ADDING = "Adding…";
 export const LOG_DELETE = "Remove";
@@ -293,7 +308,6 @@ export const FORM_QUANTITY_BREASTMILK_HINT =
   "No measure? Leave it blank — we'll count the feed and skip the maths for that day";
 export const LOG_ERROR_QUANTITY = "How much needs to be a number above 0";
 export const LOG_ERROR_FOOD = "Pick a food from the list";
-export const LOG_ERROR_TIME = "Pick a time for this feed";
 export const LOG_FOODS_UNAVAILABLE =
   "We couldn't load the food list. Check your connection and try again";
 export const LOG_FOODS_LOADING = "Fetching the food list…";

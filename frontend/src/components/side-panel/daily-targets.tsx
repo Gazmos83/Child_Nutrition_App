@@ -17,7 +17,7 @@ const FLAG_CLASS: Record<GapFlag, string> = {
 export function DailyTargets({ childId, dirty }: { childId: string | null; dirty: boolean }) {
   const query = useDailyTargets(childId);
   return (
-    <section className="space-y-3 border-t p-4" data-testid="daily-targets">
+    <section className="space-y-3 p-4" data-testid="daily-targets">
       <h3 className="text-sm font-medium">{copy.TARGETS_TITLE}</h3>
       {childId === null ? (
         <p className="text-sm text-muted-foreground">{copy.TARGETS_NEEDS_CHILD}</p>
