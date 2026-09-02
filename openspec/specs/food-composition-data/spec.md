@@ -63,7 +63,11 @@ The system SHALL additionally resolve a plain-language lookup string to a food
 deterministically, without language-model involvement: an exact identifier match first,
 then a normalized match against the food's identifier or display name, then a
 whole-word match (tolerant of plural forms and punctuation) that succeeds only when it
-identifies exactly one food. A string that matches several foods or no food SHALL be
+identifies exactly one food. Before matching, the system SHALL ignore words that describe
+an amount (numbers, units such as g and ml, measure words such as pieces or servings) or
+that frame a question (such as "what", "how much", "nutritional values"); such words SHALL
+never choose between foods, and words that describe a preparation (cooked, mashed, raw,
+whole) SHALL keep discriminating. A string that matches several foods or no food SHALL be
 refused — never silently substituted with a lookalike — and the refusal SHALL name the
 closest matching foods, when any exist, so the failure can be corrected in one turn.
 Exact-identifier lookup SHALL remain available unchanged for callers that hold real
@@ -100,3 +104,14 @@ identifiers.
 - **WHEN** a resolution is performed for a string matching no entry
 - **THEN** the system reports the food is not found, preserving the string as given
 - **AND** the report includes the closest-matching entries when any are close
+
+#### Scenario: Quantity words are ignored
+
+- **WHEN** a resolution is performed for "nutritional values for 20 grams of sweet
+  potatoes" and the table's only sweet-potato entry is `sweet_potato_mashed`
+- **THEN** the system returns the `sweet_potato_mashed` entry
+
+#### Scenario: Amount without a food is refused
+
+- **WHEN** a resolution is performed for "20 grams"
+- **THEN** the system reports the food is not found, preserving the string as given
