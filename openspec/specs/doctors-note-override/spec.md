@@ -132,8 +132,8 @@ tolerable upper intake levels, for no user-visible gain.
 
 #### Scenario: An overridable nutrient still applies normally
 
-- **WHEN** a doctor's note limits calories and the child's displayed set contains six
-  nutrients
+- **WHEN** a doctor's note limits calories and the child's displayed set contains several
+  nutrients beyond the overridable three
 - **THEN** the calorie override is applied and the conflict is reported as before
 - **AND** no other displayed nutrient's target is altered by the note
 
