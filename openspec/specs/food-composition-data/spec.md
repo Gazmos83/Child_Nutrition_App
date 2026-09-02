@@ -45,7 +45,12 @@ age in months it is appropriate for.
 
 The system SHALL reject the food table at load time if any entry is missing a required
 field, uses an allergen value outside the controlled vocabulary, or specifies an age
-outside 0–60 months, rather than admitting a partially-valid table.
+outside 0–60 months, rather than admitting a partially-valid table. The same whole-table
+validation SHALL run on every administrative write, and a solid food SHALL have a minimum age
+of at least 6 months while only the two milk feeds may be under it. The table SHALL be stored
+in the application database as whole-table revisions, the first seeded from the committed
+file, and the version the system serves SHALL name the revision it came from; the committed
+file SHALL remain the fallback when no database table has been loaded.
 
 #### Scenario: Invalid entry blocks loading
 
@@ -53,6 +58,17 @@ outside 0–60 months, rather than admitting a partially-valid table.
   unrecognized allergen name
 - **THEN** loading the table fails with an error naming the offending entry
 - **AND** no partial table is made available to callers
+
+#### Scenario: Invalid entry blocks a write
+
+- **WHEN** an administrative write would put an entry with a negative calorie value into the
+  table
+- **THEN** the write fails naming the offending entry and the served table is unchanged
+
+#### Scenario: Version names the revision
+
+- **WHEN** the table is served from database revision 3
+- **THEN** every result that reports a table version reports `db-3`
 
 ### Requirement: Lookup is by stable identifier
 
@@ -71,7 +87,8 @@ whole) SHALL keep discriminating. A string that matches several foods or no food
 refused — never silently substituted with a lookalike — and the refusal SHALL name the
 closest matching foods, when any exist, so the failure can be corrected in one turn.
 Exact-identifier lookup SHALL remain available unchanged for callers that hold real
-identifiers.
+identifiers. Name resolution SHALL consider only active entries; retrieval by identifier
+SHALL return an inactive entry too, so a stored feed can always be priced.
 
 #### Scenario: Unknown food identifier
 
@@ -115,3 +132,9 @@ identifiers.
 
 - **WHEN** a resolution is performed for "20 grams"
 - **THEN** the system reports the food is not found, preserving the string as given
+
+#### Scenario: An inactive entry is not resolved by name but is retrievable by identifier
+
+- **WHEN** the only banana entry has been deactivated
+- **THEN** a resolution for "bananas" reports the food is not found
+- **AND** retrieval by the identifier `banana_mashed` still returns the entry
