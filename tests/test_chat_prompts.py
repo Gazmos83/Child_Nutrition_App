@@ -29,6 +29,16 @@ def test_answer_prompt_still_forbids_recomputation() -> None:
     assert "Never recompute" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
 
 
+def test_prompts_put_the_amount_beside_the_food() -> None:
+    """food-lookup-quantities: the food alone in food_id, the amount as quantity/unit."""
+    assert 'food_id "sweet potato"' in ROUTER_SYSTEM_PROMPT
+    assert (
+        "`quantity`" in ROUTER_SYSTEM_PROMPT and "calculate_meal_nutrition" in ROUTER_SYSTEM_PROMPT
+    )
+    assert "nutrients_for_quantity" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
+    assert "Never scale" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
+
+
 def test_child_block_lists_age_in_months_and_sorted_allergens() -> None:
     child = ChildContext.model_validate(
         {"age_months": 8, "weight_kg": 8.5, "sex": "female", "allergies": ["peanut", "egg"]}

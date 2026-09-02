@@ -8,6 +8,8 @@ import pytest
 from backend.models.enums import FeedingType
 from backend.nutrition.feeding import (
     FeedingEntryError,
+    UnitMismatchError,
+    check_unit,
     daily_totals,
     group_by_day,
     is_complete,
@@ -146,3 +148,25 @@ def test_nutrition_package_has_no_langchain_import() -> None:
     package = Path("backend") / "nutrition"
     offenders = [p for p in package.glob("*.py") if "langchain" in p.read_text(encoding="utf-8")]
     assert offenders == []
+
+
+class TestUnitCheck:
+    """food-lookup-quantities design Decision 3: one unit check for the log and the tools."""
+
+    def test_mismatch_is_a_feeding_entry_error_naming_the_units(self, table) -> None:
+        food = table.get("avocado")
+        with pytest.raises(UnitMismatchError, match="measured in g, not ml") as excinfo:
+            check_unit(food, "ml")
+        assert isinstance(excinfo.value, FeedingEntryError)
+        assert (excinfo.value.food_name, excinfo.value.expected_unit, excinfo.value.given_unit) == (
+            food.name,
+            "g",
+            "ml",
+        )
+        check_unit(food, "g")  # the table's unit passes silently
+
+    def test_solid_in_ml_still_fails_normalisation_the_same_way(self, table) -> None:
+        with pytest.raises(UnitMismatchError, match="measured in g, not ml"):
+            normalise_entry(
+                entry(FeedingType.SOLID, food_id="avocado", quantity=30, unit="ml"), table
+            )

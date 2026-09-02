@@ -1,4 +1,4 @@
-# Evaluation test set (reference §12; rag-evaluation spec). 54 cases, seven categories.
+# Evaluation test set (reference §12; rag-evaluation spec). 55 cases, seven categories.
 #
 # Routing of categories to endpoints (design.md Decision 2):
 #   rag_basic, rag_advanced, out_of_domain -> POST /api/ask, once per strategy
@@ -261,6 +261,13 @@ cases:
   - id: tool-food-lookup
     category: tool
     question: What nutrients are in a serving of avocado from your food table?
+    child: infant_8mo
+    expect:
+      intent: tool
+      tools: [lookup_food]
+  - id: tool-food-lookup-quantity
+    category: tool
+    question: What are the nutritional values for 20 grams of sweet potatoes?
     child: infant_8mo
     expect:
       intent: tool

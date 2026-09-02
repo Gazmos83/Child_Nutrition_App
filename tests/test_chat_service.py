@@ -87,6 +87,22 @@ class TestRunTools:
             "bmi": 17.36,
         }
 
+    async def test_wrong_unit_is_a_validation_error_naming_the_units(self, tools) -> None:
+        """food-lookup-quantities design Decision 5."""
+        request = ChatRequest.model_validate({"message": "m"})
+        [failed] = await run_tools(
+            decision(
+                PlannedCall(
+                    name="lookup_food", args={"food_id": "avocado", "quantity": 20, "unit": "ml"}
+                )
+            ),
+            request,
+            tools,
+        )
+        assert failed.status == "error"
+        assert failed.error == copy.wrong_unit("Avocado, mashed", "g", "ml")
+        assert "measured in g, not ml" in (failed.detail or "")
+
     async def test_missing_age_without_child_gives_the_side_panel_hint(self, tools) -> None:
         request = ChatRequest.model_validate({"message": "m"})
         [activity] = await run_tools(

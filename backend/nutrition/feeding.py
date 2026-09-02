@@ -30,6 +30,22 @@ class FeedingEntryError(ValueError):
     """An entry that passed shape validation but contradicts the food table."""
 
 
+class UnitMismatchError(FeedingEntryError):
+    """An amount given in a unit the food is not measured in (food-lookup-quantities)."""
+
+    def __init__(self, food: FoodItem, unit: str) -> None:
+        super().__init__(f"{food.name} is measured in {food.serving_unit}, not {unit}")
+        self.food_name = food.name
+        self.expected_unit = food.serving_unit
+        self.given_unit = unit
+
+
+def check_unit(food: FoodItem, unit: str) -> None:
+    """Raise ``UnitMismatchError`` unless ``unit`` is the food's table unit."""
+    if unit != food.serving_unit:
+        raise UnitMismatchError(food, unit)
+
+
 @dataclass(frozen=True)
 class NormalisedEntry:
     """An entry resolved against the table, with its nutrient contribution."""
@@ -74,8 +90,7 @@ def normalise_entry(entry: FeedingEntry, table: LoadedFoodTable) -> NormalisedEn
     food = table.get(food_id)
     if kind in MILK_FEED_DEFAULTS and food.category is not FoodCategory.MILK_FEED:
         raise FeedingEntryError(f"{food.id} is not a milk feed; a {kind.value} entry must name one")
-    if entry.unit != food.serving_unit:
-        raise FeedingEntryError(f"{food.name} is measured in {food.serving_unit}, not {entry.unit}")
+    check_unit(food, entry.unit)
     if entry.quantity is None:
         return NormalisedEntry(entry, food, ZERO_TOTALS)
     return NormalisedEntry(entry, food, entry_nutrients(food, entry.quantity))

@@ -159,8 +159,8 @@ them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 | `assess_growth` | z-scores, percentiles, WHO cut-off bands and reference values for weight-for-age, length/height-for-age, weight-for-length/height, and BMI-for-age; indicators the inputs cannot support are skipped with a reason, never failed | `nutrition-data/who-growth-standards.yaml` |
 | `calculate_calorie_target` | Estimated Energy Requirement by age band; height + activity from 36 months | 2005 DRI EER equations |
 | `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
-| `lookup_food` | one row of the food table: nutrients, allergens, safety flags, minimum age, source | `nutrition-data/foods.yaml` |
-| `calculate_meal_nutrition` | sums foods × servings; unknown ids reported, never dropped | `nutrition-data/foods.yaml` |
+| `lookup_food` | one food's per-serving nutrients and safety flags by identifier or plain name (amount words are ignored when matching); with a `quantity` and `unit` (g or ml) the result also carries the nutrients for exactly that amount, scaled in code | `nutrition-data/foods.yaml` |
+| `calculate_meal_nutrition` | totals over a list of foods, each measured in table servings or as a quantity with unit; unknown foods are reported, never dropped | `nutrition-data/foods.yaml` |
 | `generate_meal_plan` | targets → doctor's-note override → diet filter → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log; optionally steered by a gap report and today's logged feeds (below) | all of the above |
 | `log_feeding` | validates one feed (type from a closed vocabulary, table food, quantity, unit), prices it from the table, assigns an id; stores nothing until Day 6 | `nutrition-data/foods.yaml` |
 | `get_daily_nutrition` | one local day's totals from the feeding log | `nutrition-data/foods.yaml` |

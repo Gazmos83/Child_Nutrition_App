@@ -14,6 +14,7 @@ from backend.schemas.tools import (
     DailyNutritionInput,
     DoctorsNoteOverride,
     FeedingEntry,
+    FoodLookupInput,
     GapDetectionRequest,
     GrowthAssessmentInput,
     GrowthIndicatorKey,
@@ -232,3 +233,37 @@ class TestLogInputs:
     def test_gap_request_needs_height_from_36_months(self) -> None:
         with pytest.raises(ValidationError, match="height_cm is required from 36 months"):
             GapDetectionRequest(age_months=40, weight_kg=15, sex=Sex.MALE)
+
+
+class TestFoodLookupQuantity:
+    """food-lookup-quantities: the amount travels beside the food, never inside its name."""
+
+    def test_quantity_and_unit_are_optional(self) -> None:
+        assert FoodLookupInput(food_id="sweet potato").quantity is None
+        params = FoodLookupInput(food_id="sweet potato", quantity=20, unit="g")
+        assert (params.quantity, params.unit) == (20, "g")
+        assert FoodLookupInput(food_id="formula", quantity=150).unit is None
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"food_id": "sweet potato", "quantity": 0, "unit": "g"},
+            {"food_id": "sweet potato", "quantity": 20, "unit": "oz"},
+            {"food_id": "sweet potato", "unit": "g"},  # unit needs a quantity
+            {"food_id": "sweet potato", "quantity": 5000, "unit": "g"},
+        ],
+    )
+    def test_bad_amounts_are_rejected(self, body: dict) -> None:
+        with pytest.raises(ValidationError):
+            FoodLookupInput.model_validate(body)
+
+    def test_meal_item_takes_exactly_one_measure(self) -> None:
+        assert MealItem(food_id="banana", servings=1).quantity is None
+        assert MealItem(food_id="banana", quantity=25, unit="g").servings is None
+        for body in (
+            {"food_id": "banana"},
+            {"food_id": "banana", "servings": 1, "quantity": 25},
+            {"food_id": "banana", "servings": 1, "unit": "g"},
+        ):
+            with pytest.raises(ValidationError):
+                MealItem.model_validate(body)

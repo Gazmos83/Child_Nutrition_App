@@ -59,6 +59,14 @@ def unknown_food(food_id: str, suggestions: Sequence[str] = ()) -> str:
     return f"We don't know a food called “{food_id}” yet"
 
 
+def wrong_unit(food_name: str, expected_unit: str, given_unit: str) -> str:
+    """An amount in a unit the food is not measured in (food-lookup-quantities)."""
+    return (
+        f"{food_name} is measured in {expected_unit}, not {given_unit} — give the amount in "
+        f"{expected_unit} and we'll work it out"
+    )
+
+
 def _display_name(suggestion: str) -> str:
     """The human name from a ``"id (Name)"`` suggestion, or the string as given."""
     open_paren = suggestion.find("(")

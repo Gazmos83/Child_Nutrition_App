@@ -101,7 +101,10 @@ export function toolSummary(
     case "lookup_food": {
       const id = asText(args.food_id);
       const found = asText(result?.name) ?? (id ? id.replaceAll("_", " ") : null);
-      return found ? `Looked up ${found}` : null;
+      if (!found) return null;
+      const quantity = asNumber(args.quantity);
+      const unit = asText(args.unit) ?? asText(result?.requested_unit);
+      return quantity !== null && unit ? `Looked up ${formatNumber(quantity)} ${unit} of ${found}` : `Looked up ${found}`;
     }
     case "calculate_meal_nutrition": {
       const items = Array.isArray(args.items) ? args.items.length : 0;

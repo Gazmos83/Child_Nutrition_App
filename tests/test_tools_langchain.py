@@ -137,3 +137,19 @@ async def test_remaining_targets_and_gaps_are_async_only(tools) -> None:
     assert remaining.remaining.calories == 678.0
     with pytest.raises(NotImplementedError):
         tools["detect_nutrient_gaps"].invoke(child)
+
+
+def test_lookup_with_a_quantity_scales_in_code(tools) -> None:
+    """food-lookup-quantities: the amount is a separate argument, scaled by the tool."""
+    schema_fields = tools["lookup_food"].args_schema.model_fields
+    assert {"food_id", "quantity", "unit"} <= set(schema_fields)
+    food = tools["lookup_food"].invoke({"food_id": "sweet potato", "quantity": 20, "unit": "g"})
+    assert food.id == "sweet_potato_mashed" and food.serving_size == 60
+    assert (food.requested_quantity, food.requested_unit) == (20, "g")
+    assert food.nutrients_for_quantity is not None
+    assert food.nutrients_for_quantity.calories == round(food.calories * 20 / 60, 2)
+    meal = tools["calculate_meal_nutrition"].invoke(
+        {"items": [{"food_id": "lentils_cooked", "quantity": 100, "unit": "g"}]}
+    )
+    lentils = tools["lookup_food"].invoke({"food_id": "lentils_cooked"})
+    assert meal.totals.iron_mg == round(lentils.iron_mg * 100 / lentils.serving_size, 1)

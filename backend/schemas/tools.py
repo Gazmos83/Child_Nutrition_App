@@ -504,23 +504,56 @@ def _row_from_legacy(
 
 # -- Food lookup and meal nutrition ---------------------------------------------------------
 
+# Amounts a parent states, shared by the food tools and the feeding log. A sanity ceiling,
+# not a medical one: it rejects a quantity typed in the wrong unit.
+MAX_FEED_QUANTITY = 2000.0
+FeedingUnit = Literal["ml", "g"]
+
+_FOOD_ONLY = Field(
+    min_length=1,
+    description=(
+        "The food only -- its table identifier or its plain name as the parent said it "
+        "(e.g. 'sweet potato'), never an amount or a question; resolved in code."
+    ),
+)
+_QUANTITY = Field(
+    default=None,
+    gt=0,
+    le=MAX_FEED_QUANTITY,
+    description="Amount the parent named, in `unit` (or the food's own unit when omitted).",
+)
+_UNIT = Field(default=None, description="Unit of `quantity`: 'g' for solids, 'ml' for liquids.")
+
 
 class FoodLookupInput(_Strict):
-    food_id: str = Field(
-        min_length=1,
-        description=(
-            "Stable identifier from the food table, or the food's plain name as the "
-            "parent said it (e.g. 'bananas'); resolved deterministically in code."
-        ),
-    )
+    food_id: str = _FOOD_ONLY
+    quantity: float | None = _QUANTITY
+    unit: FeedingUnit | None = _UNIT
+
+    @model_validator(mode="after")
+    def _unit_needs_quantity(self) -> FoodLookupInput:
+        if self.unit is not None and self.quantity is None:
+            raise ValueError("unit needs a quantity")
+        return self
 
 
 class MealItem(_Strict):
-    food_id: str = Field(
-        min_length=1,
-        description="Food-table identifier, or the food's plain name as the parent said it.",
+    """One food in a meal, measured either in table servings or in an amount with unit."""
+
+    food_id: str = _FOOD_ONLY
+    servings: float | None = Field(
+        default=None, gt=0, le=20, description="Multiples of the food's table serving."
     )
-    servings: float = Field(gt=0, le=20, description="Multiples of the food's table serving.")
+    quantity: float | None = _QUANTITY
+    unit: FeedingUnit | None = _UNIT
+
+    @model_validator(mode="after")
+    def _exactly_one_measure(self) -> MealItem:
+        if (self.servings is None) == (self.quantity is None):
+            raise ValueError("give exactly one of servings or quantity")
+        if self.unit is not None and self.quantity is None:
+            raise ValueError("unit needs a quantity")
+        return self
 
 
 class MealNutritionInput(_Strict):
@@ -601,9 +634,6 @@ class OverrideOutcome(_Frozen):
 # Client-held log bounds: the request carries at most this many entries (design Decision 9).
 MAX_LOG_ENTRIES = 200
 # Sanity limit on one feed, not a nutritional one: rejects a litre typed as millilitres x10.
-MAX_FEED_QUANTITY = 2000.0
-
-FeedingUnit = Literal["ml", "g"]
 
 
 def _check_timezone(value: str) -> str:

@@ -13,6 +13,7 @@ RENDERED = [
     copy.missing_field_hint("height"),
     copy.missing_field_hint("age_months"),
     copy.unknown_food("nope"),
+    copy.wrong_unit("Avocado, mashed", "g", "ml"),
     NO_SAFE_PLAN_MESSAGE,
 ]
 

@@ -114,11 +114,13 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             func=food_lookup,
             name="lookup_food",
             description=(
-                "Look up a food by its identifier or common name in the curated "
-                "infant/toddler food table: per-serving calories, protein, fat, "
-                "carbohydrate, iron, calcium, allergens, choking-hazard/honey/unpasteurised "
-                "flags, minimum age in months, and source. An unknown or ambiguous name "
-                "fails with the closest matches."
+                "Look up one food in the curated infant/toddler food table by identifier or "
+                "plain name -- food_id is the food only, never an amount or a question. "
+                "Returns per-serving calories, protein, fat, carbohydrate, iron, calcium, "
+                "allergens, choking-hazard/honey/unpasteurised flags, minimum age in months, "
+                "and source. Pass quantity and unit (g or ml) when the parent names an "
+                "amount; the result then also carries nutrients_for_quantity for exactly "
+                "that amount. An unknown or ambiguous name fails with the closest matches."
             ),
             args_schema=FoodLookupInput,
         ),
@@ -126,9 +128,10 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             func=meal_nutrition,
             name="calculate_meal_nutrition",
             description=(
-                "Sum the nutrients of a meal given a list of foods (identifier or common "
-                "name) and servings. Unknown foods are reported in 'missing', never "
-                "silently dropped."
+                "Sum the nutrients of a meal from a list of foods (identifier or plain "
+                "name), each with either servings (multiples of the table serving) or a "
+                "quantity with unit (g or ml) as the parent said it. Unknown foods are "
+                "reported in 'missing', never silently dropped."
             ),
             args_schema=MealNutritionInput,
         ),

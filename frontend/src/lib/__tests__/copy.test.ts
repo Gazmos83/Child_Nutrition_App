@@ -34,6 +34,11 @@ const RENDERED: string[] = [
     copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),
     copy.toolSummary("calculate_protein_target", { age_months: 8, weight_kg: 8.4 }, null),
     copy.toolSummary("lookup_food", { food_id: "oatmeal_porridge" }, null),
+    copy.toolSummary(
+      "lookup_food",
+      { food_id: "sweet potato", quantity: 20, unit: "g" },
+      { name: "Sweet potato, cooked and mashed" },
+    ),
     copy.toolSummary("calculate_meal_nutrition", { items: [{}, {}] }, null),
     copy.toolSummary("calculate_meal_nutrition", { items: [{}] }, null),
     copy.toolSummary("generate_meal_plan", { age_months: 8 }, null),

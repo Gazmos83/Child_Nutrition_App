@@ -22,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 from backend.chat import copy
 from backend.chat.prompts import ANSWER_WITH_TOOLS_SYSTEM_PROMPT, build_tools_answer_prompt
 from backend.chat.router import PROFILE_FIELDS, decide, resolve_context
+from backend.nutrition.feeding import UnitMismatchError
 from backend.nutrition.foods import FoodNotFoundError
 from backend.nutrition.safety import UnsafePlanError
 from backend.rag.pipeline import RagPipeline, RagResponse, RetrievedContext
@@ -164,6 +165,15 @@ async def _invoke(
             args=args,
             used_context=used,
             error=copy.unknown_food(exc.food_id, exc.suggestions),
+            detail=str(exc),
+        )
+    except UnitMismatchError as exc:
+        return ToolActivity(
+            name=name,
+            status="error",
+            args=args,
+            used_context=used,
+            error=copy.wrong_unit(exc.food_name, exc.expected_unit, exc.given_unit),
             detail=str(exc),
         )
     except UnsafePlanError as exc:

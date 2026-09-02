@@ -112,6 +112,77 @@ _STOPWORDS = frozenset("a and as from in its made of or the to until with".split
 
 _MAX_SUGGESTIONS = 5
 
+# Query-side noise (food-lookup-quantities design Decision 4): words that describe an
+# amount or frame a question, never a food. Dropped from the *query* only -- the index is
+# untouched -- and never used to choose between foods. Preparation words (cooked, mashed,
+# raw, whole) and nutrient names (iron, calcium appear in food names) stay out on purpose;
+# ``tests/test_tools_nutrient.py`` asserts this set is disjoint from every table pool.
+_QUERY_NOISE = frozenset(
+    {
+        # units
+        "g",
+        "gram",
+        "grams",
+        "ml",
+        "millilitre",
+        "millilitres",
+        "milliliter",
+        "milliliters",
+        "oz",
+        "ounce",
+        "ounces",
+        "cup",
+        "cups",
+        "tbsp",
+        "tablespoon",
+        "tablespoons",
+        "tsp",
+        "teaspoon",
+        "teaspoons",
+        # measure words
+        "piece",
+        "pieces",
+        "serving",
+        "servings",
+        "portion",
+        "portions",
+        "half",
+        "quarter",
+        "some",
+        "about",
+        "roughly",
+        "approximately",
+        "around",
+        "per",
+        "for",
+        # question and framing words
+        "what",
+        "how",
+        "many",
+        "much",
+        "is",
+        "are",
+        "does",
+        "do",
+        "have",
+        "has",
+        "there",
+        "nutritional",
+        "nutrition",
+        "nutrient",
+        "nutrients",
+        "value",
+        "values",
+        "calories",
+        "kcal",
+        "macros",
+    }
+)
+
+
+def _is_noise(token: str) -> bool:
+    return token[0].isdigit() or token in _QUERY_NOISE
+
 
 def _normalize(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
@@ -182,9 +253,17 @@ class LoadedFoodTable:
         if exact is not None:
             return exact
 
-        query_tokens = [
-            _variants(token) for token in normalized.split() if token not in _STOPWORDS
-        ]
+        # Amount and question words around the food are ignored; if nothing else is
+        # left ("20 grams"), the original words stand so the refusal names what was said.
+        words = [token for token in normalized.split() if token not in _STOPWORDS]
+        core = [token for token in words if not _is_noise(token)] or words
+        if core != words:
+            normalized = " ".join(core)
+            exact = self._forms.get(normalized)
+            if exact is not None:
+                return exact
+
+        query_tokens = [_variants(token) for token in core]
         if query_tokens:
             contained = [
                 food
