@@ -31,6 +31,7 @@ from backend.core.config import Settings
 from backend.db.session import get_db
 from backend.main import create_app
 from backend.models import User
+from backend.nutrition.foods import reset_food_table_cache
 
 
 def _test_database_url() -> str | None:
@@ -177,3 +178,12 @@ async def auth_client(api_client: AsyncClient, user: User) -> AsyncClient:
     """``api_client`` signed in as ``user``."""
     sign_in(api_client, user)
     return api_client
+
+
+@pytest.fixture(autouse=True)
+def _served_food_table_is_reset():
+    """A test that runs the app's lifespan (``with TestClient(app)``) or writes a revision
+    swaps the served table in-process (food-table-admin design Decision 2); every other test
+    reads the committed file, so the cache is cleared after each one."""
+    yield
+    reset_food_table_cache()

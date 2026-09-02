@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request, status
 
 from backend.chat import copy
 
-Bucket = Literal["model", "auth"]
+Bucket = Literal["model", "auth", "admin"]
 
 
 class RateLimiter:

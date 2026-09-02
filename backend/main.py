@@ -1,6 +1,9 @@
 """FastAPI application factory."""
 
+import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +15,11 @@ from backend.api.rate_limit import RateLimiter
 from backend.api.router import api_router
 from backend.core.config import Settings, get_rag_settings, get_settings
 from backend.core.logging import configure_logging
+from backend.db.food_table import load_latest_table
+from backend.db.session import get_engine
+from backend.nutrition.foods import set_food_table
+
+logger = logging.getLogger(__name__)
 
 DESCRIPTION = (
     "Child nutrition assistant for newborns through ~4 years.\n\n"
@@ -59,7 +67,34 @@ def _rate_limits(settings: Settings | None) -> dict[str, int]:
             if settings is not None
             else fields["rate_limit_auth_per_minute"].default
         ),
+        "admin": (
+            settings.rate_limit_admin_per_minute
+            if settings is not None
+            else fields["rate_limit_admin_per_minute"].default
+        ),
     }
+
+
+async def load_food_table_from_database(settings: Settings | None) -> None:
+    """Serve the database's latest food-table revision (food-table-admin design Decision 2).
+
+    Without a database the committed file is served (the loader says so). In production a
+    table that cannot be loaded stops the process rather than quietly serving the file.
+    """
+    if settings is None:
+        return
+    try:
+        table = await load_latest_table(get_engine())
+    except Exception:
+        if settings.app_env == "prod":
+            raise
+        logger.warning("Food table not loaded from the database; serving the committed file")
+        return
+    if table is None:
+        logger.warning("No food-table revision in the database; serving the committed file")
+        return
+    set_food_table(table)
+    logger.info("Serving food table %s from the database", table.version)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -71,10 +106,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _require_production_configuration(settings)
     configure_logging(settings)
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        await load_food_table_from_database(settings)
+        yield
+
     app = FastAPI(
         title="Child Nutrition AI App",
         description=DESCRIPTION,
         version="0.1.0",
+        lifespan=lifespan,
     )
     # Added first, so it runs *inside* the request-context middleware below and preflight
     # answers carry X-Request-ID and an access record too. An empty allowlist -- the

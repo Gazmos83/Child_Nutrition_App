@@ -24,3 +24,6 @@ class CurrentUserResponse(BaseModel):
 
     id: uuid.UUID
     email: str
+    is_admin: bool = Field(
+        default=False, description="Listed in ADMIN_EMAILS; may edit the food table."
+    )

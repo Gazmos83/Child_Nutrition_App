@@ -19,6 +19,22 @@ export type ActivityLevel = "sedentary" | "low_active" | "active" | "very_active
 export type FeedingType = "breastmilk" | "formula" | "solid" | "water";
 /** Who a note row comes from; only a doctor's row may change a nutrient target. */
 export type NoteKind = "doctor" | "preference";
+/** Food groups of the food table (backend/nutrition/foods.py:FoodCategory). */
+export type FoodCategory =
+  | "milk_feed"
+  | "dairy"
+  | "egg"
+  | "meat"
+  | "poultry"
+  | "fish"
+  | "shellfish"
+  | "legume"
+  | "grain"
+  | "vegetable"
+  | "fruit"
+  | "nut_seed"
+  | "fat_oil"
+  | "sweetener";
 
 export interface Option<T extends string> {
   value: T;
@@ -72,4 +88,21 @@ export const NUTRIENT_LABELS: Record<string, string> = {
 export const NOTE_KIND_OPTIONS: readonly Option<NoteKind>[] = [
   { value: "doctor", label: "Doctor's note" },
   { value: "preference", label: "Preference" },
+];
+
+export const FOOD_CATEGORY_OPTIONS: readonly Option<FoodCategory>[] = [
+  { value: "milk_feed", label: "Milk feed" },
+  { value: "dairy", label: "Dairy" },
+  { value: "egg", label: "Egg" },
+  { value: "meat", label: "Meat" },
+  { value: "poultry", label: "Poultry" },
+  { value: "fish", label: "Fish" },
+  { value: "shellfish", label: "Shellfish" },
+  { value: "legume", label: "Legume" },
+  { value: "grain", label: "Grain" },
+  { value: "vegetable", label: "Vegetable" },
+  { value: "fruit", label: "Fruit" },
+  { value: "nut_seed", label: "Nut or seed" },
+  { value: "fat_oil", label: "Fat or oil" },
+  { value: "sweetener", label: "Sweetener" },
 ];

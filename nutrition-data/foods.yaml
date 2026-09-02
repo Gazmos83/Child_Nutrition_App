@@ -1,5 +1,9 @@
 # Food-composition table for the deterministic nutrient tools (Day 4).
 #
+# This file seeds the database (food_table_revisions, revision 1). Once the migration has
+# run, the served table is edited through the admin page (/admin/foods) and stored as further
+# revisions; editing this file changes only what a fresh database is seeded with.
+#
 # Every nutrient number a meal plan reports is a sum over rows in this file; the language
 # model never computes or guesses one. Values are rounded typical figures per the stated
 # serving, taken from USDA FoodData Central unless an entry names its own `source`.

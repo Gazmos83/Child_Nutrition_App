@@ -81,6 +81,8 @@ TIGHT = Settings(
     session_secret="s" * 32,
     rate_limit_model_per_minute=2,
     rate_limit_auth_per_minute=2,
+    rate_limit_admin_per_minute=2,
+    admin_emails="admin@example.com",
     _env_file=None,
 )
 CREDENTIALS = {"email": "parent@example.com", "password": "correct horse battery"}
@@ -189,3 +191,29 @@ class TestDisabled:
             assert all(
                 c.post("/api/chat", json={"message": "hi"}).status_code == 401 for _ in range(5)
             )
+
+
+class TestAdminRoutes:
+    """food-table-admin: writes have their own bucket, separate from sign-in."""
+
+    def test_third_admin_write_is_429(self) -> None:
+        import uuid
+
+        from backend.api.deps import get_current_user
+        from backend.models import User
+
+        admin = User(id=uuid.uuid7(), email="admin@example.com", hashed_password="x")
+        app = create_app(settings=TIGHT)
+        app.dependency_overrides[get_auth_settings] = lambda: TIGHT
+        app.dependency_overrides[get_db] = _no_db
+        app.dependency_overrides[get_current_user] = lambda: admin
+        # No database here: the first two calls reach the handler and fail there (that is
+        # not what is under test); the third must be refused before any work.
+        with TestClient(app, raise_server_exceptions=False) as client:
+            statuses = [
+                client.post("/api/admin/foods/nope/deactivate").status_code for _ in range(3)
+            ]
+        assert statuses[0] != 429 and statuses[1] != 429 and statuses[2] == 429
+        # And the auth bucket is untouched by admin writes.
+        with TestClient(app, raise_server_exceptions=False) as client:
+            assert client.post("/api/auth/login", json=CREDENTIALS).status_code != 429

@@ -170,3 +170,15 @@ class TestUnitCheck:
             normalise_entry(
                 entry(FeedingType.SOLID, food_id="avocado", quantity=30, unit="ml"), table
             )
+
+
+def test_an_inactive_food_still_prices_a_stored_entry(tmp_path) -> None:
+    """food-table-admin: deactivation hides a food; it never breaks a feed already logged."""
+    from backend.nutrition.foods import load_food_table
+    from tests.test_nutrition_foods import VALID_ENTRY, write_table
+
+    table = load_food_table(write_table(tmp_path, {**VALID_ENTRY, "is_active": False}))
+    priced = normalise_entry(
+        entry(FeedingType.SOLID, food_id="banana", quantity=50, unit="g"), table
+    )
+    assert priced.nutrients.calories == 45

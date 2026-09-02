@@ -26,6 +26,7 @@ TABLES = {
     "feedings",
     "growth_measurements",
     "child_notes",
+    "food_table_revisions",
     "alembic_version",
 }
 INITIAL_REVISION = "a1d6f0c0b001"
@@ -182,6 +183,28 @@ def test_upgrade_splits_doctors_note_into_rows(test_database_url: str) -> None:
     finally:
         command.upgrade(config, "head")
         _run(test_database_url, cleanup)
+
+
+def test_food_table_is_seeded_from_the_committed_file(test_database_url: str) -> None:
+    """food-table-admin design Decision 7: revision 1 is the file, as validated."""
+    from backend.nutrition.foods import load_food_table
+
+    command.upgrade(alembic_config(test_database_url), "head")
+    rows = _run(
+        test_database_url,
+        lambda conn: conn.execute(
+            text(
+                'SELECT revision, summary, actor_user_id, "table" FROM food_table_revisions '
+                "ORDER BY revision"
+            )
+        ).all(),
+    )
+    assert len(rows) >= 1 and rows[0][0] == 1 and rows[0][2] is None
+    committed = load_food_table()
+    assert rows[0][1] == f"Seeded from nutrition-data/foods.yaml {committed.version}"
+    seeded = rows[0][3]
+    assert [f["id"] for f in seeded["foods"]] == [f.id for f in committed.all_foods]
+    assert "version" not in seeded and seeded["source"] == committed.table.source
 
 
 def _run(url: str, fn):

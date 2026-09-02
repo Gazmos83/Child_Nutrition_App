@@ -15,6 +15,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       client.removeQueries({ queryKey: ["feedings"] });
       client.removeQueries({ queryKey: ["growth"] });
       client.removeQueries({ queryKey: ["growth-curves"] });
+      client.removeQueries({ queryKey: ["admin"] });
     });
     return () => setUnauthorizedHandler(null);
   }, [client]);

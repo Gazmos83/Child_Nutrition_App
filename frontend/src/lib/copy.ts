@@ -566,6 +566,118 @@ export function footerCopyright(year: number): string {
   return `© ${year} Little Gourmant — made with warm hands.`;
 }
 
+// -- food table administration (food-table-admin; direct voice — safety flags are questions) --
+
+export const ADMIN_LINK = "Food table";
+export const ADMIN_TITLE = "Food table";
+export const ADMIN_INTRO =
+  "Every food the planner, the picker and the lookup can use. A saved change reaches every family right away";
+export const ADMIN_REFUSAL = "This page is for administrators of the food table";
+export const ADMIN_BACK = "Back to the app";
+export const ADMIN_LOADING = "Loading the food table…";
+export const ADMIN_UNAVAILABLE = "The food table couldn't be loaded. Try again in a moment";
+export const ADMIN_ADD_FOOD = "Add a food";
+export const ADMIN_EDIT = "Edit";
+export const ADMIN_DEACTIVATE = "Deactivate";
+export const ADMIN_ACTIVATE = "Reactivate";
+export const ADMIN_DEACTIVATE_NOTE =
+  "Deactivated foods leave the picker and meal plans; feeds already logged with them keep their nutrients";
+export const ADMIN_PROTECTED = "Breast milk and iron-fortified formula stay in the table";
+export const ADMIN_INACTIVE = "Inactive";
+export const ADMIN_SHOW_INACTIVE = "Show inactive foods";
+export const ADMIN_FILTER_LABEL = "Filter foods";
+export const ADMIN_FILTER_PLACEHOLDER = "Name or id";
+export const ADMIN_NO_MATCHES = "No food matches that";
+export const ADMIN_WRITE_FAILED = "That didn't save. Reload the table and try again";
+export const ADMIN_TABLE_CHANGED = "Someone else changed the table first. Reload and try again";
+export const ADMIN_COL_NAME = "Food";
+export const ADMIN_COL_CATEGORY = "Category";
+export const ADMIN_COL_SERVING = "Serving";
+export const ADMIN_COL_AGE = "From (months)";
+export const ADMIN_COL_ALLERGENS = "Allergens";
+export const ADMIN_COL_SAFETY = "Safety";
+export const ADMIN_COL_ACTIONS = "Actions";
+export const ADMIN_FLAG_CHOKING = "choking hazard";
+export const ADMIN_FLAG_HONEY = "honey";
+export const ADMIN_FLAG_UNPASTEURIZED = "unpasteurized";
+export const ADMIN_NONE = "none";
+
+export const ADMIN_FORM_NEW_TITLE = "New food";
+export const ADMIN_FORM_EDIT_TITLE = "Edit food";
+export const ADMIN_FIELD_ID = "Id";
+export const ADMIN_FIELD_ID_HINT = "Lower-case letters, digits and underscores; it can't change later";
+export const ADMIN_FIELD_NAME = "Name";
+export const ADMIN_FIELD_CATEGORY = "Category";
+export const ADMIN_FIELD_SERVING_SIZE = "Serving size";
+export const ADMIN_FIELD_SERVING_UNIT = "Unit";
+export const ADMIN_FIELD_SERVING_HINT = "The nutrients below are for one serving; g for solids, ml for milk feeds";
+export const ADMIN_FIELD_CALORIES = "Calories (kcal)";
+export const ADMIN_FIELD_PROTEIN = "Protein (g)";
+export const ADMIN_FIELD_FAT = "Fat (g)";
+export const ADMIN_FIELD_CARBS = "Carbohydrate (g)";
+export const ADMIN_FIELD_IRON = "Iron (mg)";
+export const ADMIN_FIELD_CALCIUM = "Calcium (mg)";
+export const ADMIN_FIELD_ALLERGENS = "Allergens";
+export const ADMIN_FIELD_MIN_AGE = "Earliest age, in completed months";
+export const ADMIN_FIELD_MIN_AGE_HINT = "0 only for breast milk and formula; every solid is 6 or more";
+export const ADMIN_FIELD_SOURCE = "Source";
+export const ADMIN_FIELD_SOURCE_HINT =
+  "Where the numbers come from, for example USDA FoodData Central FDC 170026";
+export const ADMIN_FIELD_NOTES = "Notes";
+export const ADMIN_SAFETY_LEGEND = "Safety, answered for every food";
+export const ADMIN_SAFETY_CHOKING = "Choking hazard for children under 4 (AAP list)";
+export const ADMIN_SAFETY_HONEY = "Contains honey";
+export const ADMIN_SAFETY_UNPASTEURIZED = "Commonly served unpasteurized";
+export const ADMIN_YES = "Yes";
+export const ADMIN_NO = "No";
+export const ADMIN_SAFETY_REQUIRED = "Answer yes or no for every safety question before saving";
+export const ADMIN_SAVE = "Save food";
+export const ADMIN_SAVING = "Saving…";
+export const ADMIN_CANCEL = "Cancel";
+export const ADMIN_ERROR_ID = "Use lower-case letters, digits and underscores";
+export const ADMIN_ERROR_REQUIRED = "This is needed";
+export const ADMIN_ERROR_SOURCE = "Every food names where its numbers come from";
+export const ADMIN_ERROR_POSITIVE = "Needs to be more than 0";
+export const ADMIN_ERROR_NON_NEGATIVE = "Needs to be 0 or more";
+export const ADMIN_ERROR_AGE = "Whole months from 0 to 60";
+export const ADMIN_ERROR_AGE_CATEGORY = "Milk feeds start at 0; every other food at 6 months or later";
+
+export const ADMIN_IMPORT_TITLE = "Import a file";
+export const ADMIN_IMPORT_INTRO =
+  "YAML (a list of foods, or a mapping with a foods list) or CSV with one food per row and allergens separated by semicolons. We check the whole file first; nothing is written until you confirm";
+export const ADMIN_IMPORT_FILE = "File";
+export const ADMIN_IMPORT_MODE = "Rows whose id is already in the table";
+export const ADMIN_IMPORT_MODE_UPSERT = "Update them";
+export const ADMIN_IMPORT_MODE_CREATE_ONLY = "Refuse them";
+export const ADMIN_IMPORT_CHECK = "Check the file";
+export const ADMIN_IMPORT_APPLY = "Import";
+export const ADMIN_IMPORT_WORKING = "Checking…";
+export const ADMIN_IMPORT_NOTHING_WRITTEN = "Nothing was written yet";
+export const ADMIN_IMPORT_ERRORS_INTRO = "Nothing was imported; fix the rows below and check the file again";
+export const ADMIN_IMPORT_APPLIED = "Imported. The table is on a new revision";
+export const ADMIN_IMPORT_ERRORS = "Rows we can't take";
+export const ADMIN_IMPORT_UNREADABLE = "That file couldn't be read. Check the format and try again";
+export const ADMIN_IMPORT_TOO_LARGE = "Files up to 1 MiB";
+export const ADMIN_IMPORT_NO_CHANGES = "Every row matches the table already";
+
+export function adminTableStatus(version: string, count: number): string {
+  return `Revision ${version} · ${count} foods`;
+}
+
+export function adminImportCounts(created: number, updated: number, unchanged: number): string {
+  return `${created} new, ${updated} changed, ${unchanged} unchanged`;
+}
+
+export function importRowError(
+  row: number,
+  id: string | null,
+  field: string | null,
+  message: string,
+): string {
+  const where = [id, field].filter((part): part is string => Boolean(part)).join(", ");
+  return where ? `Row ${row} (${where}): ${message}` : `Row ${row}: ${message}`;
+}
+
 // -- helpers -------------------------------------------------------------------------------
 
 export function formatNumber(value: number): string {

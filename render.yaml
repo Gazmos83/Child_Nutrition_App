@@ -42,6 +42,11 @@ services:
         value: "30"
       - key: RATE_LIMIT_AUTH_PER_MINUTE
         value: "10"
+      - key: RATE_LIMIT_ADMIN_PER_MINUTE
+        value: "30"
+      # Comma-separated emails allowed to edit the food table; set in the dashboard.
+      - key: ADMIN_EMAILS
+        sync: false
       - key: MILVUS_DB_PATH
         value: /data/milvus.db
     # Optional, paid plans only: keep the Milvus Lite file across deploys and restarts so

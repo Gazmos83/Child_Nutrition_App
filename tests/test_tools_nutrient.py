@@ -225,3 +225,16 @@ class TestMealNutritionQuantities:
                 MealNutritionInput(items=[MealItem(food_id="banana", quantity=25, unit="ml")]),
                 table,
             )
+
+
+class TestInactiveFoods:
+    def test_lookup_of_an_inactive_food_is_refused(self, tmp_path) -> None:
+        table = load_food_table(write_table(tmp_path, {**VALID_ENTRY, "is_active": False}, LENTILS))
+        with pytest.raises(FoodNotFoundError):
+            lookup_food(FoodLookupInput(food_id="banana"), table)
+        with pytest.raises(FoodNotFoundError):
+            lookup_food(FoodLookupInput(food_id="bananas"), table)
+        result = calculate_meal_nutrition(
+            MealNutritionInput(items=[MealItem(food_id="banana", servings=1)]), table
+        )
+        assert result.missing == ["banana"]

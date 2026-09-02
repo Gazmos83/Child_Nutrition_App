@@ -32,6 +32,14 @@ VALID_ENTRY = {
 }
 
 
+LENTILS_ENTRY = {
+    **VALID_ENTRY,
+    "id": "lentils",
+    "name": "Lentils, cooked soft",
+    "category": "legume",
+}
+
+
 def write_table(tmp_path: Path, *foods: dict) -> Path:
     path = tmp_path / "foods.yaml"
     table = {"version": "test", "source": "test source", "foods": list(foods)}
@@ -160,3 +168,77 @@ class TestCommittedTable:
             and f.min_age_months <= 9
         ]
         assert len(eligible) >= 8
+
+
+class TestActiveAndInactive:
+    """food-table-admin design Decision 3: a withdrawn food hides but still prices."""
+
+    def test_inactive_is_hidden_from_foods_and_names_but_kept_by_id(self, tmp_path) -> None:
+        from backend.nutrition.foods import FoodNotFoundError, load_food_table
+
+        table = load_food_table(
+            write_table(tmp_path, {**VALID_ENTRY, "is_active": False}, LENTILS_ENTRY)
+        )
+        assert [f.id for f in table.foods] == ["lentils"]
+        assert sorted(f.id for f in table.all_foods) == ["banana", "lentils"]
+        assert table.get("banana").is_active is False
+        assert len(table) == 1 and "banana" not in table and "lentils" in table
+        with pytest.raises(FoodNotFoundError) as excinfo:
+            table.resolve("bananas")
+        assert not any("banana" in s for s in excinfo.value.suggestions)
+        assert table.matches("banana") == []
+
+
+class TestAgeMatchesCategory:
+    """Universal rule: only milk feeds under six months (food-table-admin design Decision 4)."""
+
+    def test_solid_under_six_months_rejected_naming_the_entry(self, tmp_path) -> None:
+        from backend.nutrition.foods import load_food_table
+
+        with pytest.raises(ValueError, match=r"foods\[0\] \(banana\).*at least 6"):
+            load_food_table(write_table(tmp_path, {**VALID_ENTRY, "min_age_months": 4}))
+
+    def test_milk_feed_must_be_age_zero(self, tmp_path) -> None:
+        from backend.nutrition.foods import load_food_table
+
+        milk = {**VALID_ENTRY, "id": "milk", "category": "milk_feed", "min_age_months": 6}
+        with pytest.raises(ValueError, match="milk feed's min_age_months must be 0"):
+            load_food_table(write_table(tmp_path, milk))
+        ok = load_food_table(write_table(tmp_path, {**milk, "min_age_months": 0}))
+        assert ok.get("milk").min_age_months == 0
+
+
+class TestRevisionsAndCache:
+    def test_table_from_revision_is_versioned_and_validated(self) -> None:
+        from backend.nutrition.foods import table_from_revision
+
+        payload = {"source": "test source", "foods": [VALID_ENTRY]}
+        table = table_from_revision(7, payload)
+        assert table.version == "db-7" and table.get("banana").calories == 45
+        with pytest.raises(ValueError, match=r"revision 8.*foods\[0\] \(banana\)"):
+            table_from_revision(8, {"source": "s", "foods": [{**VALID_ENTRY, "calories": -1}]})
+        with pytest.raises(ValueError, match="listed twice"):
+            table_from_revision(9, {"source": "s", "foods": [VALID_ENTRY, VALID_ENTRY]})
+
+    def test_allergens_serialise_sorted(self) -> None:
+        from backend.nutrition.foods import FoodItem
+
+        food = FoodItem.model_validate({**VALID_ENTRY, "allergens": ["soy", "egg", "milk"]})
+        assert food.model_dump(mode="json")["allergens"] == ["egg", "milk", "soy"]
+
+    def test_set_and_reset_the_served_table(self) -> None:
+        from backend.nutrition.foods import (
+            get_food_table,
+            reset_food_table_cache,
+            set_food_table,
+            table_from_revision,
+        )
+
+        reset_food_table_cache()
+        committed = get_food_table()
+        assert get_food_table() is committed and not committed.version.startswith("db-")
+        swapped = table_from_revision(2, {"source": "s", "foods": [VALID_ENTRY]})
+        set_food_table(swapped)
+        assert get_food_table() is swapped and get_food_table().version == "db-2"
+        reset_food_table_cache()
+        assert get_food_table() is not swapped

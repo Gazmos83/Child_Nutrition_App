@@ -108,6 +108,19 @@ class Settings(BaseSettings):
         ge=0,
         description="Registrations and sign-in attempts per client per minute; 0 disables.",
     )
+    rate_limit_admin_per_minute: int = Field(
+        default=30,
+        ge=0,
+        description="Food-table writes per administrator client per minute; 0 disables.",
+    )
+
+    # food-table-admin: the accounts allowed to write the food table, by email. Comma-
+    # separated like ALLOWED_ORIGINS; compared case-insensitively. There is no route that
+    # grants the role.
+    admin_emails: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        description="Emails of the accounts that may edit the food table; empty grants none.",
+    )
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
@@ -122,6 +135,15 @@ class Settings(BaseSettings):
                     "credentialed requests"
                 )
             return origins
+        return value
+
+    @field_validator("admin_emails", mode="before")
+    @classmethod
+    def _split_admin_emails(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.split(",")
+        if isinstance(value, list):
+            return [email.strip().lower() for email in value if email and email.strip()]
         return value
 
     @model_validator(mode="after")

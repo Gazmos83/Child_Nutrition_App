@@ -67,11 +67,11 @@ Three constraints are load-bearing and worth knowing before touching the schema:
 
 Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles, feeding log, or growth log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
 
-`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` requires a session too (Day 7) — not because it reads user data (it doesn't; it persists nothing and uses the identity for admission only) but because every answer spends model credit; the evaluation harness registers an account before its first request. `GET /api/foods` and the register/login routes stay public.
+`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` requires a session too (Day 7) — not because it reads user data (it doesn't; it persists nothing and uses the identity for admission only) but because every answer spends model credit; the evaluation harness registers an account before its first request. `GET /api/foods` and the register/login routes stay public. The `/api/admin/foods` routes need a signed-in account listed in `ADMIN_EMAILS`; any other account gets 403 (`require_admin`, `backend/api/deps.py`).
 
 All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
 
-**Abuse ceilings (Day 7).** The model-spending routes (`/api/ask` and `/api/chat`, one shared budget) and the credential routes (register, login) are rate-limited per client address — `RATE_LIMIT_MODEL_PER_MINUTE` (default 30) and `RATE_LIMIT_AUTH_PER_MINUTE` (default 10); `0` disables — answering 429 with a `Retry-After` header before any retrieval, model call, or password work (`backend/api/rate_limit.py`, a route dependency). The limiter is in-process, which is exact because the service runs as one instance; behind the hosting proxy the client address comes from `X-Forwarded-For` through uvicorn's `--proxy-headers`, which only the container start script passes. Cross-origin browser access is an explicit allowlist, `ALLOWED_ORIGINS` (comma-separated, default empty, never `*`): the browser reaches the API through the Next.js same-origin rewrite, so nothing is granted unless configured. With `APP_ENV=prod` the application refuses to start without `SESSION_SECRET` and `OPENROUTER_API_KEY` rather than serving 503s.
+**Abuse ceilings (Day 7).** The model-spending routes (`/api/ask` and `/api/chat`, one shared budget) and the credential routes (register, login) are rate-limited per client address — `RATE_LIMIT_MODEL_PER_MINUTE` (default 30) and `RATE_LIMIT_AUTH_PER_MINUTE` (default 10), and the food-table writes under `/api/admin/foods` by `RATE_LIMIT_ADMIN_PER_MINUTE` (default 30); `0` disables — answering 429 with a `Retry-After` header before any retrieval, model call, or password work (`backend/api/rate_limit.py`, a route dependency). The limiter is in-process, which is exact because the service runs as one instance; behind the hosting proxy the client address comes from `X-Forwarded-For` through uvicorn's `--proxy-headers`, which only the container start script passes. Cross-origin browser access is an explicit allowlist, `ALLOWED_ORIGINS` (comma-separated, default empty, never `*`): the browser reaches the API through the Next.js same-origin rewrite, so nothing is granted unless configured. With `APP_ENV=prod` the application refuses to start without `SESSION_SECRET` and `OPENROUTER_API_KEY` rather than serving 503s.
 
 **Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, the client address, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
 
@@ -102,7 +102,7 @@ Always add dependencies through the package manager (`uv add`, `pnpm add`) and r
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. `APP_ENV=prod` changes that: the session cookie becomes `Secure`, and a missing `SESSION_SECRET` or `OPENROUTER_API_KEY` stops the process at start with the setting's name. `ALLOWED_ORIGINS`, `RATE_LIMIT_MODEL_PER_MINUTE`, and `RATE_LIMIT_AUTH_PER_MINUTE` are described under *Security*. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
+Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. `APP_ENV=prod` changes that: the session cookie becomes `Secure`, and a missing `SESSION_SECRET` or `OPENROUTER_API_KEY` stops the process at start with the setting's name. `ALLOWED_ORIGINS`, `RATE_LIMIT_MODEL_PER_MINUTE`, `RATE_LIMIT_AUTH_PER_MINUTE`, and `RATE_LIMIT_ADMIN_PER_MINUTE` are described under *Security*. `ADMIN_EMAILS` (comma-separated, compared lower-cased, default empty) names the accounts that may edit the food table — see *Food table administration*. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
 
 ### Knowledge base
 
@@ -170,7 +170,10 @@ them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 `nutrition-data/foods.yaml` is a hand-curated, validated table (~55 infant/toddler foods,
 USDA FoodData Central figures per serving) carrying the "big nine" allergens and the
 choking-hazard / honey / unpasteurised flags the safety filter reads. The whole file is
-rejected if any entry is invalid. The safety filter (`backend/nutrition/safety.py`) has no
+rejected if any entry is invalid. The file seeds the database: the served table lives in
+`food_table_revisions` as whole-table snapshots (revision 1 is the file; every
+administrator's change adds the next), and a plan's audit `food_table_version` (`db-<n>`)
+names the exact snapshot it used — see *Food table administration*. The safety filter (`backend/nutrition/safety.py`) has no
 switch that disables a rule and runs on both the candidates and the finished plan.
 
 `nutrition-data/who-growth-standards.yaml` holds the WHO Child Growth Standards (2006)
@@ -327,6 +330,34 @@ marker. No charting dependency.
 uv run pytest tests/test_nutrition_age.py tests/test_nutrition_growth.py tests/test_api_children.py -k "Growth or Profiles or Curves"
 pnpm -C frontend test -- growth
 ```
+
+## Food table administration
+
+The food table is data, not code: `nutrition-data/foods.yaml` seeds revision 1 of
+`food_table_revisions` (migration `d4a9b3c4e004`), and the application serves the latest
+revision from the database at start (`APP_ENV=prod` refuses to start if it cannot; elsewhere
+it warns and serves the committed file). Every write — create, edit, deactivate, reactivate,
+import — loads the latest snapshot, applies the change in memory, validates the whole table
+with the same model that validates the file, and inserts the next revision with the actor and
+a summary; two concurrent writers cannot both win (409). The served table is swapped
+in-process on each write, so the picker, the lookup tools, and the planner see the change
+immediately, and a plan's `food_table_version` (`db-<n>`) names the snapshot it used.
+
+Accounts listed in `ADMIN_EMAILS` see a **Food table** link in the app header and the page
+`/admin/foods`; everyone else gets a refusal there and 403 from the routes. The routes, all
+under `/api/admin/foods`: `GET` (every food, active and inactive, with the revision), `POST`
+(create; 409 on a duplicate id), `PUT /{food_id}` (edit; the id is immutable), `POST
+/{food_id}/deactivate` and `/activate` (idempotent), and `POST /import` with a JSON body
+`{format: yaml|csv, content, mode: upsert|create_only, dry_run}` that reports
+`created`/`updated`/`unchanged` ids and per-row errors (`row`, `id`, `field`, `message`);
+with `dry_run` nothing is written, and a file with any bad row writes nothing either.
+
+Foods are never deleted. A deactivated food leaves the picker, name resolution, and every
+new plan, but stays retrievable by id so feeds already logged with it keep their nutrients.
+Breast milk and iron-fortified formula cannot be deactivated or moved out of `milk_feed`.
+Every entry needs an explicit `source` and explicit answers to the three safety questions —
+the form preselects nothing — and `min_age_months` is 0 only for milk feeds and at least 6
+for everything else.
 
 ## Evaluation (Day 6)
 

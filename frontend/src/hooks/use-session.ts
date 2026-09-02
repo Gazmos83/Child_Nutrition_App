@@ -32,6 +32,7 @@ export function useSession() {
     queryClient.removeQueries({ queryKey: ["feedings"] });
     queryClient.removeQueries({ queryKey: ["growth"] });
     queryClient.removeQueries({ queryKey: ["growth-curves"] });
+    queryClient.removeQueries({ queryKey: ["admin"] });
     queryClient.setQueryData(SESSION_KEY, user);
   };
 
@@ -54,6 +55,7 @@ export function useSession() {
       queryClient.removeQueries({ queryKey: ["feedings"] });
       queryClient.removeQueries({ queryKey: ["growth"] });
       queryClient.removeQueries({ queryKey: ["growth-curves"] });
+      queryClient.removeQueries({ queryKey: ["admin"] });
     },
   });
 

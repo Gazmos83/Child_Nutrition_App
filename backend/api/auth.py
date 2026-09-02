@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from backend.api.deps import SESSION_COOKIE, AuthSettings, CurrentUser, DbSession
+from backend.api.deps import SESSION_COOKIE, AuthSettings, CurrentUser, DbSession, is_admin
 from backend.api.rate_limit import rate_limited
 from backend.auth.passwords import hash_password, verify_password
 from backend.auth.tokens import issue_session_token
@@ -73,7 +73,7 @@ async def register(
             status.HTTP_409_CONFLICT, detail="An account with this email already exists"
         ) from exc
     _set_session_cookie(response, user, settings)
-    return CurrentUserResponse(id=user.id, email=user.email)
+    return _account(user, settings)
 
 
 @router.post(
@@ -96,7 +96,7 @@ async def login(
     if not verify_password(hashed, credentials.password) or user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=BAD_CREDENTIALS_DETAIL)
     _set_session_cookie(response, user, settings)
-    return CurrentUserResponse(id=user.id, email=user.email)
+    return _account(user, settings)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Sign out")
@@ -106,5 +106,9 @@ async def logout(response: Response) -> None:
 
 
 @router.get("/me", response_model=CurrentUserResponse, summary="The signed-in account")
-async def me(user: CurrentUser) -> CurrentUserResponse:
-    return CurrentUserResponse(id=user.id, email=user.email)
+async def me(user: CurrentUser, settings: AuthSettings) -> CurrentUserResponse:
+    return _account(user, settings)
+
+
+def _account(user: User, settings: Settings) -> CurrentUserResponse:
+    return CurrentUserResponse(id=user.id, email=user.email, is_admin=is_admin(user, settings))

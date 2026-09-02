@@ -7,8 +7,9 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.deps import SESSION_COOKIE
+from backend.api.deps import SESSION_COOKIE, get_auth_settings
 from backend.auth.tokens import issue_session_token
+from backend.core.config import Settings
 from backend.models import User
 from tests.conftest import FIXTURE_PASSWORD, TEST_SESSION_SECRET, sign_in
 
@@ -22,7 +23,8 @@ class TestRegister:
         response = await api_client.post("/api/auth/register", json=CREDENTIALS)
         assert response.status_code == 201
         body = response.json()
-        assert set(body) == {"id", "email"} and body["email"] == CREDENTIALS["email"]
+        assert set(body) == {"id", "email", "is_admin"} and body["email"] == CREDENTIALS["email"]
+        assert body["is_admin"] is False
         uuid.UUID(body["id"])
         cookie = response.headers["set-cookie"]
         assert cookie.startswith(f"{SESSION_COOKIE}=")
@@ -162,3 +164,26 @@ class TestNothingSensitiveIsLogged:
         access = [r for r in caplog.records if r.name == "backend.api.access"]
         assert [r.status for r in access] == [201, 200, 200]
         assert access[-1].user_id == registered.json()["id"]
+
+
+class TestAdminFlag:
+    """food-table-admin: the account read says whether the caller may edit the food table."""
+
+    async def test_listed_email_is_admin_regardless_of_case(
+        self, api_client: AsyncClient, user: User
+    ) -> None:
+        app = api_client._transport.app  # type: ignore[attr-defined]
+        admin_settings = Settings(
+            database_url="postgresql://unused:unused@unused/unused",
+            session_secret=TEST_SESSION_SECRET,
+            admin_emails=user.email.upper(),
+            _env_file=None,
+        )
+        app.dependency_overrides[get_auth_settings] = lambda: admin_settings
+        sign_in(api_client, user)
+        me = await api_client.get("/api/auth/me")
+        assert me.status_code == 200 and me.json()["is_admin"] is True
+
+    async def test_unlisted_email_is_not_admin(self, auth_client: AsyncClient) -> None:
+        me = await auth_client.get("/api/auth/me")
+        assert me.json()["is_admin"] is False

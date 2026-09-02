@@ -689,3 +689,23 @@ class TestNoteAvoidances:
         assert record["avoidances"][0]["food_ids"] == ["pork_tenderloin_cooked"]
         assert record["note_outcomes"][0]["applied"] is True
         assert "note_avoidances" in record["rules"]
+
+
+class TestInactiveFoods:
+    async def test_an_inactive_food_is_never_planned(self) -> None:
+        """food-table-admin: the planner composes from active entries only."""
+        from backend.nutrition.foods import table_from_revision
+
+        base = get_food_table()
+        payload = {
+            "source": base.table.source,
+            "foods": [
+                {**f.model_dump(mode="json"), "is_active": f.id != "infant_cereal_iron_fortified"}
+                for f in base.all_foods
+            ],
+        }
+        table = table_from_revision(2, payload)
+        result = await generate_meal_plan(request(), None, table)
+        assert result.outcome == "plan"
+        assert "infant_cereal_iron_fortified" not in {i.food_id for i in result.items}
+        assert result.food_table_version == "db-2"

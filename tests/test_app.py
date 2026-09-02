@@ -1,5 +1,6 @@
 """Application boot, health reporting, and route surface (tasks 6.2, 6.3, 6.4; Day 6)."""
 
+import logging
 import re
 
 import pytest
@@ -142,6 +143,14 @@ class TestProductionGuard:
         monkeypatch.setenv("APP_ENV", "prod")
         monkeypatch.setenv("SESSION_SECRET", "s" * 32)
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+
+        # The guard under test is configuration, not connectivity: the database behind the
+        # dummy URL is never reached, so the food-table start-up load is stubbed out here
+        # (its own behaviour is covered by TestFoodTableStartup).
+        async def no_table(_engine):
+            return None
+
+        monkeypatch.setattr("backend.main.load_latest_table", no_table)
         with TestClient(create_app()) as client:
             assert client.get("/health").json()["app_env"] == "prod"
 
@@ -229,6 +238,14 @@ USER_SCOPED_PATHS = {
     "/api/children/{child_id}/growth/curves",
     "/api/children/{child_id}/growth/{measurement_id}",
 }
+# food-table-admin: behind the session and the administrator role (403 for everyone else).
+ADMIN_PATHS = {
+    "/api/admin/foods",
+    "/api/admin/foods/{food_id}",
+    "/api/admin/foods/{food_id}/deactivate",
+    "/api/admin/foods/{food_id}/activate",
+    "/api/admin/foods/import",
+}
 
 
 class TestRouteSurface:
@@ -236,7 +253,7 @@ class TestRouteSurface:
     refuses an unauthenticated request; nothing user-scoped is reachable any other way."""
 
     def test_documented_surface_is_exactly_public_plus_user_scoped(self) -> None:
-        assert set(app.openapi()["paths"]) == PUBLIC_PATHS | USER_SCOPED_PATHS
+        assert set(app.openapi()["paths"]) == PUBLIC_PATHS | USER_SCOPED_PATHS | ADMIN_PATHS
 
     def test_only_builtin_docs_routes_are_top_level(self) -> None:
         top_level = {r.path for r in app.routes if getattr(r, "path", None) is not None}
@@ -251,7 +268,7 @@ class TestRouteSurface:
         sample_id = "0198f0a0-0000-7000-8000-000000000001"
         with TestClient(secret_app) as client:
             for path, operations in app.openapi()["paths"].items():
-                if path not in USER_SCOPED_PATHS:
+                if path not in USER_SCOPED_PATHS | ADMIN_PATHS:
                     continue
                 concrete = re.sub(r"\{\w+_id\}", sample_id, path)
                 for method in operations:
@@ -279,3 +296,64 @@ class TestRouteSurface:
     def test_unknown_paths_are_not_routed(self, path: str) -> None:
         with TestClient(app) as client:
             assert client.get(path).status_code == 404
+
+
+class TestFoodTableStartup:
+    """food-table-admin design Decision 2: no database table -> the committed file, loudly."""
+
+    async def test_dev_without_a_database_serves_the_file_with_a_warning(
+        self, caplog, monkeypatch
+    ) -> None:
+        from backend.main import load_food_table_from_database
+        from backend.nutrition.foods import get_food_table, reset_food_table_cache
+
+        reset_food_table_cache()
+        settings = Settings(
+            database_url="postgresql://u:p@nowhere.invalid:1/db", app_env="dev", _env_file=None
+        )
+        monkeypatch.setattr("backend.main.get_engine", lambda: (_ for _ in ()).throw(OSError()))
+        with caplog.at_level(logging.WARNING):
+            await load_food_table_from_database(settings)
+        assert "serving the committed file" in caplog.text
+        assert not get_food_table().version.startswith("db-")
+
+    async def test_prod_refuses_to_start_without_the_table(self, monkeypatch) -> None:
+        from backend.main import load_food_table_from_database
+
+        settings = Settings(
+            database_url="postgresql://u:p@nowhere.invalid:1/db",
+            app_env="prod",
+            session_secret="s" * 32,
+            _env_file=None,
+        )
+        monkeypatch.setattr("backend.main.get_engine", lambda: (_ for _ in ()).throw(OSError()))
+        with pytest.raises(OSError):
+            await load_food_table_from_database(settings)
+
+
+class TestAdminSurface:
+    """food-table-admin: every administrative operation refuses a signed-in non-administrator."""
+
+    def test_every_admin_operation_refuses_a_non_admin(self) -> None:
+        import uuid
+
+        from backend.api.deps import get_current_user
+        from backend.models import User
+
+        parent = User(id=uuid.uuid7(), email="parent@example.com", hashed_password="x")
+        settings = Settings(
+            database_url="postgresql://u:p@h/db", session_secret="s" * 32, _env_file=None
+        )
+        secret_app = create_app(settings)
+        secret_app.dependency_overrides[get_current_user] = lambda: parent
+        secret_app.dependency_overrides[get_auth_settings] = lambda: settings
+        sample = "0198f0a0-0000-7000-8000-000000000001"
+        with TestClient(secret_app) as client:
+            for path, operations in app.openapi()["paths"].items():
+                if path not in ADMIN_PATHS:
+                    continue
+                concrete = re.sub(r"\{\w+_id\}", sample, path)
+                for method in operations:
+                    response = client.request(method.upper(), concrete, json={})
+                    assert response.status_code == 403, (method, path, response.status_code)
+                    assert response.json() == {"detail": "Admin access required"}

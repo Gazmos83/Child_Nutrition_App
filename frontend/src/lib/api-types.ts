@@ -1,6 +1,14 @@
 // Wire types mirrored from backend/schemas/{chat,rag,tools,auth,child}.py.
 
-import type { ActivityLevel, Allergen, DietPreference, FeedingType, NoteKind, Sex } from "./enums";
+import type {
+  ActivityLevel,
+  Allergen,
+  DietPreference,
+  FeedingType,
+  FoodCategory,
+  NoteKind,
+  Sex,
+} from "./enums";
 
 export type Strategy = "basic" | "advanced";
 export type Intent = "rag" | "tool" | "hybrid";
@@ -43,6 +51,8 @@ export interface ChatRequest {
 export interface CurrentUser {
   id: string;
   email: string;
+  /** Listed in ADMIN_EMAILS; may edit the food table (food-table-admin). */
+  is_admin: boolean;
 }
 
 export interface Credentials {
@@ -493,6 +503,75 @@ export interface GrowthCurvesResponse {
   indicators: GrowthCurveSet[];
   source: string;
   source_url: string;
+}
+
+// -- food-table administration (backend/schemas/admin.py; food-table-admin) -----------------
+
+/** One food exactly as the table stores it (backend/nutrition/foods.py:FoodItem). */
+export interface FoodItem {
+  id: string;
+  name: string;
+  category: FoodCategory;
+  serving_size: number;
+  serving_unit: string;
+  calories: number;
+  protein_g: number;
+  fat_g: number;
+  carbohydrate_g: number;
+  iron_mg: number;
+  calcium_mg: number;
+  allergens: Allergen[];
+  choking_hazard: boolean;
+  contains_honey: boolean;
+  commonly_unpasteurized: boolean;
+  min_age_months: number;
+  source: string | null;
+  notes: string | null;
+  is_active: boolean;
+}
+
+/** An administrator's entry: the same shape with the source made mandatory. */
+export type FoodWrite = Omit<FoodItem, "source" | "is_active" | "notes"> & {
+  source: string;
+  notes?: string | null;
+  is_active?: boolean;
+};
+
+export interface FoodTableAdminResponse {
+  version: string;
+  revision: number;
+  source: string;
+  foods: FoodItem[];
+}
+
+export interface FoodWriteResponse {
+  food: FoodItem;
+  version: string;
+  revision: number;
+}
+
+export interface FoodImportRequest {
+  format: "yaml" | "csv";
+  content: string;
+  mode?: "upsert" | "create_only";
+  dry_run?: boolean;
+}
+
+export interface ImportRowError {
+  row: number;
+  id: string | null;
+  field: string | null;
+  message: string;
+}
+
+export interface FoodImportResult {
+  applied: boolean;
+  created: string[];
+  updated: string[];
+  unchanged: string[];
+  errors: ImportRowError[];
+  version: string;
+  revision: number;
 }
 
 // -- server-sent events (design.md Decision 6) --------------------------------------------

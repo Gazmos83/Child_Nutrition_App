@@ -23,6 +23,7 @@ SESSION_COOKIE = "session"
 
 UNAUTHENTICATED_DETAIL = "Sign in to continue"
 NO_SUCH_CHILD_DETAIL = "No such child profile"
+ADMIN_REQUIRED_DETAIL = "Admin access required"
 
 
 def unauthenticated() -> HTTPException:
@@ -92,3 +93,23 @@ async def owned_child(child_id: uuid.UUID, user: CurrentUser, db: DbSession) -> 
 
 
 OwnedChild = Annotated[ChildProfile, Depends(owned_child)]
+
+
+def is_admin(user: User, settings: Settings) -> bool:
+    """The role is a fact about the configuration, compared case-insensitively
+    (food-table-admin spec)."""
+    return user.email.lower() in set(settings.admin_emails)
+
+
+async def require_admin(user: CurrentUser, settings: AuthSettings) -> User:
+    """The signed-in account, when it is an administrator; otherwise 403.
+
+    403 rather than 404: the refusal is a fact about the caller, not a probe into another
+    account's data, and the admin routes are public in the OpenAPI schema anyway.
+    """
+    if not is_admin(user, settings):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ADMIN_REQUIRED_DETAIL)
+    return user
+
+
+AdminUser = Annotated[User, Depends(require_admin)]

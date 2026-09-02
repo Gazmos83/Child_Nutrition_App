@@ -36,5 +36,21 @@
   "note_kind": [
     "doctor",
     "preference"
+  ],
+  "food_category": [
+    "milk_feed",
+    "dairy",
+    "egg",
+    "meat",
+    "poultry",
+    "fish",
+    "shellfish",
+    "legume",
+    "grain",
+    "vegetable",
+    "fruit",
+    "nut_seed",
+    "fat_oil",
+    "sweetener"
   ]
 }

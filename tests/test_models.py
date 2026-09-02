@@ -14,7 +14,14 @@ import pytest
 from sqlalchemy import CheckConstraint, DateTime, UniqueConstraint
 
 from backend.db.base import Base
-from backend.models import ChildAllergy, ChildNote, ChildProfile, GrowthMeasurement, User
+from backend.models import (
+    ChildAllergy,
+    ChildNote,
+    ChildProfile,
+    FoodTableRevision,
+    GrowthMeasurement,
+    User,
+)
 from backend.models.enums import Allergen, DietPreference, NoteKind, Sex
 from backend.nutrition.age import today
 
@@ -282,3 +289,19 @@ def _build_profile(**overrides) -> ChildProfile:
         "diet_preference": DietPreference.OMNIVORE,
     }
     return ChildProfile(**(defaults | overrides))
+
+
+class TestFoodTableRevision:
+    """food-table-admin design Decision 1: whole-table snapshots, one per write."""
+
+    def test_revision_is_the_assigned_primary_key(self) -> None:
+        column = FoodTableRevision.__table__.c.revision
+        assert column.primary_key and column.autoincrement is False
+        assert "ck_food_table_revisions_revision_positive" in _check_constraints(FoodTableRevision)
+
+    def test_snapshot_and_actor(self) -> None:
+        columns = FoodTableRevision.__table__.c
+        assert columns.table.type.__class__.__name__ == "JSONB" and columns.table.nullable is False
+        fk = next(iter(columns.actor_user_id.foreign_keys))
+        assert fk.ondelete == "SET NULL" and columns.actor_user_id.nullable is True
+        assert columns.summary.nullable is False

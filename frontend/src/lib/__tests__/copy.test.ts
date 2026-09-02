@@ -31,6 +31,10 @@ const RENDERED: string[] = [
   copy.chartPointLabel("Sep 2, 2026", 6.9, "kg", 22.3),
   copy.chartPointLabel("Sep 2, 2026", 6.9, "kg", null),
   copy.chartAriaLabel("Weight for age", "female"),
+  copy.adminTableStatus("db-3", 58),
+  copy.adminImportCounts(3, 1, 53),
+  copy.importRowError(4, "kale_chips", "min_age_months", "must be at least 6"),
+  copy.importRowError(2, null, null, "missing id"),
   ...[
     copy.toolSummary("calculate_bmi", { weight_kg: 8.4, height_cm: 68 }, null),
     copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),

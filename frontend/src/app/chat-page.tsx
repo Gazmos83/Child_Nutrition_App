@@ -1,13 +1,14 @@
 "use client";
 
 import { ChefHat } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { ChildContextForm } from "@/components/side-panel/child-context-form";
 import { DailyTargets } from "@/components/side-panel/daily-targets";
 import { FeedingLogTab } from "@/components/side-panel/feeding-log-tab";
 import { GrowthTab } from "@/components/side-panel/growth-tab";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useChat, type RequestContext } from "@/hooks/use-chat";
 import { useChildContext } from "@/hooks/use-child-context";
@@ -16,6 +17,7 @@ import { useGrowthLog } from "@/hooks/use-growth-log";
 import { latestNoteOutcomes } from "@/lib/note-outcomes";
 import type { CurrentUser, LoggedFeeding } from "@/lib/api-types";
 import {
+  ADMIN_LINK,
   APP_TITLE,
   CHAT_FEED_NEEDS_CHILD,
   CHAT_FEED_SAVE_FAILED,
@@ -73,6 +75,11 @@ export function ChatPage({ user, onSignOut }: Props) {
           <span className="truncate" data-testid="account-email">
             {user.email}
           </span>
+          {user.is_admin && (
+            <Link href="/admin/foods" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+              {ADMIN_LINK}
+            </Link>
+          )}
           <Button type="button" variant="ghost" size="sm" onClick={onSignOut}>
             {SIGN_OUT}
           </Button>

@@ -16,6 +16,7 @@ from backend.models.enums import (
     Sex,
 )
 from backend.models.feeding import Feeding
+from backend.models.food_table_revision import FoodTableRevision
 from backend.models.growth_measurement import GrowthMeasurement
 from backend.models.user import User
 
@@ -29,6 +30,7 @@ __all__ = [
     "DietPreference",
     "Feeding",
     "FeedingType",
+    "FoodTableRevision",
     "GrowthMeasurement",
     "NoteKind",
     "Sex",

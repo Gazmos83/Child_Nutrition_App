@@ -281,3 +281,26 @@ class TestRAGSettings:
             assert get_rag_settings() is settings
         finally:
             get_rag_settings.cache_clear()
+
+
+class TestAdminEmails:
+    """food-table-admin: the role is a comma-separated setting, compared case-insensitively."""
+
+    def test_absent_by_default(self, monkeypatch) -> None:
+        for name in ("ADMIN_EMAILS", "RATE_LIMIT_ADMIN_PER_MINUTE"):
+            monkeypatch.delenv(name, raising=False)
+        settings = Settings(database_url="postgresql://u:p@h/db", _env_file=None)
+        assert settings.admin_emails == []
+        assert settings.rate_limit_admin_per_minute == 30
+
+    def test_split_stripped_lower_cased_and_blanks_dropped(self) -> None:
+        settings = Settings(
+            database_url="postgresql://u:p@h/db",
+            admin_emails=" Parent@Example.com , , other@example.com ",
+            _env_file=None,
+        )
+        assert settings.admin_emails == ["parent@example.com", "other@example.com"]
+
+    def test_blank_means_none(self) -> None:
+        settings = Settings(database_url="postgresql://u:p@h/db", admin_emails="", _env_file=None)
+        assert settings.admin_emails == []

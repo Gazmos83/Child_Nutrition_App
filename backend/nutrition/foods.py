@@ -1,19 +1,27 @@
 """The curated food-composition table (design.md Decision 2; food-composition-data spec).
 
-``nutrition-data/foods.yaml`` is validated whole at load time: one invalid entry fails the
-load with an error naming it, and no partial table is ever handed to callers. A food
-missing its safety flags would otherwise be *admitted* to infant plans.
+The table is validated whole: one invalid entry fails the load with an error naming it, and
+no partial table is ever handed to callers. A food missing its safety flags would otherwise
+be *admitted* to infant plans. Since food-table-admin the served table comes from the
+database's latest whole-table revision (``set_food_table``); ``nutrition-data/foods.yaml``
+seeds that database and is the fallback whenever no database table has been loaded.
 """
 
 import difflib
 import logging
 import re
 from enum import StrEnum
-from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_serializer,
+    model_validator,
+)
 
 from backend.models.enums import Allergen
 from backend.schemas.tools import MAX_AGE_MONTHS, MIN_AGE_MONTHS
@@ -21,6 +29,9 @@ from backend.schemas.tools import MAX_AGE_MONTHS, MIN_AGE_MONTHS
 logger = logging.getLogger(__name__)
 
 DEFAULT_FOOD_TABLE_PATH = Path("nutrition-data") / "foods.yaml"
+
+# WHO/AAP: complementary foods from about 6 months; only milk feeds are for younger infants.
+SOLIDS_MIN_AGE_MONTHS = 6
 
 
 class FoodCategory(StrEnum):
@@ -73,6 +84,26 @@ class FoodItem(BaseModel):
         default=None, description="Overrides the table-level source for this entry."
     )
     notes: str | None = None
+    # food-table-admin: a withdrawn food leaves the picker, the planner, and name lookup but
+    # stays retrievable by id so feeds already logged with it still price. Not a safety
+    # flag, so a default is acceptable.
+    is_active: bool = True
+
+    @model_validator(mode="after")
+    def _age_matches_category(self) -> FoodItem:
+        if self.category is FoodCategory.MILK_FEED:
+            if self.min_age_months != MIN_AGE_MONTHS:
+                raise ValueError("a milk feed's min_age_months must be 0")
+        elif self.min_age_months < SOLIDS_MIN_AGE_MONTHS:
+            raise ValueError(
+                f"a solid food's min_age_months must be at least {SOLIDS_MIN_AGE_MONTHS}"
+            )
+        return self
+
+    @field_serializer("allergens")
+    def _sorted_allergens(self, value: frozenset[Allergen]) -> list[str]:
+        """Sorted, so snapshots and seeds serialise deterministically."""
+        return sorted(a.value for a in value)
 
 
 class FoodTable(BaseModel):
@@ -108,7 +139,9 @@ class FoodNotFoundError(LookupError):
 # Filler words in display names ("Sweet potato, cooked and mashed") that carry no food
 # identity. Preparation words (cooked, mashed, raw, whole) are deliberately NOT here:
 # they separate e.g. carrot_cooked_mashed from raw_carrot_sticks.
-_STOPWORDS = frozenset("a and as from in its made of or the to until with".split())
+_STOPWORDS = frozenset(
+    ["a", "and", "as", "from", "in", "its", "made", "of", "or", "the", "to", "until", "with"]
+)
 
 _MAX_SUGGESTIONS = 5
 
@@ -208,16 +241,23 @@ def _tokenize(text: str) -> frozenset[str]:
 
 
 class LoadedFoodTable:
-    """A validated table with id lookup. Immutable after construction."""
+    """A validated table with id lookup. Immutable after construction.
+
+    ``foods``, name resolution, ``len`` and ``in`` see active entries only -- what the
+    picker, the planner, and the chat tools may offer. ``get`` and ``all_foods`` see every
+    entry, so a stored feed can always be priced (food-table-admin design Decision 3).
+    """
 
     def __init__(self, table: FoodTable) -> None:
         self.table = table
-        self._by_id = table.by_id()
-        # Resolution index: each food's normalized id/name forms and its token pool
-        # (id and name tokens with plural variants), built once -- the table is frozen.
+        self._all_by_id = table.by_id()
+        self._active = [food for food in table.foods if food.is_active]
+        self._by_id = {food.id: food for food in self._active}
+        # Resolution index over active entries: each food's normalized id/name forms and
+        # its token pool (id and name tokens with plural variants), built once.
         self._forms: dict[str, FoodItem] = {}
         self._token_pools: list[tuple[FoodItem, frozenset[str]]] = []
-        for food in table.foods:
+        for food in self._active:
             for form in (_normalize(food.id), _normalize(food.name)):
                 self._forms.setdefault(form, food)
             self._token_pools.append((food, _tokenize(f"{food.id} {food.name}")))
@@ -228,12 +268,19 @@ class LoadedFoodTable:
 
     @property
     def foods(self) -> list[FoodItem]:
+        """Active entries only."""
+        return list(self._active)
+
+    @property
+    def all_foods(self) -> list[FoodItem]:
+        """Every entry, inactive included (the administrator's view)."""
         return list(self.table.foods)
 
     def get(self, food_id: str) -> FoodItem:
-        """Return the food or raise ``FoodNotFoundError`` -- never a default or a lookalike."""
+        """Return the food -- inactive included -- or raise ``FoodNotFoundError``; never a
+        default or a lookalike."""
         try:
-            return self._by_id[food_id]
+            return self._all_by_id[food_id]
         except KeyError:
             raise FoodNotFoundError(food_id) from None
 
@@ -336,13 +383,36 @@ def load_food_table(path: str | Path = DEFAULT_FOOD_TABLE_PATH) -> LoadedFoodTab
     except ValidationError as exc:
         raise ValueError(f"Invalid {path}: {_describe(exc, raw)}") from exc
 
+    try:
+        _check_unique_ids(table)
+    except ValueError as exc:
+        raise ValueError(f"Invalid {path}: {exc}") from exc
+
+    logger.info(
+        "Loaded food table %s: %d foods (version %s)", path, len(table.foods), table.version
+    )
+    return LoadedFoodTable(table)
+
+
+def _check_unique_ids(table: FoodTable) -> None:
     seen: set[str] = set()
     for food in table.foods:
         if food.id in seen:
-            raise ValueError(f"Invalid {path}: food id {food.id!r} is listed twice")
+            raise ValueError(f"food id {food.id!r} is listed twice")
         seen.add(food.id)
 
-    logger.info("Loaded food table %s: %d foods (version %s)", path, len(seen), table.version)
+
+def table_from_revision(revision: int, payload: dict) -> LoadedFoodTable:
+    """A database snapshot (``{source, foods}``) as the served table, versioned ``db-N``.
+
+    Validated whole exactly like the file; a ``ValueError`` names the offending entry.
+    """
+    raw = {**payload, "version": f"db-{revision}"}
+    try:
+        table = FoodTable.model_validate(raw)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid food table revision {revision}: {_describe(exc, raw)}") from exc
+    _check_unique_ids(table)
     return LoadedFoodTable(table)
 
 
@@ -363,12 +433,31 @@ def _describe(exc: ValidationError, raw: object) -> str:
     return "; ".join(lines)
 
 
-@lru_cache(maxsize=1)
+# The served table. Set from the database's latest revision at start-up and after every
+# administrative write (one instance, so an in-process swap is exact); until then, or
+# without a database, the committed file is served and the log says so.
+_TABLE: LoadedFoodTable | None = None
+
+
 def get_food_table() -> LoadedFoodTable:
-    """Process-wide table, loaded on first use from the committed file."""
-    return load_food_table(DEFAULT_FOOD_TABLE_PATH)
+    """Process-wide table: the loaded database revision, else the committed file."""
+    global _TABLE
+    if _TABLE is None:
+        _TABLE = load_food_table(DEFAULT_FOOD_TABLE_PATH)
+        logger.warning(
+            "Serving the committed food table %s (no database table loaded)",
+            _TABLE.version,
+        )
+    return _TABLE
+
+
+def set_food_table(table: LoadedFoodTable) -> None:
+    """Swap the served table atomically (a single assignment; readers keep their snapshot)."""
+    global _TABLE
+    _TABLE = table
 
 
 def reset_food_table_cache() -> None:
-    """For tests that swap the table."""
-    get_food_table.cache_clear()
+    """Forget the served table: the next read loads the committed file again."""
+    global _TABLE
+    _TABLE = None
