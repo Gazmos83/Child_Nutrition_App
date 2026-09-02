@@ -59,10 +59,11 @@ user as an answer.
 ### Requirement: Request-supplied child context is authoritative for tool arguments
 
 When the request carries child context, the system SHALL fill every profile-backed tool
-argument (age in months, weight, sex, height, allergies, diet preference, doctor's note,
-activity level) from that context, SHALL replace any conflicting value proposed by the
-model, and SHALL record which arguments were taken from the context. Ages SHALL be in
-months (hard rule 1); allergies and diet preference SHALL be controlled-vocabulary values
+argument (age in months, weight, sex, height, allergies, diet preference, note rows with
+their kinds, activity level) from that context, SHALL replace any conflicting value proposed
+by the model — an empty list of note rows included, so the model can never add a row — and
+SHALL record which arguments were taken from the context. Ages SHALL be in months (hard
+rule 1); allergies, diet preference, and note kinds SHALL be controlled-vocabulary values
 (hard rule 2).
 
 #### Scenario: Model-proposed weight is overridden
@@ -83,6 +84,13 @@ months (hard rule 1); allergies and diet preference SHALL be controlled-vocabula
 
 - **WHEN** the request's child context names an allergy outside the controlled vocabulary
 - **THEN** the request is rejected before routing with a validation error
+
+#### Scenario: Model-proposed note rows are discarded
+
+- **WHEN** the child context carries no note rows and the model proposes a tool call with a
+  row "no vegetables"
+- **THEN** the tool runs with an empty list of rows and the activity lists the rows as taken
+  from the child context
 
 ### Requirement: Tool invocations are bounded and validated
 

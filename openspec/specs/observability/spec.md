@@ -152,8 +152,8 @@ has begun SHALL end the stream with an error event that carries the request id.
 
 The system SHALL NOT write to any log record: passwords, password hashes, session tokens,
 cookies, request headers, email addresses, or the text of the parent's chat message or the
-assistant's answer. The doctor's note SHALL remain in the meal-plan and gap-detection audit
-snapshots (hard rule 8).
+assistant's answer. The note rows and their kinds SHALL remain in the meal-plan and
+gap-detection audit snapshots (hard rule 8).
 
 #### Scenario: Sign-in leaves no credential trace
 
