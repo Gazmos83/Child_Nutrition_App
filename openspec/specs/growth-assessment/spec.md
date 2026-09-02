@@ -69,16 +69,18 @@ range, none for length/height-for-age above the range).
 
 When length/height is not supplied the system SHALL compute weight-for-age only and SHALL
 report the remaining indicators as skipped with a parent-facing reason naming the missing
-measurement and where to enter it. When a supplied length/height lies outside the range
-the WHO weight-for-length/height table covers, that indicator SHALL be skipped with a
-reason stating the covered range; the other indicators SHALL still be computed.
+measurement, worded so it reads correctly wherever the result is shown (the chat card or a
+growth-log row) — it SHALL NOT refer to a particular screen location. When a supplied
+length/height lies outside the range the WHO weight-for-length/height table covers, that
+indicator SHALL be skipped with a reason stating the covered range; the other indicators
+SHALL still be computed.
 
 #### Scenario: No height supplied
 
 - **WHEN** growth is assessed with age, sex, and weight but no length/height
 - **THEN** the result contains weight-for-age and lists length/height-for-age,
-  weight-for-length/height, and BMI-for-age as skipped, each with a reason that points to
-  the side panel
+  weight-for-length/height, and BMI-for-age as skipped, each with a reason naming the
+  missing length or height and no screen location
 - **AND** the assessment succeeds
 
 #### Scenario: Length outside the table
