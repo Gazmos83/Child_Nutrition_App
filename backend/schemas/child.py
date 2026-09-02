@@ -1,8 +1,11 @@
-"""Request and response models for ``/api/children`` (child-profile spec).
+"""Request and response models for ``/api/children`` (child-profile and growth-tracking
+specs).
 
-The write model shares its field definitions with ``ChildContext`` (ages in months,
-controlled vocabularies, height required from 36 months) so a stored profile can always
-be turned back into the context the chat and the tools accept.
+The write model shares its field definitions with ``ChildContext`` (controlled
+vocabularies, height required from 36 months) so a stored profile can always be turned
+back into the context the chat and the tools accept. Age is never written: the profile
+takes a date of birth and every age the API returns is derived from it in completed
+months (hard rule 1; growth-tracking design Decision 1).
 """
 
 import datetime as dt
@@ -11,15 +14,42 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.models.enums import ActivityLevel, Allergen, DietPreference, Sex
+from backend.nutrition.age import DATE_TOLERANCE, completed_months, today
 from backend.schemas.tools import (
-    _AGE,
     _WEIGHT,
     HEIGHT_REQUIRED_FROM_MONTHS,
+    MAX_AGE_MONTHS,
     MAX_HEIGHT_CM,
+    GrowthAssessmentResult,
     NutrientTargets,
 )
 
 MAX_DOCTORS_NOTE_CHARS = 4000
+
+AGE_OUT_OF_RANGE_DETAIL = (
+    f"The supported range is newborn through {MAX_AGE_MONTHS} months; this child's date of "
+    "birth puts them past it"
+)
+FUTURE_DATE_DETAIL = "cannot be later than today"
+
+
+def not_after_today(value: dt.date, what: str) -> dt.date:
+    """Reject a date past today (UTC) plus the one-day tolerance for parents east of UTC."""
+    if value > today() + DATE_TOLERANCE:
+        raise ValueError(f"{what} {FUTURE_DATE_DETAIL}")
+    return value
+
+
+def age_today(birth_date: dt.date) -> int:
+    """Completed months today for a validated birth date; ``ValueError`` past 60 months.
+
+    A birth date within the tolerance window ("tomorrow" east of UTC) counts as 0.
+    """
+    as_of = today()
+    age = completed_months(birth_date, max(as_of, birth_date))
+    if age > MAX_AGE_MONTHS:
+        raise ValueError(AGE_OUT_OF_RANGE_DETAIL)
+    return age
 
 
 class ChildProfileWrite(BaseModel):
@@ -27,7 +57,7 @@ class ChildProfileWrite(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    age_months: int = _AGE
+    birth_date: dt.date = Field(description="Date of birth; age is derived in completed months.")
     weight_kg: float = _WEIGHT
     sex: Sex
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
@@ -38,7 +68,8 @@ class ChildProfileWrite(BaseModel):
 
     @model_validator(mode="after")
     def _normalise(self) -> ChildProfileWrite:
-        if self.age_months >= HEIGHT_REQUIRED_FROM_MONTHS and self.height_cm is None:
+        age_months = age_today(not_after_today(self.birth_date, "birth_date"))
+        if age_months >= HEIGHT_REQUIRED_FROM_MONTHS and self.height_cm is None:
             raise ValueError(
                 f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
                 "energy equation for 3–8 years uses height"
@@ -54,7 +85,8 @@ class ChildProfileResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     id: uuid.UUID
-    age_months: int
+    birth_date: dt.date
+    age_months: int = Field(description="Completed months as of today, derived from birth_date.")
     weight_kg: float
     sex: Sex
     height_cm: float | None
@@ -80,3 +112,38 @@ class DailyTargetsResponse(BaseModel):
     diet_preference: DietPreference
     doctors_note_present: bool
     disclaimer: str
+
+
+class GrowthMeasurementWrite(BaseModel):
+    """One dated measurement as the Growth tab submits it (growth-tracking spec).
+
+    Shape and "not in the future" are checked here; the rules that need the stored child
+    (not before the birth date, not past 60 months, one per day) live in the route.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    measured_on: dt.date
+    weight_kg: float = _WEIGHT
+    height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
+
+    @model_validator(mode="after")
+    def _not_in_the_future(self) -> GrowthMeasurementWrite:
+        not_after_today(self.measured_on, "measured_on")
+        return self
+
+
+class GrowthMeasurementResponse(BaseModel):
+    """A stored measurement read back with what is derived from it on every read: the age
+    on that day and the WHO assessment. ``assessment`` is ``None`` only when a later change
+    to the birth date has put the measurement outside the 0-60-month standards."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    measured_on: dt.date
+    age_months: int
+    weight_kg: float
+    height_cm: float | None
+    assessment: GrowthAssessmentResult | None
+    created_at: dt.datetime

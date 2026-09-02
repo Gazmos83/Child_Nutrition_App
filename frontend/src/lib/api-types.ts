@@ -44,11 +44,16 @@ export interface Credentials {
   password: string;
 }
 
-/** `ChildProfileWrite`: field-for-field the context the chat resolves the profile into. */
-export type ChildProfileWrite = ChildContext;
+/**
+ * `ChildProfileWrite`: the context the chat resolves the profile into, except that age is
+ * never written — the profile takes a date of birth (YYYY-MM-DD) and derives the months.
+ */
+export type ChildProfileWrite = Omit<ChildContext, "age_months"> & { birth_date: string };
 
 export interface ChildProfile extends ChildContext {
   id: string;
+  /** YYYY-MM-DD; `age_months` is derived from it server-side as of today. */
+  birth_date: string;
   height_cm: number | null;
   doctors_note: string | null;
   doctors_note_recorded_at: string | null;
@@ -397,6 +402,28 @@ export function isGrowthAssessmentResult(value: unknown): value is GrowthAssessm
       (i) => i && typeof i === "object" && "z_score" in (i as Record<string, unknown>),
     )
   );
+}
+
+// -- growth log (backend/schemas/child.py; growth-tracking spec) ---------------------------
+
+export interface GrowthMeasurementWrite {
+  /** YYYY-MM-DD */
+  measured_on: string;
+  weight_kg: number;
+  height_cm?: number | null;
+}
+
+/** A stored measurement with what the server derives on every read. */
+export interface GrowthMeasurement {
+  id: string;
+  measured_on: string;
+  /** Completed months on `measured_on`, from the profile's date of birth. */
+  age_months: number;
+  weight_kg: number;
+  height_cm: number | null;
+  /** Null only when the birth date was moved after this measurement was logged. */
+  assessment: GrowthAssessmentResult | null;
+  created_at: string;
 }
 
 // -- server-sent events (design.md Decision 6) --------------------------------------------

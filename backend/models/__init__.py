@@ -8,6 +8,7 @@ from backend.db.base import Base
 from backend.models.child_profile import ChildAllergy, ChildProfile
 from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
 from backend.models.feeding import Feeding
+from backend.models.growth_measurement import GrowthMeasurement
 from backend.models.user import User
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "DietPreference",
     "Feeding",
     "FeedingType",
+    "GrowthMeasurement",
     "Sex",
     "User",
 ]

@@ -7,19 +7,32 @@ same answer as for a record that does not exist, and no session means no data.
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.chat import get_service, resolve_chat_request
-from backend.models import User
+from backend.models import ChildProfile, User
+from backend.models.enums import Sex
+from backend.nutrition.age import birth_date_for, today
+from backend.nutrition.growth import GrowthIndicator, get_growth_table
 from backend.schemas.chat import ChatRequest
+from backend.schemas.child import AGE_OUT_OF_RANGE_DETAIL
 from tests.conftest import sign_in
 
 pytestmark = pytest.mark.db
 
-CHILD = {"age_months": 8, "weight_kg": 8.5, "sex": "female", "allergies": ["peanut", "milk"]}
+
+def born(months: int) -> str:
+    """A date of birth that reads as exactly ``months`` completed months today."""
+    return birth_date_for(months, today()).isoformat()
+
+
+CHILD = {"birth_date": born(8), "weight_kg": 8.5, "sex": "female", "allergies": ["peanut", "milk"]}
 FORMULA = {"fed_at": "2026-08-27T09:00:00Z", "feeding_type": "formula", "quantity": 150}
+MEASUREMENT = {"measured_on": today().isoformat(), "weight_kg": 8.7, "height_cm": 70}
 NOWHERE = uuid.UUID("0198f0a0-0000-7000-8000-000000000001")
 
 
@@ -36,10 +49,30 @@ async def log_feed(client: AsyncClient, child_id: str, **overrides) -> dict:
     return response.json()
 
 
+async def measure(client: AsyncClient, child_id: str, **overrides) -> dict:
+    body = {**MEASUREMENT, **overrides}
+    response = await client.post(f"/api/children/{child_id}/growth", json=body)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+async def growth_list(client: AsyncClient, child_id: str) -> list[dict]:
+    response = await client.get(f"/api/children/{child_id}/growth")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def profile_of(client: AsyncClient, child_id: str) -> dict:
+    response = await client.get(f"/api/children/{child_id}")
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
 class TestProfiles:
     async def test_create_and_read_back(self, auth_client: AsyncClient) -> None:
         created = await create_child(auth_client, doctors_note="  limit to 650 kcal/day ")
         assert created["age_months"] == 8 and created["weight_kg"] == 8.5
+        assert created["birth_date"] == CHILD["birth_date"]  # stored; the age is derived
         assert created["allergies"] == ["milk", "peanut"]  # sorted, deduplicated
         assert created["doctors_note"] == "  limit to 650 kcal/day "
         assert created["doctors_note_recorded_at"] is not None
@@ -79,11 +112,14 @@ class TestProfiles:
     @pytest.mark.parametrize(
         "overrides",
         [
-            {"age_months": 61},
+            {"birth_date": born(61)},
+            {"birth_date": (today() + dt.timedelta(days=2)).isoformat()},
+            {"birth_date": "2026-13-01"},
+            {"age_months": 8},  # a typed age is refused, never converted
             {"weight_kg": 0},
             {"allergies": ["gluten"]},
             {"diet_preference": "keto"},
-            {"age_months": 40},  # height required from 36 months
+            {"birth_date": born(40)},  # height required from 36 months
             {"nickname": "bean"},
             {"activity_level": "olympic"},
         ],
@@ -102,7 +138,7 @@ class TestOwnership:
         sign_in(api_client, user)
         mine = await create_child(api_client)
         sign_in(api_client, other_user)
-        theirs = await create_child(api_client, age_months=20, sex="male")
+        theirs = await create_child(api_client, birth_date=born(20), sex="male")
 
         sign_in(api_client, user)
         assert [c["id"] for c in (await api_client.get("/api/children")).json()] == [mine["id"]]
@@ -115,6 +151,7 @@ class TestOwnership:
         sign_in(api_client, user)
         mine = await create_child(api_client)
         fed = (await api_client.post(f"/api/children/{mine['id']}/feedings", json=FORMULA)).json()
+        measured = await measure(api_client, mine["id"])
 
         sign_in(api_client, other_user)
         for method, path, body in [
@@ -124,6 +161,9 @@ class TestOwnership:
             ("GET", f"/api/children/{mine['id']}/feedings", None),
             ("POST", f"/api/children/{mine['id']}/feedings", FORMULA),
             ("DELETE", f"/api/children/{mine['id']}/feedings/{fed['entry']['id']}", None),
+            ("GET", f"/api/children/{mine['id']}/growth", None),
+            ("POST", f"/api/children/{mine['id']}/growth", MEASUREMENT),
+            ("DELETE", f"/api/children/{mine['id']}/growth/{measured['id']}", None),
         ]:
             as_non_owner = await api_client.request(method, path, json=body)
             as_nonexistent = await api_client.request(
@@ -137,6 +177,7 @@ class TestOwnership:
         sign_in(api_client, user)
         assert (await api_client.get(f"/api/children/{mine['id']}")).status_code == 200
         assert len((await api_client.get(f"/api/children/{mine['id']}/feedings")).json()) == 1
+        assert len(await growth_list(api_client, mine["id"])) == 1
 
     async def test_unauthenticated_gets_no_record_data(
         self, api_client: AsyncClient, user: User
@@ -148,6 +189,7 @@ class TestOwnership:
             "/api/children",
             f"/api/children/{mine['id']}",
             f"/api/children/{mine['id']}/feedings",
+            f"/api/children/{mine['id']}/growth",
         ):
             response = await api_client.get(path)
             assert response.status_code == 401
@@ -215,7 +257,7 @@ class TestDailyTargets:
         self, auth_client: AsyncClient
     ) -> None:
         child = await create_child(
-            auth_client, age_months=30, weight_kg=13, diet_preference="vegan"
+            auth_client, birth_date=born(30), weight_kg=13, diet_preference="vegan"
         )
         body = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
         rows = {row["nutrient"]: row for row in body["targets"]["items"]}
@@ -225,11 +267,11 @@ class TestDailyTargets:
     async def test_changing_diet_changes_the_set_but_never_a_number(
         self, auth_client: AsyncClient
     ) -> None:
-        child = await create_child(auth_client, age_months=30, weight_kg=13)
+        child = await create_child(auth_client, birth_date=born(30), weight_kg=13)
         before = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
         replaced = await auth_client.put(
             f"/api/children/{child['id']}",
-            json={**CHILD, "age_months": 30, "weight_kg": 13, "diet_preference": "vegan"},
+            json={**CHILD, "birth_date": born(30), "weight_kg": 13, "diet_preference": "vegan"},
         )
         assert replaced.status_code == 200
         after = (await auth_client.get(f"/api/children/{child['id']}/targets")).json()
@@ -264,6 +306,27 @@ class TestDailyTargets:
         response = await api_client.get(f"/api/children/{mine['id']}/targets")
         assert response.status_code == 401
         assert response.json() == {"detail": "Sign in to continue"}
+
+    async def test_a_child_who_aged_out_is_refused_with_the_range_named(
+        self, auth_client: AsyncClient, db_session: AsyncSession, user: User
+    ) -> None:
+        """child-profile spec: a stored profile past 60 months (which the write API would no
+        longer accept) answers 422 wherever the chat context is built, not 500."""
+        aged_out = ChildProfile(
+            user_id=user.id,
+            birth_date=birth_date_for(61, today()),
+            weight_kg=Decimal("18.0"),
+            height_cm=Decimal("106.0"),
+            sex=Sex.MALE,
+        )
+        db_session.add(aged_out)
+        await db_session.commit()
+        profile = await profile_of(auth_client, str(aged_out.id))
+        assert profile["age_months"] == 61  # the read itself still works
+        targets = await auth_client.get(f"/api/children/{aged_out.id}/targets")
+        assert targets.status_code == 422 and targets.json()["detail"] == AGE_OUT_OF_RANGE_DETAIL
+        chat = await auth_client.post("/api/chat", json={"message": "hi", "stream": False})
+        assert chat.status_code == 422 and chat.json()["detail"] == AGE_OUT_OF_RANGE_DETAIL
 
 
 class TestFeedingLog:
@@ -347,6 +410,152 @@ class TestFeedingLog:
         assert [e["entry"]["id"] for e in remaining] == [kept["entry"]["id"]]
 
 
+class TestGrowthLog:
+    """``/api/children/{id}/growth`` (growth-tracking spec): raw rows stored, the age on the
+    day and the WHO assessment derived on every read, the newest measurement carried onto
+    the profile."""
+
+    async def test_newest_first_with_the_age_on_the_measurement_day(
+        self, auth_client: AsyncClient
+    ) -> None:
+        # Fixed dates for the arithmetic: born 10 January, measured the day before and the
+        # day of the four-month anniversary (child-profile spec scenario).
+        child = await create_child(auth_client, birth_date="2026-01-10")
+        for day, weight in (("2026-05-09", 6.9), ("2026-05-10", 7.0)):
+            await measure(auth_client, child["id"], measured_on=day, weight_kg=weight)
+        listed = await growth_list(auth_client, child["id"])
+        assert [(m["measured_on"], m["age_months"]) for m in listed] == [
+            ("2026-05-10", 4),
+            ("2026-05-09", 3),
+        ]
+        for row in listed:
+            assert row["assessment"]["age_months"] == row["age_months"]
+            assert row["assessment"]["source"] == "WHO Child Growth Standards (2006)"
+            uuid.UUID(row["id"])
+
+    async def test_height_unlocks_four_indicators(self, auth_client: AsyncClient) -> None:
+        child = await create_child(auth_client)
+        with_height = await measure(auth_client, child["id"])
+        yesterday = (today() - dt.timedelta(days=1)).isoformat()
+        without = await measure(
+            auth_client, child["id"], measured_on=yesterday, weight_kg=8.6, height_cm=None
+        )
+        assert len(with_height["assessment"]["indicators"]) == 4
+        assert with_height["assessment"]["skipped"] == []
+        assert [i["indicator"] for i in without["assessment"]["indicators"]] == ["weight_for_age"]
+        assert len(without["assessment"]["skipped"]) == 3
+        assert "length or height" in without["assessment"]["skipped"][0]["reason"]
+        assert without["height_cm"] is None
+
+    async def test_median_weight_reads_as_the_50th_percentile(
+        self, auth_client: AsyncClient
+    ) -> None:
+        """Recomputed on read from the WHO table, not stored: the median for the child's
+        sex and age on the measurement day sits at the 50th percentile."""
+        child = await create_child(auth_client)  # girl, 8 months today
+        _, median, _ = get_growth_table().monthly(GrowthIndicator.WEIGHT_FOR_AGE, Sex.FEMALE, 8)
+        row = await measure(auth_client, child["id"], weight_kg=round(median, 2), height_cm=None)
+        [weight_for_age] = row["assessment"]["indicators"]
+        # The stored value is fixed-point to two decimals, so allow that rounding.
+        assert abs(weight_for_age["percentile"] - 50.0) <= 0.5
+        assert weight_for_age["band"] == "expected"
+
+    async def test_the_newest_measurement_sets_the_profile(self, auth_client: AsyncClient) -> None:
+        child = await create_child(auth_client)  # 8.5 kg, no height
+        await measure(auth_client, child["id"])  # today: 8.7 kg, 70 cm
+        profile = await profile_of(auth_client, child["id"])
+        assert (profile["weight_kg"], profile["height_cm"]) == (8.7, 70.0)
+
+        a_month_ago = (today() - dt.timedelta(days=30)).isoformat()
+        await measure(auth_client, child["id"], measured_on=a_month_ago, weight_kg=8.2)
+        profile = await profile_of(auth_client, child["id"])
+        assert (profile["weight_kg"], profile["height_cm"]) == (8.7, 70.0)  # back-dated: no change
+
+    async def test_newest_without_height_keeps_the_profile_height(
+        self, auth_client: AsyncClient
+    ) -> None:
+        child = await create_child(auth_client)
+        yesterday = (today() - dt.timedelta(days=1)).isoformat()
+        await measure(auth_client, child["id"], measured_on=yesterday, weight_kg=8.6, height_cm=70)
+        await measure(auth_client, child["id"], weight_kg=8.8, height_cm=None)
+        profile = await profile_of(auth_client, child["id"])
+        assert (profile["weight_kg"], profile["height_cm"]) == (8.8, 70.0)
+
+    async def test_editing_the_profile_logs_nothing(self, auth_client: AsyncClient) -> None:
+        child = await create_child(auth_client)
+        replaced = await auth_client.put(
+            f"/api/children/{child['id']}", json={**CHILD, "weight_kg": 9.1}
+        )
+        assert replaced.status_code == 200
+        assert await growth_list(auth_client, child["id"]) == []
+
+    async def test_rejections(self, auth_client: AsyncClient) -> None:
+        child = await create_child(auth_client)
+        birth = dt.date.fromisoformat(CHILD["birth_date"])
+        before_birth = (birth - dt.timedelta(days=1)).isoformat()
+        response = await auth_client.post(
+            f"/api/children/{child['id']}/growth",
+            json={**MEASUREMENT, "measured_on": before_birth},
+        )
+        assert response.status_code == 422 and "date of birth" in response.json()["detail"]
+
+        ahead = (today() + dt.timedelta(days=2)).isoformat()
+        response = await auth_client.post(
+            f"/api/children/{child['id']}/growth", json={**MEASUREMENT, "measured_on": ahead}
+        )
+        assert response.status_code == 422
+
+        for body in (
+            {**MEASUREMENT, "weight_kg": 0},
+            {**MEASUREMENT, "height_cm": 0},
+            {**MEASUREMENT, "id": str(NOWHERE)},  # ids are server-generated
+        ):
+            response = await auth_client.post(f"/api/children/{child['id']}/growth", json=body)
+            assert response.status_code == 422, body
+        assert await growth_list(auth_client, child["id"]) == []
+
+    async def test_same_day_twice_is_409_and_the_first_stands(
+        self, auth_client: AsyncClient
+    ) -> None:
+        child = await create_child(auth_client)
+        first = await measure(auth_client, child["id"])
+        again = await auth_client.post(
+            f"/api/children/{child['id']}/growth", json={**MEASUREMENT, "weight_kg": 9.9}
+        )
+        assert again.status_code == 409 and "that day" in again.json()["detail"]
+        listed = await growth_list(auth_client, child["id"])
+        assert [m["id"] for m in listed] == [first["id"]] and listed[0]["weight_kg"] == 8.7
+        assert (await profile_of(auth_client, child["id"]))["weight_kg"] == 8.7
+
+    async def test_sixty_months_is_still_assessed(self, auth_client: AsyncClient) -> None:
+        child = await create_child(
+            auth_client, birth_date=born(60), weight_kg=18, height_cm=106, sex="male"
+        )
+        row = await measure(auth_client, child["id"], weight_kg=18.2, height_cm=106.5)
+        assert row["age_months"] == 60 and len(row["assessment"]["indicators"]) == 4
+
+    async def test_delete_removes_one_and_leaves_the_profile(
+        self, auth_client: AsyncClient, api_client: AsyncClient, other_user: User, user: User
+    ) -> None:
+        child = await create_child(auth_client)
+        yesterday = (today() - dt.timedelta(days=1)).isoformat()
+        older = await measure(auth_client, child["id"], measured_on=yesterday, weight_kg=8.6)
+        newest = await measure(auth_client, child["id"])
+        response = await auth_client.delete(f"/api/children/{child['id']}/growth/{newest['id']}")
+        assert response.status_code == 204
+        assert [m["id"] for m in await growth_list(auth_client, child["id"])] == [older["id"]]
+        assert (await profile_of(auth_client, child["id"]))["weight_kg"] == 8.7  # not rolled back
+
+        # Another child's measurement id is refused exactly like a nonexistent one.
+        sign_in(api_client, other_user)
+        theirs = await create_child(api_client, sex="male")
+        sign_in(api_client, user)
+        foreign = await api_client.delete(f"/api/children/{child['id']}/growth/{theirs['id']}")
+        nowhere = await api_client.delete(f"/api/children/{child['id']}/growth/{NOWHERE}")
+        assert foreign.status_code == nowhere.status_code == 404
+        assert foreign.content == nowhere.content
+
+
 class TestChatAuthoritySeam:
     """``POST /api/chat`` reads the child and the log from the account, never the body."""
 
@@ -405,7 +614,7 @@ class TestChatAuthoritySeam:
         self, auth_client: AsyncClient, captured: list[ChatRequest]
     ) -> None:
         first = await create_child(auth_client)
-        await create_child(auth_client, age_months=30, sex="male")
+        await create_child(auth_client, birth_date=born(30), sex="male")
         ambiguous = await auth_client.post("/api/chat", json={"message": "hi", "stream": False})
         assert ambiguous.status_code == 422 and "child_id" in ambiguous.json()["detail"]
         explicit = await auth_client.post(

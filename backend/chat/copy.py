@@ -68,9 +68,11 @@ def _display_name(suggestion: str) -> str:
 
 
 # Growth assessment: reasons an indicator is skipped, never failed (growth-assessment spec).
+# Location-neutral on purpose: the same result renders in the chat card and in a growth-log
+# row (growth-tracking spec).
 GROWTH_NEEDS_HEIGHT = (
-    "We need your child's length or height for this one — pop it in the side panel and "
-    "we'll place it on the WHO chart"
+    "We need your child's length or height for this one — add it and we'll place it on the "
+    "WHO chart"
 )
 
 

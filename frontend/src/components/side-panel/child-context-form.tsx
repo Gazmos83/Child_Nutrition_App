@@ -7,7 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChildForm, ChildFormErrors } from "@/lib/child-context-store";
-import { HEIGHT_REQUIRED_FROM_MONTHS, MAX_AGE_MONTHS, MAX_NOTE_CHARS } from "@/lib/child-context-store";
+import {
+  HEIGHT_REQUIRED_FROM_MONTHS,
+  MAX_NOTE_CHARS,
+  completedMonths,
+  todayIsoDate,
+} from "@/lib/child-context-store";
 import * as copy from "@/lib/copy";
 import {
   ACTIVITY_LEVEL_OPTIONS,
@@ -30,10 +35,12 @@ interface Props {
   dirty: boolean;
   saving: boolean;
   saveFailed: boolean;
+  /** The server's own reason for a refused save, when it gave one; else the generic line. */
+  saveError?: string | null;
   clearFailed: boolean;
   update: <K extends keyof ChildForm>(key: K, value: ChildForm[K]) => void;
   save: () => void;
-  /** Deletes the saved profile and its feeding log; the form asks before calling it. */
+  /** Deletes the saved profile, its feeding log, and its growth log; the form asks first. */
   clear: () => void;
 }
 
@@ -45,13 +52,14 @@ export function ChildContextForm({
   dirty,
   saving,
   saveFailed,
+  saveError,
   clearFailed,
   update,
   save,
   clear,
 }: Props) {
-  const age = Number(form.age_months);
-  const heightNeeded = form.age_months !== "" && Number.isInteger(age) && age >= HEIGHT_REQUIRED_FROM_MONTHS;
+  const age = completedMonths(form.birth_date);
+  const heightNeeded = age !== null && age >= HEIGHT_REQUIRED_FROM_MONTHS;
   const canSave = dirty && !isEmpty && Object.keys(errors).length === 0 && !saving;
 
   return (
@@ -91,17 +99,19 @@ export function ChildContextForm({
       )}
 
       <fieldset className="contents" disabled={!hydrated} aria-busy={!hydrated}>
-      <Field label={copy.FORM_AGE_LABEL} hint={copy.FORM_AGE_HINT} error={errors.age_months} htmlFor="age_months">
+      <Field
+        label={copy.FORM_BIRTH_DATE_LABEL}
+        hint={age === null ? copy.FORM_BIRTH_DATE_HINT : copy.monthsOld(age)}
+        error={errors.birth_date}
+        htmlFor="birth_date"
+      >
         <Input
-          id="age_months"
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={MAX_AGE_MONTHS}
-          step={1}
-          value={form.age_months}
-          onChange={(e) => update("age_months", e.target.value)}
-          aria-invalid={Boolean(errors.age_months)}
+          id="birth_date"
+          type="date"
+          max={todayIsoDate()}
+          value={form.birth_date}
+          onChange={(e) => update("birth_date", e.target.value)}
+          aria-invalid={Boolean(errors.birth_date)}
         />
       </Field>
 
@@ -204,7 +214,7 @@ export function ChildContextForm({
       )}
       {saveFailed && (
         <p className="text-xs text-destructive" role="alert">
-          {copy.FORM_SAVE_FAILED}
+          {saveError ?? copy.FORM_SAVE_FAILED}
         </p>
       )}
     </form>

@@ -4,6 +4,7 @@ The offline model tests assert these against SQLAlchemy metadata; here the datab
 the enforcing. Every test is marked ``db`` and rolls back through ``db_session``.
 """
 
+import datetime as dt
 from decimal import Decimal
 
 import pytest
@@ -12,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import ChildAllergy, ChildProfile, Feeding, User
+from backend.models import ChildAllergy, ChildProfile, Feeding, GrowthMeasurement, User
 from backend.models.enums import Allergen, FeedingType, Sex
 from backend.schemas.child import ChildProfileWrite
 from tests.conftest import make_user
@@ -23,7 +24,7 @@ pytestmark = pytest.mark.db
 def profile(user: User, **overrides) -> ChildProfile:
     fields = {
         "user_id": user.id,
-        "age_in_months": 8,
+        "birth_date": dt.date(2026, 1, 10),
         "weight_kg": Decimal("8.5"),
         "sex": Sex.FEMALE,
     }
@@ -31,27 +32,28 @@ def profile(user: User, **overrides) -> ChildProfile:
     return ChildProfile(**fields)
 
 
-class TestAgeInMonths:
-    """child-profile spec: age is represented in months."""
+class TestBirthDate:
+    """child-profile spec: age is derived from a stored date of birth, in months."""
 
-    @pytest.mark.parametrize("age", [-1, 61])
-    async def test_out_of_range_rejected(self, db_session: AsyncSession, user: User, age: int):
-        db_session.add(profile(user, age_in_months=age))
-        with pytest.raises(IntegrityError, match="age_in_months_range"):
-            await db_session.flush()
+    def test_typed_age_rejected_before_the_database(self) -> None:
+        """The write model takes a date of birth only; a typed age -- whole or fractional --
+        is refused rather than converted."""
+        for age in (8, 8.5):
+            with pytest.raises(ValidationError):
+                ChildProfileWrite.model_validate(
+                    {"age_months": age, "weight_kg": 8.5, "sex": "female"}
+                )
 
-    def test_fraction_rejected_before_the_database(self) -> None:
-        """PostgreSQL would *round* 8.5 into a smallint, not refuse it (Day 1 task 7.5 assumed
-        otherwise); the write model is where a fractional month is rejected."""
-        with pytest.raises(ValidationError):
-            ChildProfileWrite.model_validate({"age_months": 8.5, "weight_kg": 8.5, "sex": "female"})
-
-    @pytest.mark.parametrize("age", [0, 8, 60])
-    async def test_in_range_accepted(self, db_session: AsyncSession, user: User, age: int):
-        child = profile(user, age_in_months=age)
+    async def test_round_trips_as_a_date(self, db_session: AsyncSession, user: User) -> None:
+        child = profile(user, birth_date=dt.date(2026, 1, 31))
         db_session.add(child)
         await db_session.flush()
-        assert (await db_session.get(ChildProfile, child.id)).age_in_months == age
+        await db_session.refresh(child, attribute_names=["birth_date"])
+        assert child.birth_date == dt.date(2026, 1, 31)
+        # Month-end birthday: 28 Feb is the clamped anniversary, so one completed month.
+        assert child.age_months_on(dt.date(2026, 2, 27)) == 0
+        assert child.age_months_on(dt.date(2026, 2, 28)) == 1
+        assert child.age_months_on(dt.date(2026, 3, 31)) == 2
 
 
 class TestAllergenVocabulary:
@@ -119,12 +121,19 @@ class TestCascadeDeletion:
                 quantity=None,
             )
         )
+        db_session.add(
+            GrowthMeasurement(
+                child_profile_id=child.id,
+                measured_on=dt.date(2026, 5, 10),
+                weight_kg=Decimal("7.2"),
+            )
+        )
         await db_session.flush()
 
         await db_session.delete(user)
         await db_session.flush()
 
-        for table in (ChildProfile, ChildAllergy, Feeding):
+        for table in (ChildProfile, ChildAllergy, Feeding, GrowthMeasurement):
             count = await db_session.scalar(select(func.count()).select_from(table))
             assert count == 0, table.__tablename__
 
@@ -178,4 +187,50 @@ class TestFeedingRules:
             )
         )
         with pytest.raises(IntegrityError, match="unit_known"):
+            await db_session.flush()
+
+
+class TestGrowthMeasurementRules:
+    """growth-tracking spec: positive measurements, one per child per day."""
+
+    async def _child(self, db_session: AsyncSession, user: User) -> ChildProfile:
+        child = profile(user)
+        db_session.add(child)
+        await db_session.flush()
+        return child
+
+    async def test_zero_weight_rejected(self, db_session: AsyncSession, user: User) -> None:
+        child = await self._child(db_session, user)
+        db_session.add(
+            GrowthMeasurement(
+                child_profile_id=child.id, measured_on=dt.date(2026, 5, 10), weight_kg=Decimal("0")
+            )
+        )
+        with pytest.raises(IntegrityError, match="growth_measurements_weight_kg_positive"):
+            await db_session.flush()
+
+    async def test_zero_height_rejected(self, db_session: AsyncSession, user: User) -> None:
+        child = await self._child(db_session, user)
+        db_session.add(
+            GrowthMeasurement(
+                child_profile_id=child.id,
+                measured_on=dt.date(2026, 5, 10),
+                weight_kg=Decimal("7.2"),
+                height_cm=Decimal("0"),
+            )
+        )
+        with pytest.raises(IntegrityError, match="growth_measurements_height_cm_positive"):
+            await db_session.flush()
+
+    async def test_one_measurement_per_day(self, db_session: AsyncSession, user: User) -> None:
+        child = await self._child(db_session, user)
+        for weight in ("7.2", "7.3"):
+            db_session.add(
+                GrowthMeasurement(
+                    child_profile_id=child.id,
+                    measured_on=dt.date(2026, 5, 10),
+                    weight_kg=Decimal(weight),
+                )
+            )
+        with pytest.raises(IntegrityError, match="uq_growth_measurements_child_day"):
             await db_session.flush()

@@ -10,7 +10,8 @@ function trackPosition(z: number): number {
   return ((clamped + 3) / 6) * 100;
 }
 
-function IndicatorRow({ indicator }: { indicator: GrowthIndicatorResult }) {
+/** One indicator on the −3…+3 track; shared with the Growth tab's measurement rows. */
+export function GrowthIndicatorRow({ indicator }: { indicator: GrowthIndicatorResult }) {
   const label = copy.GROWTH_INDICATOR_LABELS[indicator.indicator] ?? indicator.indicator;
   return (
     <li data-testid="growth-row" data-band={indicator.band}>
@@ -58,7 +59,7 @@ export function GrowthCard({ result }: { result: GrowthAssessmentResult }) {
       <CardContent className="space-y-3 text-sm">
         <ul className="space-y-3">
           {result.indicators.map((indicator) => (
-            <IndicatorRow key={indicator.indicator} indicator={indicator} />
+            <GrowthIndicatorRow key={indicator.indicator} indicator={indicator} />
           ))}
           {result.skipped.map((skipped) => (
             <li key={skipped.indicator} data-testid="growth-skipped">

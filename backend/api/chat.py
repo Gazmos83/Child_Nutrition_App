@@ -17,8 +17,8 @@ from sqlalchemy import select
 
 from backend.api.children import (
     DEFAULT_LOG_DAYS,
+    child_context_or_422,
     recent_feedings,
-    to_child_context,
     to_feeding_entries,
 )
 from backend.api.deps import CurrentUser, DbSession, owned_child
@@ -72,7 +72,9 @@ async def resolve_chat_request(
     request_context.set_child_profile_id(child.id)
     rows = await recent_feedings(db, child, DEFAULT_LOG_DAYS)
     return ChatRequest(
-        **body.model_dump(), child=to_child_context(child), feeding_log=to_feeding_entries(rows)
+        **body.model_dump(),
+        child=child_context_or_422(child),
+        feeding_log=to_feeding_entries(rows),
     )
 
 

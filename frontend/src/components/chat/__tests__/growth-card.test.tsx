@@ -75,7 +75,7 @@ describe("GrowthCard", () => {
 
   it("lists skipped indicators with their reasons when no height was given", () => {
     const reason =
-      "We need your child's length or height for this one — pop it in the side panel and we'll place it on the WHO chart";
+      "We need your child's length or height for this one — add it and we'll place it on the WHO chart";
     const noHeight: GrowthAssessmentResult = {
       ...BASE,
       height_cm: null,

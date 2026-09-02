@@ -5,20 +5,23 @@ preference as controlled vocabularies (rule 2), and the doctor's note whose guid
 overrides general nutrient targets (rule 3).
 """
 
+import datetime as dt
 import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Numeric, SmallInteger, Text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric, Text
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, pg_enum
 from backend.models.enums import ActivityLevel, Allergen, DietPreference, Sex
+from backend.nutrition.age import completed_months, today
 
 if TYPE_CHECKING:
     from backend.models.feeding import Feeding
+    from backend.models.growth_measurement import GrowthMeasurement
     from backend.models.user import User
 
 # Newborn through ~4 years, the supported range. 60 months = 5 years exclusive upper
@@ -38,10 +41,12 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
 
-    # Hard rule 1: age lives in months and only in months. There is deliberately no
-    # `age_years` column -- the failure mode "someone read age as years" cannot be
-    # expressed because there is nothing to read (design.md Decision 7).
-    age_in_months: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    # Hard rule 1: age lives in months and only in months. The date of birth is the one
+    # stored fact; the age is derived from it as completed months on demand (growth-tracking
+    # design Decision 1), so it never goes stale. There is deliberately no `age_years`
+    # column -- the failure mode "someone read age as years" cannot be expressed because
+    # there is nothing to read (Day 1 design.md Decision 7).
+    birth_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
 
     # Fixed-point, not float: weight feeds per-kilogram nutrient arithmetic whose output
     # is a feeding instruction, so binary representation error has no place in the chain
@@ -90,6 +95,12 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         passive_deletes=True,
     )
 
+    growth_measurements: Mapped[list[GrowthMeasurement]] = relationship(
+        back_populates="child_profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     #: Read/write view of :attr:`allergies` as plain :class:`Allergen` values.
     allergens: AssociationProxy[list[Allergen]] = association_proxy(
         "allergies",
@@ -98,10 +109,6 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     __table_args__ = (
-        CheckConstraint(
-            f"age_in_months >= {MIN_AGE_MONTHS} AND age_in_months <= {MAX_AGE_MONTHS}",
-            name="age_in_months_range",
-        ),
         CheckConstraint("weight_kg > 0", name="weight_kg_positive"),
         CheckConstraint("height_cm IS NULL OR height_cm > 0", name="height_cm_positive"),
         # Either a note with its timestamp, or neither. Keeps "a note nobody can date"
@@ -112,10 +119,21 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
+    def age_months_on(self, as_of: dt.date) -> int:
+        """Completed months of age on ``as_of`` (hard rule 1)."""
+        return completed_months(self.birth_date, as_of)
+
+    @property
+    def age_months(self) -> int:
+        """Completed months of age today (UTC). Clamped at 0 for a child born "tomorrow"
+        in the parent's time zone (growth-tracking design Decision 2)."""
+        if self.birth_date > today():
+            return MIN_AGE_MONTHS
+        return self.age_months_on(today())
+
     def __repr__(self) -> str:
         return (
-            f"<ChildProfile id={self.id} age_in_months={self.age_in_months} "
-            f"weight_kg={self.weight_kg}>"
+            f"<ChildProfile id={self.id} birth_date={self.birth_date} weight_kg={self.weight_kg}>"
         )
 
 

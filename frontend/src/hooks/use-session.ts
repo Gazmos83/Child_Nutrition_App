@@ -30,6 +30,7 @@ export function useSession() {
     // A different account may be signing in on the same page: nothing cached may carry over.
     queryClient.removeQueries({ queryKey: ["children"] });
     queryClient.removeQueries({ queryKey: ["feedings"] });
+    queryClient.removeQueries({ queryKey: ["growth"] });
     queryClient.setQueryData(SESSION_KEY, user);
   };
 
@@ -50,6 +51,7 @@ export function useSession() {
       queryClient.setQueryData(SESSION_KEY, null);
       queryClient.removeQueries({ queryKey: ["children"] });
       queryClient.removeQueries({ queryKey: ["feedings"] });
+      queryClient.removeQueries({ queryKey: ["growth"] });
     },
   });
 

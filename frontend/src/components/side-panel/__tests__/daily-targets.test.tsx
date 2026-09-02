@@ -159,6 +159,7 @@ describe("DailyTargets", () => {
   it("refetches after a profile save", async () => {
     const profile = {
       id: "c1",
+      birth_date: "2025-11-27",
       age_months: 9,
       weight_kg: 8.5,
       sex: "female",

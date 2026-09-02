@@ -239,7 +239,7 @@ class TestSkippingNeverFailing:
             "bmi_for_age",
         ]
         for skipped in result.skipped:
-            assert "side panel" in skipped.reason
+            assert "length or height" in skipped.reason and "side panel" not in skipped.reason
 
     def test_out_of_range_length_skips_weight_for_length_only(
         self, table: LoadedGrowthTable

@@ -6,11 +6,13 @@ import { ChatWidget } from "@/components/chat/chat-widget";
 import { ChildContextForm } from "@/components/side-panel/child-context-form";
 import { DailyTargets } from "@/components/side-panel/daily-targets";
 import { FeedingLogTab } from "@/components/side-panel/feeding-log-tab";
+import { GrowthTab } from "@/components/side-panel/growth-tab";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useChat, type RequestContext } from "@/hooks/use-chat";
 import { useChildContext } from "@/hooks/use-child-context";
 import { useFeedingLog } from "@/hooks/use-feeding-log";
+import { useGrowthLog } from "@/hooks/use-growth-log";
 import type { CurrentUser, LoggedFeeding } from "@/lib/api-types";
 import {
   APP_TITLE,
@@ -18,6 +20,7 @@ import {
   CHAT_FEED_SAVE_FAILED,
   SIGN_OUT,
   TAB_CHILD,
+  TAB_GROWTH,
   TAB_LOG,
   TAB_TARGETS,
 } from "@/lib/copy";
@@ -31,6 +34,7 @@ export function ChatPage({ user, onSignOut }: Props) {
   const childContext = useChildContext();
   const { childId } = childContext;
   const feedingLog = useFeedingLog(childId);
+  const growth = useGrowthLog(childId);
   const { timeZone, add } = feedingLog;
   const [feedNotice, setFeedNotice] = useState<string | null>(null);
   const onFeedLogged = useCallback(
@@ -79,6 +83,7 @@ export function ChatPage({ user, onSignOut }: Props) {
             <TabsTrigger value="child">{TAB_CHILD}</TabsTrigger>
             <TabsTrigger value="log">{TAB_LOG}</TabsTrigger>
             <TabsTrigger value="targets">{TAB_TARGETS}</TabsTrigger>
+            <TabsTrigger value="growth">{TAB_GROWTH}</TabsTrigger>
           </TabsList>
           <TabsContent value="child">
             <ChildContextForm
@@ -89,6 +94,7 @@ export function ChatPage({ user, onSignOut }: Props) {
               dirty={childContext.dirty}
               saving={childContext.saving}
               saveFailed={childContext.saveFailed}
+              saveError={childContext.saveError}
               clearFailed={childContext.clearFailed}
               update={childContext.update}
               save={childContext.save}
@@ -100,6 +106,9 @@ export function ChatPage({ user, onSignOut }: Props) {
           </TabsContent>
           <TabsContent value="targets">
             <DailyTargets childId={childId} dirty={childContext.dirty} />
+          </TabsContent>
+          <TabsContent value="growth">
+            <GrowthTab growth={growth} birthDate={childContext.profile?.birth_date ?? null} />
           </TabsContent>
         </Tabs>
       </main>

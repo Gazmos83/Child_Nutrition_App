@@ -1,6 +1,7 @@
 """The running service as a black box (rag-evaluation spec, *Both strategies are evaluated
 through the running service*). Nothing here imports application code."""
 
+import calendar
 import datetime as dt
 import secrets
 import time
@@ -12,6 +13,16 @@ Strategy = str  # "basic" | "advanced"
 
 class ServiceUnavailable(RuntimeError):
     pass
+
+
+def birth_date_for(months: int, as_of: dt.date) -> dt.date:
+    """The latest date of birth that gives exactly ``months`` completed months on ``as_of``.
+
+    The cases describe children in months (hard rule 1); the API takes a date of birth and
+    derives the age. Mirrors ``backend.nutrition.age.birth_date_for`` without importing it.
+    """
+    year, month = divmod(as_of.year * 12 + (as_of.month - 1) - months, 12)
+    return dt.date(year, month + 1, min(as_of.day, calendar.monthrange(year, month + 1)[1]))
 
 
 class ServiceClient:
@@ -54,7 +65,11 @@ class ServiceClient:
         return self.account
 
     def save_child(self, child: dict) -> dict:
-        response = self.http.post("/api/children", json=child)
+        body = dict(child)
+        if "age_months" in body:
+            as_of = dt.datetime.now(dt.UTC).date()
+            body["birth_date"] = birth_date_for(body.pop("age_months"), as_of).isoformat()
+        response = self.http.post("/api/children", json=body)
         response.raise_for_status()
         return response.json()
 

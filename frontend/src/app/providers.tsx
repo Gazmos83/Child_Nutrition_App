@@ -13,6 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       client.setQueryData(SESSION_KEY, null);
       client.removeQueries({ queryKey: ["children"] });
       client.removeQueries({ queryKey: ["feedings"] });
+      client.removeQueries({ queryKey: ["growth"] });
     });
     return () => setUnauthorizedHandler(null);
   }, [client]);

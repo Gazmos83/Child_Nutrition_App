@@ -1,5 +1,7 @@
 """Application boot, health reporting, and route surface (tasks 6.2, 6.3, 6.4; Day 6)."""
 
+import re
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -223,6 +225,8 @@ USER_SCOPED_PATHS = {
     "/api/children/{child_id}/feedings",
     "/api/children/{child_id}/feedings/{feeding_id}",
     "/api/children/{child_id}/targets",
+    "/api/children/{child_id}/growth",
+    "/api/children/{child_id}/growth/{measurement_id}",
 }
 
 
@@ -248,7 +252,7 @@ class TestRouteSurface:
             for path, operations in app.openapi()["paths"].items():
                 if path not in USER_SCOPED_PATHS:
                     continue
-                concrete = path.replace("{child_id}", sample_id).replace("{feeding_id}", sample_id)
+                concrete = re.sub(r"\{\w+_id\}", sample_id, path)
                 for method in operations:
                     response = client.request(method.upper(), concrete, json={})
                     assert response.status_code == 401, (method, path, response.status_code)

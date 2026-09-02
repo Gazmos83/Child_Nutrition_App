@@ -5,16 +5,18 @@ re-verified against real PostgreSQL in the group 7 integration tests, where the 
 does the enforcing -- these catch a broken model definition before a migration is ever run.
 """
 
+import datetime as dt
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import CheckConstraint, DateTime
+from sqlalchemy import CheckConstraint, DateTime, UniqueConstraint
 
 from backend.db.base import Base
-from backend.models import ChildAllergy, ChildProfile, User
+from backend.models import ChildAllergy, ChildProfile, GrowthMeasurement, User
 from backend.models.enums import Allergen, DietPreference, Sex
+from backend.nutrition.age import today
 
 
 class TestUUIDPrimaryKey:
@@ -30,7 +32,7 @@ class TestUUIDPrimaryKey:
         # SQLAlchemy wraps the callable to accept an execution context, so assert on
         # behaviour rather than on the identity of the wrapped function.
         # ChildAllergy is excluded: it has a composite primary key, not a UUID id.
-        for model in (User, ChildProfile):
+        for model in (User, ChildProfile, GrowthMeasurement):
             column_default = model.__table__.c.id.default
             assert column_default is not None, model.__name__
             generated = column_default.arg(None)
@@ -67,7 +69,7 @@ class TestUserTable:
 
 
 class TestAgeInMonths:
-    """Task 5.3 / hard rule 1 / design.md Decision 7."""
+    """Task 5.3 / hard rule 1 / design.md Decision 7; growth-tracking design Decision 1."""
 
     def test_no_age_years_column_anywhere(self) -> None:
         for table in Base.metadata.sorted_tables:
@@ -79,15 +81,50 @@ class TestAgeInMonths:
         assert not hasattr(ChildProfile, "age_years")
         assert not hasattr(ChildProfile, "age_in_years")
 
-    def test_age_column_is_an_integer_type(self) -> None:
-        # An integer column rejects 8.5 rather than truncating it.
-        assert ChildProfile.__table__.c.age_in_months.type.python_type is int
+    def test_birth_date_is_a_date_column_not_null(self) -> None:
+        column = ChildProfile.__table__.c.birth_date
+        assert column.type.python_type is dt.date
+        assert column.nullable is False
 
-    def test_age_range_check_constraint_exists(self) -> None:
-        checks = _check_constraints(ChildProfile)
-        assert "ck_child_profiles_age_in_months_range" in checks
-        sql = checks["ck_child_profiles_age_in_months_range"]
-        assert "0" in sql and "60" in sql
+    def test_no_typed_age_column_and_no_age_check_remains(self) -> None:
+        assert "age_in_months" not in ChildProfile.__table__.c
+        assert not any("age" in name for name in _check_constraints(ChildProfile))
+
+    def test_age_is_derived_in_completed_months(self) -> None:
+        profile = _build_profile(birth_date=dt.date(2026, 1, 10))
+        assert profile.age_months_on(dt.date(2026, 5, 9)) == 3
+        assert profile.age_months_on(dt.date(2026, 5, 10)) == 4
+        # Born "tomorrow" in the parent's time zone: clamped, never negative.
+        assert _build_profile(birth_date=today() + dt.timedelta(days=1)).age_months == 0
+
+
+class TestGrowthMeasurement:
+    """growth-tracking design Decision 4."""
+
+    def test_columns_are_fixed_point_and_a_calendar_date(self) -> None:
+        columns = GrowthMeasurement.__table__.c
+        assert (columns.weight_kg.type.precision, columns.weight_kg.type.scale) == (5, 2)
+        assert columns.weight_kg.nullable is False
+        assert (columns.height_cm.type.precision, columns.height_cm.type.scale) == (4, 1)
+        assert columns.height_cm.nullable is True
+        assert columns.measured_on.type.python_type is dt.date
+        assert columns.measured_on.nullable is False
+
+    def test_positivity_checks_exist(self) -> None:
+        checks = _check_constraints(GrowthMeasurement)
+        assert "ck_growth_measurements_weight_kg_positive" in checks
+        assert "ck_growth_measurements_height_cm_positive" in checks
+
+    def test_one_measurement_per_child_per_day(self) -> None:
+        unique = [
+            c for c in GrowthMeasurement.__table__.constraints if isinstance(c, UniqueConstraint)
+        ]
+        assert [c.name for c in unique] == ["uq_growth_measurements_child_day"]
+        assert [col.name for col in unique[0].columns] == ["child_profile_id", "measured_on"]
+
+    def test_foreign_key_cascades_on_delete(self) -> None:
+        fk = next(iter(GrowthMeasurement.__table__.c.child_profile_id.foreign_keys))
+        assert fk.ondelete == "CASCADE"
 
 
 class TestWeight:
@@ -233,7 +270,7 @@ def _check_constraints(model: type) -> dict[str, str]:
 def _build_profile(**overrides) -> ChildProfile:
     defaults = {
         "user_id": uuid.uuid7(),
-        "age_in_months": 8,
+        "birth_date": dt.date(2026, 1, 10),
         "weight_kg": Decimal("8.40"),
         "sex": Sex.FEMALE,
         "diet_preference": DietPreference.OMNIVORE,

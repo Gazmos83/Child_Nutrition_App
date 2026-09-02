@@ -35,7 +35,7 @@ export function overrideBody(
 export const NO_SAFE_PLAN_WHY = "Here's why";
 export const NO_SAFE_PLAN_CHECK = "Worth checking";
 export const NO_SAFE_PLAN_CHECKLIST: readonly string[] = [
-  "Age in months",
+  "Date of birth",
   "Recorded allergies",
   "Diet preference",
   "Your pediatrician can suggest foods that fit",
@@ -149,8 +149,11 @@ export const HIDE_PASSAGE = "Hide passage";
 // -- child form ----------------------------------------------------------------------------
 
 export const PANEL_TITLE = "Your little one";
-export const FORM_AGE_LABEL = "Age (months)";
-export const FORM_AGE_HINT = "Age is in months — 0 to 60 — because the first year moves fast";
+export const FORM_BIRTH_DATE_LABEL = "Date of birth";
+export const FORM_BIRTH_DATE_HINT = "We count age in months from here — the first year moves fast";
+export function monthsOld(months: number): string {
+  return `${months} ${months === 1 ? "month" : "months"} old`;
+}
 export const FORM_WEIGHT_LABEL = "Weight (kg)";
 export const FORM_SEX_LABEL = "Sex";
 export const FORM_HEIGHT_LABEL = "Height (cm)";
@@ -168,7 +171,7 @@ export const FORM_SAVED = "Saved to your account";
 export const FORM_UNSAVED = "Not saved yet";
 export const FORM_SAVE_FAILED = "Those details didn't save. Check them and try again";
 export const FORM_CLEAR_CONFIRM =
-  "This removes your little one's details and their whole feeding log from your account. Continue?";
+  "This removes your little one's details, their feeding log, and their growth measurements from your account. Continue?";
 export const FORM_CLEAR_FAILED = "Those details didn't clear. Try again in a moment";
 
 // -- chat input ----------------------------------------------------------------------------
@@ -253,7 +256,8 @@ export function servingsLine(servings: number, size: number, unit: string): stri
 
 // -- form validation (direct: what is needed, in one line) ---------------------------------
 
-export const FORM_ERROR_AGE = "Age needs to be a whole number of months, from 0 to 60";
+export const FORM_ERROR_BIRTH_DATE =
+  "Date of birth needs to be a real date, no later than today and within the last 60 months";
 export const FORM_ERROR_WEIGHT = "Weight needs to be more than 0 and up to 60 kg";
 export const FORM_ERROR_HEIGHT = "Height needs to be more than 0 and up to 150 cm";
 export const FORM_ERROR_HEIGHT_REQUIRED = "From 36 months we need a height to work out calories";
@@ -271,6 +275,7 @@ export const INCOMPLETE = "Incomplete";
 export const TAB_CHILD = "Child";
 export const TAB_LOG = "Feeding log";
 export const TAB_TARGETS = "Daily targets";
+export const TAB_GROWTH = "Growth";
 export const LOG_TITLE = "Feeding log";
 export const LOG_EMPTY =
   "Nothing logged yet. Add a feed whenever you like — the more days we see, the more we can tell you";
@@ -400,6 +405,33 @@ export function ordinal(percentile: number): string {
   const suffix =
     tens >= 11 && tens <= 13 ? "th" : { 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th";
   return `${n}${suffix}`;
+}
+
+// -- growth tab (growth-tracking; direct voice — weight status is never a joke) -------------
+
+export const GROWTH_LOG_TITLE = "Growth over time";
+export const GROWTH_STORED_HERE =
+  "Saved to your account — the newest measurement also sets the weight and height on the Child tab";
+export const GROWTH_NEEDS_CHILD = "Save your little one's details first, then record measurements here";
+export const GROWTH_UNAVAILABLE =
+  "We couldn't load the measurements. Check your connection and try again";
+export const GROWTH_EMPTY =
+  "No measurements yet. Add today's weight to start the record — height too, if you have it";
+export const GROWTH_ADD_TITLE = "Add a measurement";
+export const GROWTH_DATE_LABEL = "Measured on";
+export const GROWTH_HEIGHT_HINT = "Optional — with a length or height we can place three more indicators";
+export const GROWTH_ADD = "Add measurement";
+export const GROWTH_ADDING = "Adding…";
+export const GROWTH_LOGGED = "Measurement saved";
+export const GROWTH_ADD_FAILED = "That measurement didn't save. Check the details and try again";
+export const GROWTH_REMOVE_FAILED = "That measurement didn't come off the record. Try again in a moment";
+export const GROWTH_ERROR_DATE = "Measured on needs to be a date from the birth date up to today";
+export const GROWTH_ENTRY_NO_HEIGHT = "No length or height with this one, so only weight for age is placed";
+export const GROWTH_ENTRY_UNASSESSED =
+  "This measurement falls outside the WHO standards for the saved date of birth, so it has no percentiles";
+export function measurementLine(weightKg: number, heightCm: number | null): string {
+  const weight = `${formatNumber(weightKg)} kg`;
+  return heightCm == null ? weight : `${weight} · ${formatNumber(heightCm)} cm`;
 }
 
 // -- daily targets panel (day 9) -------------------------------------------------------------

@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 Authority = Literal["WHO", "AAP", "CDC", "USDA/HHS", "NIH", "FDA/EPA"]
 AUTHORITIES: tuple[str, ...] = get_args(Authority)
 
-# The supported age range, in months (hard rule 1). Mirrors ChildProfile.age_in_months.
+# The supported age range, in months (hard rule 1). Mirrors the age ChildProfile derives.
 MIN_AGE_MONTHS = 0
 MAX_AGE_MONTHS = 60
 

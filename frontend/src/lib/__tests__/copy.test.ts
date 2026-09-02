@@ -19,6 +19,10 @@ const RENDERED: string[] = [
   copy.ordinal(50),
   copy.ordinal(0.4),
   copy.ordinal(99.8),
+  copy.monthsOld(1),
+  copy.monthsOld(8),
+  copy.measurementLine(8.5, 69),
+  copy.measurementLine(8.5, null),
   ...[
     copy.toolSummary("calculate_bmi", { weight_kg: 8.4, height_cm: 68 }, null),
     copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),

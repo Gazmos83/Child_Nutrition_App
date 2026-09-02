@@ -1,7 +1,50 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_CHILD_FORM, fromProfile, toChildContext } from "../child-context-store";
+import {
+  EMPTY_CHILD_FORM,
+  completedMonths,
+  fromProfile,
+  parseIsoDate,
+  toChildContext,
+  todayIsoDate,
+} from "../child-context-store";
+import * as copy from "../copy";
 
-const FILLED = { ...EMPTY_CHILD_FORM, age_months: "8", weight_kg: "8.5", sex: "female" as const };
+/** A `YYYY-MM-DD` exactly `months` calendar months before `from`, clamped to the month's end. */
+function monthsAgo(months: number, from: Date = new Date()): string {
+  const year = from.getFullYear();
+  const month = from.getMonth() - months;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return todayIsoDate(new Date(year, month, Math.min(from.getDate(), lastDay)));
+}
+
+const FILLED = { ...EMPTY_CHILD_FORM, birth_date: monthsAgo(8), weight_kg: "8.5", sex: "female" as const };
+
+describe("completedMonths", () => {
+  it("counts whole calendar months, the day before an anniversary excluded", () => {
+    expect(completedMonths("2026-01-10", new Date(2026, 4, 9))).toBe(3);
+    expect(completedMonths("2026-01-10", new Date(2026, 4, 10))).toBe(4);
+    expect(completedMonths("2026-01-10", new Date(2026, 0, 10))).toBe(0);
+  });
+
+  it("clamps a month-end birthday to the last day of a shorter month", () => {
+    expect(completedMonths("2025-01-31", new Date(2025, 1, 28))).toBe(1);
+    expect(completedMonths("2025-01-31", new Date(2025, 2, 30))).toBe(1);
+    expect(completedMonths("2025-01-31", new Date(2025, 2, 31))).toBe(2);
+  });
+
+  it("is null for a future, malformed, or impossible date", () => {
+    expect(completedMonths("2026-05-11", new Date(2026, 4, 10))).toBeNull();
+    expect(completedMonths("yesterday", new Date(2026, 4, 10))).toBeNull();
+    expect(completedMonths("2026-02-30", new Date(2026, 4, 10))).toBeNull();
+    expect(parseIsoDate("2026-02-30")).toBeNull();
+  });
+});
+
+describe("todayIsoDate", () => {
+  it("is the local calendar date, zero-padded", () => {
+    expect(todayIsoDate(new Date(2026, 0, 5))).toBe("2026-01-05");
+  });
+});
 
 describe("toChildContext", () => {
   it("empty form is empty, not invalid", () => {
@@ -11,10 +54,10 @@ describe("toChildContext", () => {
     expect(r.errors).toEqual({});
   });
 
-  it("valid form becomes a ChildContext with enum values only", () => {
+  it("valid form becomes a ChildProfileWrite with a birth date and no typed age", () => {
     const r = toChildContext({ ...FILLED, allergies: ["peanut"], doctors_note: "  " });
     expect(r.child).toEqual({
-      age_months: 8,
+      birth_date: FILLED.birth_date,
       weight_kg: 8.5,
       sex: "female",
       height_cm: null,
@@ -23,18 +66,23 @@ describe("toChildContext", () => {
       doctors_note: null,
       activity_level: "low_active",
     });
+    expect(r.child).not.toHaveProperty("age_months");
   });
 
-  it("rejects age outside 0-60 months, fractional months, and years-like input", () => {
-    expect(toChildContext({ ...FILLED, age_months: "61" }).errors.age_months).toBeDefined();
-    expect(toChildContext({ ...FILLED, age_months: "8.5" }).errors.age_months).toBeDefined();
-    expect(toChildContext({ ...FILLED, age_months: "-1" }).errors.age_months).toBeDefined();
-    expect(toChildContext({ ...FILLED, age_months: "0" }).child?.age_months).toBe(0);
+  it("rejects a birth date in the future, past 60 months, or malformed", () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    for (const birth_date of [todayIsoDate(tomorrow), monthsAgo(61), "8", "2026-13-01"]) {
+      expect(toChildContext({ ...FILLED, birth_date }).errors.birth_date).toBe(copy.FORM_ERROR_BIRTH_DATE);
+    }
+    expect(toChildContext({ ...FILLED, birth_date: todayIsoDate() }).child?.birth_date).toBe(todayIsoDate());
+    expect(toChildContext({ ...FILLED, birth_date: monthsAgo(60) }).errors.birth_date).toBeUndefined();
   });
 
-  it("requires height from 36 months", () => {
-    expect(toChildContext({ ...FILLED, age_months: "36" }).errors.height_cm).toContain("36 months");
-    expect(toChildContext({ ...FILLED, age_months: "36", height_cm: "95" }).child?.height_cm).toBe(95);
+  it("requires height from 36 months of derived age", () => {
+    expect(toChildContext({ ...FILLED, birth_date: monthsAgo(36) }).errors.height_cm).toContain("36 months");
+    expect(toChildContext({ ...FILLED, birth_date: monthsAgo(36), height_cm: "95" }).child?.height_cm).toBe(95);
+    expect(toChildContext({ ...FILLED, birth_date: monthsAgo(35) }).errors.height_cm).toBeUndefined();
     expect(toChildContext({ ...FILLED, height_cm: "0" }).errors.height_cm).toBeDefined();
   });
 
@@ -48,6 +96,7 @@ describe("fromProfile", () => {
   it("shows the stored profile as form strings, blanks for nulls", () => {
     const form = fromProfile({
       id: "c1",
+      birth_date: FILLED.birth_date,
       age_months: 8,
       weight_kg: 8.5,
       sex: "female",
@@ -62,7 +111,7 @@ describe("fromProfile", () => {
     expect(form).toEqual({ ...FILLED, allergies: ["peanut"] });
     // And back again without loss.
     expect(toChildContext(form).child).toEqual({
-      age_months: 8,
+      birth_date: FILLED.birth_date,
       weight_kg: 8.5,
       sex: "female",
       height_cm: null,

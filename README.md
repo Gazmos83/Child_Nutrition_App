@@ -1,6 +1,6 @@
 # Child Nutrition App
 
-A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years. It answers nutrition questions from a curated pediatric-guideline corpus and generates nutrient-specific meal plans from a stored child profile: age in months, weight, gender, allergies, diet preference, and any doctor's note.
+A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years. It answers nutrition questions from a curated pediatric-guideline corpus and generates nutrient-specific meal plans from a stored child profile: date of birth (age is derived from it in months), weight, gender, allergies, diet preference, and any doctor's note.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
@@ -65,7 +65,7 @@ Three constraints are load-bearing and worth knowing before touching the schema:
 
 ## Security
 
-Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles or feeding log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
+Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles, feeding log, or growth log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
 
 `POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` requires a session too (Day 7) — not because it reads user data (it doesn't; it persists nothing and uses the identity for admission only) but because every answer spends model credit; the evaluation harness registers an account before its first request. `GET /api/foods` and the register/login routes stay public.
 
@@ -96,7 +96,7 @@ pnpm -C frontend dev     # Next.js dev server on :3000, proxying /api/* to the b
 pnpm -C frontend lint && pnpm -C frontend typecheck && pnpm -C frontend test
 ```
 
-`docker-compose.yml` runs the database only; the backend (`uv run uvicorn backend.main:app --reload`) and the frontend stay on the host. `docker compose down -v` resets it. Migrations live in `alembic/versions/` and are hand-written: the initial one creates the five PostgreSQL enum types before the tables and its `downgrade()` drops them after, so `uv run alembic downgrade base && uv run alembic upgrade head` round-trips — `tests/test_migrations.py` checks exactly that. Tests marked `db` bind to `TEST_DATABASE_URL` (a separate database the compose file creates, so the fixtures can never touch development data); when it is unset they skip, when it is set but unreachable they fail.
+`docker-compose.yml` runs the database only; the backend (`uv run uvicorn backend.main:app --reload`) and the frontend stay on the host. `docker compose down -v` resets it. Migrations live in `alembic/versions/` and are hand-written: the initial one creates the five PostgreSQL enum types before the tables and its `downgrade()` drops them after; the second replaces the typed `age_in_months` with a `birth_date` (backfilled from each profile's creation date minus its age, accurate to within a month) and adds `growth_measurements`, with a `downgrade()` that recomputes the age. `uv run alembic downgrade base && uv run alembic upgrade head` round-trips — `tests/test_migrations.py` checks exactly that, plus the backfill. Tests marked `db` bind to `TEST_DATABASE_URL` (a separate database the compose file creates, so the fixtures can never touch development data); when it is unset they skip, when it is set but unreachable they fail.
 
 Always add dependencies through the package manager (`uv add`, `pnpm add`) and run Python via `uv run`. Never `pip install` into `.venv`, and never hand-edit a lockfile.
 
@@ -280,6 +280,34 @@ adjustments; gap detection emits its own `nutrient_gaps_audit` line.
 ```bash
 uv run pytest tests/test_nutrition_feeding.py tests/test_nutrition_gaps.py \
   tests/test_tools_feeding_log.py tests/test_tools_nutrient_gaps.py tests/test_api_feedings.py
+```
+
+## Growth tracking
+
+The Day 6 growth assessment placed one snapshot on the WHO 2006 standards. Growth tracking
+makes the trend visible. The profile stores a **date of birth** instead of a typed age;
+every age the API returns or reasons with is still a whole number of completed months
+(hard rule 1), derived on read — as of today for the profile (`age_months` in
+`GET /api/children/{id}`), as of the measurement day for a growth row. `POST`/`PUT
+/api/children` take `birth_date` and refuse `age_months`; a date in the future or more than
+60 months back is a 422.
+
+The growth log is one row per child per calendar day — `measured_on`, `weight_kg`, optional
+`height_cm` — stored raw under `/api/children/{id}/growth` (`GET` newest first, `POST`,
+`DELETE /{measurement_id}`), all behind the owner check like the feeding log. Every read
+recomputes each row's age on that day and its WHO assessment through the same
+`assess_growth` arithmetic the chat uses; nothing derived is stored. Posting the newest
+measurement by date also sets the profile's weight and (when supplied) height in the same
+transaction, so daily targets and meal plans use the freshest numbers; a measurement without
+height never clears the profile's height, editing the profile never creates a row, and
+deleting a row leaves the profile as it is. A second measurement for the same day is a 409;
+one dated before the birth date is a 422 naming it. The UI's fourth tab, **Growth**, has the
+measurement form, the list with one percentile row per indicator (the growth card's own
+row), and the same direct-voice WHO note.
+
+```bash
+uv run pytest tests/test_nutrition_age.py tests/test_api_children.py -k "Growth or Profiles"
+pnpm -C frontend test -- growth
 ```
 
 ## Evaluation (Day 6)

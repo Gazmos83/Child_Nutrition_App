@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { ChildProfile } from "@/lib/api-types";
-import { fetchJson } from "@/lib/api";
+import { ApiError, fetchJson } from "@/lib/api";
 import {
   EMPTY_CHILD_FORM,
   fromProfile,
@@ -70,6 +70,7 @@ export function useChildContext() {
     onSuccess: () => {
       queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, []);
       queryClient.removeQueries({ queryKey: ["feedings"] });
+      queryClient.removeQueries({ queryKey: ["growth"] });
       queryClient.removeQueries({ queryKey: ["daily-targets"] });
       setDraft(null);
     },
@@ -81,6 +82,10 @@ export function useChildContext() {
     save: () => save.mutate(),
     saving: save.isPending,
     saveFailed: save.isError,
+    // A 422 carries the server's own reason (a birth date the server reads a month apart
+    // from this browser near a birthday, say); anything else gets the generic line.
+    saveError:
+      save.error instanceof ApiError && save.error.status === 422 ? save.error.detail : null,
     clear: () => clear.mutate(),
     clearFailed: clear.isError,
     dirty: draft !== null,

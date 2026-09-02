@@ -1,9 +1,11 @@
-"""``/api/children`` -- the caller's child profiles and their feeding logs (hard rule 9).
+"""``/api/children`` -- the caller's child profiles, feeding logs, and growth logs (hard
+rule 9).
 
 Every route here runs behind ``CurrentUser`` or ``OwnedChild`` (``backend/api/deps.py``);
 the list query is the only one that filters by ``user_id`` itself. ``to_child_context``
 and ``to_feeding_entries`` are the read side of the authority seam: ``POST /api/chat``
-builds its context from these rows and nowhere else.
+builds its context from these rows and nowhere else. Age is derived from the stored date
+of birth wherever it is read (hard rule 1; growth-tracking design Decision 1).
 """
 
 import datetime as dt
@@ -12,11 +14,11 @@ import uuid
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.api.deps import CurrentUser, DbSession, OwnedChild
-from backend.models import ChildProfile, Feeding
+from backend.models import ChildProfile, Feeding, GrowthMeasurement
 from backend.models.enums import FeedingType
 from backend.nutrition.feeding import (
     FeedingEntryError,
@@ -28,8 +30,22 @@ from backend.nutrition.foods import FoodNotFoundError, get_food_table
 from backend.nutrition.gaps import targets_with_intake
 from backend.rag.prompts import DISCLAIMER
 from backend.schemas.chat import ChildContext
-from backend.schemas.child import ChildProfileResponse, ChildProfileWrite, DailyTargetsResponse
-from backend.schemas.tools import MAX_LOG_ENTRIES, FeedingEntry, LoggedFeeding
+from backend.schemas.child import (
+    AGE_OUT_OF_RANGE_DETAIL,
+    ChildProfileResponse,
+    ChildProfileWrite,
+    DailyTargetsResponse,
+    GrowthMeasurementResponse,
+    GrowthMeasurementWrite,
+)
+from backend.schemas.tools import (
+    MAX_AGE_MONTHS,
+    MAX_LOG_ENTRIES,
+    FeedingEntry,
+    GrowthAssessmentInput,
+    LoggedFeeding,
+)
+from backend.tools import nutrient_tools
 from backend.tools.feeding_log import log_feeding
 from backend.tools.targets_resolution import general_targets
 
@@ -46,7 +62,7 @@ MAX_LOG_DAYS = 90
 
 
 def _apply(profile: ChildProfile, body: ChildProfileWrite) -> None:
-    profile.age_in_months = body.age_months
+    profile.birth_date = body.birth_date
     profile.weight_kg = Decimal(str(body.weight_kg))
     profile.sex = body.sex
     profile.height_cm = Decimal(str(body.height_cm)) if body.height_cm is not None else None
@@ -64,7 +80,8 @@ def _apply(profile: ChildProfile, body: ChildProfileWrite) -> None:
 def to_response(profile: ChildProfile) -> ChildProfileResponse:
     return ChildProfileResponse(
         id=profile.id,
-        age_months=profile.age_in_months,
+        birth_date=profile.birth_date,
+        age_months=profile.age_months,
         weight_kg=float(profile.weight_kg),
         sex=profile.sex,
         height_cm=float(profile.height_cm) if profile.height_cm is not None else None,
@@ -80,7 +97,7 @@ def to_response(profile: ChildProfile) -> ChildProfileResponse:
 def to_child_context(profile: ChildProfile) -> ChildContext:
     """The stored profile as the context the chat and the tools take."""
     return ChildContext(
-        age_months=profile.age_in_months,
+        age_months=profile.age_months,
         weight_kg=float(profile.weight_kg),
         sex=profile.sex,
         height_cm=float(profile.height_cm) if profile.height_cm is not None else None,
@@ -89,6 +106,14 @@ def to_child_context(profile: ChildProfile) -> ChildContext:
         doctors_note=profile.doctors_note,
         activity_level=profile.activity_level,
     )
+
+
+def child_context_or_422(profile: ChildProfile) -> ChildContext:
+    """``to_child_context`` for a request: a child whose derived age has passed the supported
+    range is refused with the range named, not failed (child-profile spec)."""
+    if profile.age_months > MAX_AGE_MONTHS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=AGE_OUT_OF_RANGE_DETAIL)
+    return to_child_context(profile)
 
 
 def to_feeding_entry(row: Feeding) -> FeedingEntry:
@@ -177,7 +202,8 @@ async def replace_child(
 
 @router.delete("/{child_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Remove a child")
 async def delete_child(child: OwnedChild, db: DbSession) -> None:
-    """Removes the profile, its allergies, and its feeding log (ON DELETE CASCADE)."""
+    """Removes the profile, its allergies, its feeding log, and its growth log (ON DELETE
+    CASCADE)."""
     await db.delete(child)
     await db.commit()
 
@@ -196,7 +222,7 @@ async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
     ``OwnedChild`` resolves the profile only through the signed-in account's ownership, so
     a non-owner gets the same refusal as a direct profile read (hard rule 9).
     """
-    targets = general_targets(to_child_context(child))
+    targets = general_targets(child_context_or_422(child))
     table = get_food_table()
     normalised = []
     for row in await recent_feedings(db, child, DEFAULT_LOG_DAYS):
@@ -305,5 +331,132 @@ async def delete_feeding(feeding_id: uuid.UUID, child: OwnedChild, db: DbSession
     row = await db.get(Feeding, feeding_id)
     if row is None or row.child_profile_id != child.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="No such feeding")
+    await db.delete(row)
+    await db.commit()
+
+
+# -- growth log -------------------------------------------------------------------------------
+
+NO_SUCH_MEASUREMENT_DETAIL = "No such measurement"
+MEASUREMENT_DAY_TAKEN_DETAIL = "A measurement for that day already exists"
+MEASURED_PAST_RANGE_DETAIL = (
+    f"measured_on puts the child past {MAX_AGE_MONTHS} months; the WHO standards stop there"
+)
+
+
+def to_growth_response(child: ChildProfile, row: GrowthMeasurement) -> GrowthMeasurementResponse:
+    """The stored row plus what is derived from it on every read: the age on that day and
+    the WHO assessment (growth-tracking spec). Neither is ever stored.
+
+    A row the stored birth date no longer covers (the date was moved after the measurement
+    was logged) is returned with ``assessment=None`` rather than dropped: it is the parent's
+    own record, and they can still see and delete it.
+    """
+    height_cm = float(row.height_cm) if row.height_cm is not None else None
+    age_months, assessment = 0, None
+    if child.birth_date <= row.measured_on:
+        age_months = child.age_months_on(row.measured_on)
+        if age_months <= MAX_AGE_MONTHS:
+            assessment = nutrient_tools.assess_growth(
+                GrowthAssessmentInput(
+                    age_months=age_months,
+                    sex=child.sex,
+                    weight_kg=float(row.weight_kg),
+                    height_cm=height_cm,
+                )
+            )
+    if assessment is None:
+        logger.warning("Growth measurement %s lies outside 0-60 months for the birth date", row.id)
+    return GrowthMeasurementResponse(
+        id=row.id,
+        measured_on=row.measured_on,
+        age_months=age_months,
+        weight_kg=float(row.weight_kg),
+        height_cm=height_cm,
+        assessment=assessment,
+        created_at=row.created_at,
+    )
+
+
+@router.get(
+    "/{child_id}/growth",
+    response_model=list[GrowthMeasurementResponse],
+    summary="The child's growth measurements, newest first, placed on the WHO standards",
+)
+async def list_growth(child: OwnedChild, db: DbSession) -> list[GrowthMeasurementResponse]:
+    """Age and assessment are recomputed from the birth date and the WHO table on every
+    read, never stored -- the feeding log's stance on nutrients."""
+    result = await db.execute(
+        select(GrowthMeasurement)
+        .where(GrowthMeasurement.child_profile_id == child.id)
+        .order_by(GrowthMeasurement.measured_on.desc())
+    )
+    return [to_growth_response(child, row) for row in result.scalars()]
+
+
+@router.post(
+    "/{child_id}/growth",
+    status_code=status.HTTP_201_CREATED,
+    response_model=GrowthMeasurementResponse,
+    summary="Record one measurement",
+    responses={
+        422: {"description": "Dated before the birth date, past 60 months, or in the future."},
+        409: {"description": "The child already has a measurement for that day."},
+    },
+)
+async def create_growth(
+    body: GrowthMeasurementWrite, child: OwnedChild, db: DbSession
+) -> GrowthMeasurementResponse:
+    """Store the measurement and, when it is the newest by date, carry its weight and any
+    height onto the profile in the same transaction (growth-tracking design Decision 6).
+
+    A missing height means "not measured today", so it never clears the profile's height.
+    The ``(child, day)`` unique constraint turns a duplicate into a 409.
+    """
+    if body.measured_on < child.birth_date:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"measured_on is before the child's date of birth ({child.birth_date})",
+        )
+    if child.age_months_on(body.measured_on) > MAX_AGE_MONTHS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, detail=MEASURED_PAST_RANGE_DETAIL
+        )
+    newest = await db.scalar(
+        select(func.max(GrowthMeasurement.measured_on)).where(
+            GrowthMeasurement.child_profile_id == child.id
+        )
+    )
+    row = GrowthMeasurement(
+        child_profile_id=child.id,
+        measured_on=body.measured_on,
+        weight_kg=Decimal(str(body.weight_kg)),
+        height_cm=Decimal(str(body.height_cm)) if body.height_cm is not None else None,
+    )
+    db.add(row)
+    if newest is None or body.measured_on >= newest:
+        child.weight_kg = row.weight_kg
+        if row.height_cm is not None:
+            child.height_cm = row.height_cm
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=MEASUREMENT_DAY_TAKEN_DETAIL) from exc
+    await db.refresh(row)
+    await db.refresh(child)
+    return to_growth_response(child, row)
+
+
+@router.delete(
+    "/{child_id}/growth/{measurement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a measurement",
+)
+async def delete_growth(measurement_id: uuid.UUID, child: OwnedChild, db: DbSession) -> None:
+    """The profile keeps its weight and height (growth-tracking design Decision 6)."""
+    row = await db.get(GrowthMeasurement, measurement_id)
+    if row is None or row.child_profile_id != child.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=NO_SUCH_MEASUREMENT_DETAIL)
     await db.delete(row)
     await db.commit()
