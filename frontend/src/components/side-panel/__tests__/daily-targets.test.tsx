@@ -45,7 +45,6 @@ const OMNIVORE: DailyTargetsResponse = {
       targetRow({ nutrient: "iron", label: "Iron", unit: "mg", amount: 11, reference_type: "RDA", flag: "below", ratio: 0.56, intake_average: 6.2 }),
       targetRow({ nutrient: "protein", label: "Protein", unit: "g", amount: 10.2, reference_type: "RDA", per_kg: 1.2 }),
       targetRow({ nutrient: "vitamin_d", label: "Vitamin D", unit: "IU", amount: 400, reference_type: "AI", tracked: false, not_tracked_reason: VITAMIN_D_REASON }),
-      targetRow({ nutrient: "zinc", label: "Zinc", unit: "mg", amount: 3, reference_type: "RDA", tracked: false, not_tracked_reason: "We don't have zinc values for these foods yet, so we show the target without a score." }),
       targetRow({ nutrient: "calcium", label: "Calcium", unit: "mg", amount: 260, reference_type: "AI" }),
     ],
   },
@@ -101,10 +100,10 @@ afterEach(() => {
 });
 
 describe("DailyTargets", () => {
-  it("renders the 9-month omnivore's six rows in server order, without B12", async () => {
+  it("renders the 9-month omnivore's five rows in server order, without B12", async () => {
     renderPanel(OMNIVORE);
     const rows = await screen.findAllByTestId("target-row");
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(5);
     expect(screen.getByText("Iron").compareDocumentPosition(screen.getByText("Protein"))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -117,7 +116,7 @@ describe("DailyTargets", () => {
   it("draws exactly one progress track per tracked row and none elsewhere", async () => {
     const { container } = renderPanel(OMNIVORE);
     await screen.findAllByTestId("target-row");
-    // calories, iron, protein, calcium are tracked; vitamin D and zinc are not.
+    // calories, iron, protein, calcium are tracked; vitamin D is not.
     expect(container.querySelectorAll('[data-slot="progress-track"]')).toHaveLength(4);
     expect(screen.getByText(copy.FLAG_LABELS.below)).toBeInTheDocument();
   });

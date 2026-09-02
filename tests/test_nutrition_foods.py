@@ -72,6 +72,32 @@ class TestLoading:
             load_food_table(tmp_path / "absent.yaml")
 
 
+class TestOptionalMicronutrients:
+    """None means "not measured" and is distinct from a recorded zero (food-micronutrients)."""
+
+    def test_recorded_values_round_trip(self, tmp_path: Path) -> None:
+        entry = {**VALID_ENTRY, "zinc_mg": 0.15, "vitamin_c_mg": 8.7}
+        food = load_food_table(write_table(tmp_path, entry)).get("banana")
+        assert food.zinc_mg == 0.15
+        assert food.vitamin_c_mg == 8.7
+
+    def test_omitted_micronutrient_is_not_measured(self, tmp_path: Path) -> None:
+        food = load_food_table(write_table(tmp_path, VALID_ENTRY)).get("banana")
+        assert food.iodine_ug is None
+        assert food.folate_ug is None
+
+    def test_zero_is_a_measurement_not_unknown(self, tmp_path: Path) -> None:
+        entry = {**VALID_ENTRY, "vitamin_b12_ug": 0}
+        food = load_food_table(write_table(tmp_path, entry)).get("banana")
+        assert food.vitamin_b12_ug == 0.0
+        assert food.vitamin_b12_ug is not None
+
+    def test_negative_micronutrient_names_entry_and_field(self, tmp_path: Path) -> None:
+        path = write_table(tmp_path, {**VALID_ENTRY, "folate_ug": -1})
+        with pytest.raises(ValueError, match=r"foods\[0\] \(banana\)\.folate_ug"):
+            load_food_table(path)
+
+
 class TestValidationFailsWhole:
     def test_negative_calories_names_entry(self, tmp_path: Path) -> None:
         path = write_table(tmp_path, VALID_ENTRY, {**VALID_ENTRY, "id": "bad", "calories": -1})

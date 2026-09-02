@@ -15,6 +15,13 @@ const LENTILS: FoodItem = {
   carbohydrate_g: 10,
   iron_mg: 1.7,
   calcium_mg: 9,
+  zinc_mg: null,
+  vitamin_a_ug: null,
+  iodine_ug: null,
+  vitamin_b12_ug: null,
+  folate_ug: null,
+  vitamin_c_mg: null,
+  fiber_g: null,
   allergens: [],
   choking_hazard: false,
   contains_honey: false,
@@ -103,6 +110,34 @@ describe("toFoodWrite", () => {
       expect(result.errors.iron_mg).toBe(copy.ADMIN_ERROR_NON_NEGATIVE);
       expect(result.errors.calories).toBe(copy.ADMIN_ERROR_NON_NEGATIVE);
       expect(result.errors.min_age_months).toBe(copy.ADMIN_ERROR_AGE);
+    }
+  });
+
+  it("omits blank micronutrients from the write, so they stay not-measured", () => {
+    const result = toFoodWrite(filled());
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect("zinc_mg" in result.value).toBe(false);
+      expect("fiber_g" in result.value).toBe(false);
+    }
+  });
+
+  it("sends filled micronutrients, and 0 as a measured zero rather than an omission", () => {
+    const result = toFoodWrite(filled({ zinc_mg: "1.3", vitamin_b12_ug: "0" }));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.zinc_mg).toBe(1.3);
+      expect(result.value.vitamin_b12_ug).toBe(0);
+      expect("folate_ug" in result.value).toBe(false);
+    }
+  });
+
+  it("refuses a negative or non-numeric micronutrient", () => {
+    const result = toFoodWrite(filled({ iodine_ug: "-1", folate_ug: "abc" }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.iodine_ug).toBe(copy.ADMIN_ERROR_NON_NEGATIVE);
+      expect(result.errors.folate_ug).toBe(copy.ADMIN_ERROR_NON_NEGATIVE);
     }
   });
 

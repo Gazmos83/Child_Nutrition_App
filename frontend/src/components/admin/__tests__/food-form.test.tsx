@@ -16,6 +16,13 @@ const KALE: FoodItem = {
   carbohydrate_g: 8,
   iron_mg: 0.5,
   calcium_mg: 30,
+  zinc_mg: 0.3,
+  vitamin_a_ug: null,
+  iodine_ug: null,
+  vitamin_b12_ug: null,
+  folate_ug: null,
+  vitamin_c_mg: null,
+  fiber_g: null,
   allergens: [],
   choking_hazard: true,
   contains_honey: false,
@@ -97,5 +104,40 @@ describe("FoodForm", () => {
       />,
     );
     expect(screen.getByTestId("food-form-server-error")).toHaveTextContent("Food 'kale_chips' already exists");
+  });
+
+  it("renders the seven optional micronutrient fields and saves with all of them blank", () => {
+    const onSubmit = vi.fn();
+    render(<FoodForm initial={KALE} busy={false} serverError={null} onSubmit={onSubmit} onCancel={() => {}} />);
+    for (const label of [
+      copy.ADMIN_FIELD_ZINC,
+      copy.ADMIN_FIELD_VITAMIN_A,
+      copy.ADMIN_FIELD_IODINE,
+      copy.ADMIN_FIELD_VITAMIN_B12,
+      copy.ADMIN_FIELD_FOLATE,
+      copy.ADMIN_FIELD_VITAMIN_C,
+      copy.ADMIN_FIELD_FIBER,
+    ]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByText(copy.ADMIN_MICRONUTRIENTS_HINT)).toBeInTheDocument();
+    fill(copy.ADMIN_FIELD_ZINC, "");
+    fireEvent.click(screen.getByRole("button", { name: copy.ADMIN_SAVE }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const value = onSubmit.mock.calls[0][0];
+    expect("zinc_mg" in value).toBe(false);
+    expect("folate_ug" in value).toBe(false);
+  });
+
+  it("shows stored micronutrients, leaves unmeasured ones blank, and sends what's filled", () => {
+    const onSubmit = vi.fn();
+    render(<FoodForm initial={KALE} busy={false} serverError={null} onSubmit={onSubmit} onCancel={() => {}} />);
+    expect(screen.getByLabelText(copy.ADMIN_FIELD_ZINC)).toHaveValue(0.3);
+    expect(screen.getByLabelText(copy.ADMIN_FIELD_FOLATE)).toHaveValue(null);
+    fill(copy.ADMIN_FIELD_VITAMIN_C, "120");
+    fireEvent.click(screen.getByRole("button", { name: copy.ADMIN_SAVE }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ zinc_mg: 0.3, vitamin_c_mg: 120 });
+    expect("iodine_ug" in onSubmit.mock.calls[0][0]).toBe(false);
   });
 });

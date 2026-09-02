@@ -74,6 +74,19 @@ class FoodItem(BaseModel):
     iron_mg: float = Field(ge=0)
     calcium_mg: float = Field(ge=0)
 
+    # Optional micronutrients (food-micronutrients): ``None`` means "not measured" and is
+    # deliberately distinct from a measured zero -- a default of 0.0 would be a nutrition
+    # claim with no source (hard rule 5). Optional also keeps every stored table revision
+    # re-validating as-is, so there is no migration. Units follow the registry convention
+    # (mg -> _mg, g -> _g, µg -> _ug).
+    zinc_mg: float | None = Field(default=None, ge=0)
+    vitamin_a_ug: float | None = Field(default=None, ge=0)
+    iodine_ug: float | None = Field(default=None, ge=0)
+    vitamin_b12_ug: float | None = Field(default=None, ge=0)
+    folate_ug: float | None = Field(default=None, ge=0)
+    vitamin_c_mg: float | None = Field(default=None, ge=0)
+    fiber_g: float | None = Field(default=None, ge=0)
+
     allergens: frozenset[Allergen] = Field(default_factory=frozenset)
     choking_hazard: bool
     contains_honey: bool

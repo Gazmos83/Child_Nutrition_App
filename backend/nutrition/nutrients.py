@@ -33,7 +33,6 @@ NutrientKey = Literal[
     "protein",
     "iron",
     "vitamin_d",
-    "zinc",
     "calcium",
     "vitamin_b12",
     "dha",
@@ -97,7 +96,7 @@ class EquationResult:
 
 @dataclass(frozen=True, slots=True)
 class FlatBands:
-    """``value`` is the daily amount: iron, zinc, calcium, vitamin D, B12."""
+    """``value`` is the daily amount: iron, calcium, vitamin D, B12."""
 
     bands: tuple[Band, ...]
 
@@ -370,27 +369,8 @@ REGISTRY: tuple[NutrientSpec, ...] = (
         # -- deficiency is the default without one, so it rises for infants.
         priority_by_age=((12, 25),),
     ),
-    NutrientSpec(
-        key="zinc",
-        label="Zinc",
-        unit="mg",
-        derivation=FlatBands(
-            (
-                Band(6, "0–6 months", 2, "AI", 4),
-                Band(12, "7–12 months", 3, "RDA", 5),
-                Band(47, "1–3 years", 3, "RDA", 7),
-                Band(60, "4–8 years", 5, "RDA", 12),
-            )
-        ),
-        source=DRI_VITAMIN_MINERAL_SOURCE,
-        # Trackable once the food table carries zinc_mg (deferred data work); until then
-        # the target is shown without a score.
-        intake_field=None,
-        not_tracked_reason=(
-            "We don't have zinc values for these foods yet, so we show the target without a score."
-        ),
-        priority=50,
-    ),
+    # Zinc has no NutrientSpec by decision (food-micronutrients): it is a stored
+    # food-composition value (zinc_mg) with no reference target for any age or diet.
     NutrientSpec(
         key="calcium",
         label="Calcium",

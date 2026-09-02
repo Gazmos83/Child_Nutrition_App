@@ -617,6 +617,17 @@ export const ADMIN_FIELD_FAT = "Fat (g)";
 export const ADMIN_FIELD_CARBS = "Carbohydrate (g)";
 export const ADMIN_FIELD_IRON = "Iron (mg)";
 export const ADMIN_FIELD_CALCIUM = "Calcium (mg)";
+export const ADMIN_MICRONUTRIENTS_LEGEND = "Micronutrients, optional";
+// Direct: a guessed number is worse than none (hard rule 5 — every value has a source).
+export const ADMIN_MICRONUTRIENTS_HINT =
+  "Leave a field blank if the source doesn't give it — blank means not measured, and 0 means a measured zero";
+export const ADMIN_FIELD_ZINC = "Zinc (mg)";
+export const ADMIN_FIELD_VITAMIN_A = "Vitamin A (µg)";
+export const ADMIN_FIELD_IODINE = "Iodine (µg)";
+export const ADMIN_FIELD_VITAMIN_B12 = "Vitamin B12 (µg)";
+export const ADMIN_FIELD_FOLATE = "Folate (µg)";
+export const ADMIN_FIELD_VITAMIN_C = "Vitamin C (mg)";
+export const ADMIN_FIELD_FIBER = "Fiber (g)";
 export const ADMIN_FIELD_ALLERGENS = "Allergens";
 export const ADMIN_FIELD_MIN_AGE = "Earliest age, in completed months";
 export const ADMIN_FIELD_MIN_AGE_HINT = "0 only for breast milk and formula; every solid is 6 or more";

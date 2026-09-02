@@ -520,6 +520,14 @@ export interface FoodItem {
   carbohydrate_g: number;
   iron_mg: number;
   calcium_mg: number;
+  /** Optional micronutrients: null means "not measured", distinct from a recorded 0. */
+  zinc_mg: number | null;
+  vitamin_a_ug: number | null;
+  iodine_ug: number | null;
+  vitamin_b12_ug: number | null;
+  folate_ug: number | null;
+  vitamin_c_mg: number | null;
+  fiber_g: number | null;
   allergens: Allergen[];
   choking_hazard: boolean;
   contains_honey: boolean;
@@ -530,12 +538,22 @@ export interface FoodItem {
   is_active: boolean;
 }
 
+/** The optional micronutrient fields; a blank form field is omitted, meaning "not measured". */
+export type Micronutrient =
+  | "zinc_mg"
+  | "vitamin_a_ug"
+  | "iodine_ug"
+  | "vitamin_b12_ug"
+  | "folate_ug"
+  | "vitamin_c_mg"
+  | "fiber_g";
+
 /** An administrator's entry: the same shape with the source made mandatory. */
-export type FoodWrite = Omit<FoodItem, "source" | "is_active" | "notes"> & {
+export type FoodWrite = Omit<FoodItem, "source" | "is_active" | "notes" | Micronutrient> & {
   source: string;
   notes?: string | null;
   is_active?: boolean;
-};
+} & Partial<Record<Micronutrient, number>>;
 
 export interface FoodTableAdminResponse {
   version: string;

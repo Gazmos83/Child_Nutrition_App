@@ -38,6 +38,13 @@ _NUMBER_FIELDS = (
     "carbohydrate_g",
     "iron_mg",
     "calcium_mg",
+    "zinc_mg",
+    "vitamin_a_ug",
+    "iodine_ug",
+    "vitamin_b12_ug",
+    "folate_ug",
+    "vitamin_c_mg",
+    "fiber_g",
 )
 
 
@@ -151,7 +158,8 @@ def parse_import(format: str, content: str) -> tuple[list[dict], str | None]:
 
     YAML: a bare list of entries or ``{source?, foods: [...]}`` like the committed file.
     CSV: a header of field names; ``allergens`` ``;``-separated; booleans ``true``/``false``;
-    blank optional cells become null.
+    blank optional cells become null. Micronutrient columns (``zinc_mg`` .. ``fiber_g``)
+    are optional; a blank cell means "not measured", never zero.
     """
     if len(content.encode("utf-8")) > IMPORT_MAX_BYTES:
         raise ValueError(f"the file is larger than {IMPORT_MAX_BYTES // 1024} KiB")

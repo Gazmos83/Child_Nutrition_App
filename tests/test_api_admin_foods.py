@@ -42,7 +42,8 @@ PEAR = {
 }
 CSV_HEADER = (
     "id,name,category,serving_size,serving_unit,calories,protein_g,fat_g,carbohydrate_g,"
-    "iron_mg,calcium_mg,allergens,choking_hazard,contains_honey,commonly_unpasteurized,"
+    "iron_mg,calcium_mg,zinc_mg,vitamin_a_ug,iodine_ug,vitamin_b12_ug,folate_ug,"
+    "vitamin_c_mg,fiber_g,allergens,choking_hazard,contains_honey,commonly_unpasteurized,"
     "min_age_months,source\n"
 )
 ADMIN = "/api/admin/foods"
@@ -204,14 +205,40 @@ class TestDeactivation:
         assert record["food_table_version"] == "db-2"
 
 
+class TestMicronutrients:
+    async def test_filled_and_blank_round_trip(
+        self, admin_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        payload = {**PEAR, "zinc_mg": 0.06, "vitamin_c_mg": 2.7, "fiber_g": 1.9}
+        response = await admin_client.post(ADMIN, json=payload)
+        assert response.status_code == 201, response.text
+        food = response.json()["food"]
+        assert food["zinc_mg"] == 0.06 and food["vitamin_c_mg"] == 2.7 and food["fiber_g"] == 1.9
+        # Blank fields read back as "not measured", never zero.
+        assert food["vitamin_a_ug"] is None and food["iodine_ug"] is None
+        listed = await admin_client.get(ADMIN)
+        [stored] = [f for f in listed.json()["foods"] if f["id"] == PEAR["id"]]
+        assert stored["zinc_mg"] == 0.06 and stored["folate_ug"] is None
+
+    async def test_negative_micronutrient_is_refused_and_writes_nothing(
+        self, admin_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        response = await admin_client.post(ADMIN, json={**PEAR, "iodine_ug": -1})
+        assert response.status_code == 422, response.text
+        assert "iodine_ug" in response.text
+        row = await latest_revision(db_session)
+        assert row.revision == 1
+
+
 class TestImport:
     def csv(self, *rows: str) -> str:
         return CSV_HEADER + "".join(rows)
 
     async def test_one_bad_row_writes_nothing_and_is_named(self, admin_client: AsyncClient) -> None:
         content = self.csv(
-            "pear_a,Pear A,fruit,60,g,34,0.2,0.1,9,0.1,5,,false,false,false,6,USDA\n",
-            "pear_b,Pear B,fruit,60,g,34,0.2,0.1,9,-1,5,,false,false,false,6,USDA\n",
+            "pear_a,Pear A,fruit,60,g,34,0.2,0.1,9,0.1,5,0.06,,,,,2.7,1.9,"
+            ",false,false,false,6,USDA\n",
+            "pear_b,Pear B,fruit,60,g,34,0.2,0.1,9,-1,5,,,,,,,,,false,false,false,6,USDA\n",
         )
         response = await admin_client.post(
             f"{ADMIN}/import", json={"format": "csv", "content": content, "dry_run": True}

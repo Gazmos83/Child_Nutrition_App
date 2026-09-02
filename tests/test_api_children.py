@@ -239,7 +239,6 @@ class TestDailyTargets:
             "iron",
             "protein",
             "vitamin_d",
-            "zinc",
             "calcium",
         ]
         assert body["diet_preference"] == "omnivore"
@@ -283,7 +282,7 @@ class TestDailyTargets:
             assert rows[key]["intake_average"] is not None, key
         # 150 ml of formula a day is far below the 678 kcal target.
         assert rows["calories"]["flag"] == "below"
-        for key in ("vitamin_d", "zinc"):
+        for key in ("vitamin_d",):
             assert rows[key]["flag"] is None and rows[key]["intake_average"] is None, key
 
     async def test_vegan_profile_gains_b12_and_the_dha_advisory(

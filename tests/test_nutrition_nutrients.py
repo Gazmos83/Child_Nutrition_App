@@ -110,23 +110,6 @@ class TestBandBoundaries:
     @pytest.mark.parametrize(
         ("age", "amount", "ref", "upper"),
         [
-            (0, 2.0, "AI", 4),
-            (6, 2.0, "AI", 4),
-            (7, 3.0, "RDA", 5),
-            (12, 3.0, "RDA", 5),
-            (13, 3.0, "RDA", 7),
-            (47, 3.0, "RDA", 7),
-            (48, 5.0, "RDA", 12),
-            (60, 5.0, "RDA", 12),
-        ],
-    )
-    def test_zinc(self, age: int, amount: float, ref: str, upper: float) -> None:
-        result = evaluate(SPECS["zinc"], inputs(age))
-        assert (result.amount, result.reference_type, result.upper_limit) == (amount, ref, upper)
-
-    @pytest.mark.parametrize(
-        ("age", "amount", "ref", "upper"),
-        [
             (0, 200, "AI", 1000),
             (6, 200, "AI", 1000),
             (7, 260, "AI", 1500),
@@ -171,27 +154,27 @@ class TestDisplayOrder:
             (
                 9,
                 DietPreference.OMNIVORE,
-                ("calories", "iron", "protein", "vitamin_d", "zinc", "calcium"),
+                ("calories", "iron", "protein", "vitamin_d", "calcium"),
             ),
             (
                 3,
                 DietPreference.OMNIVORE,
-                ("calories", "iron", "protein", "vitamin_d", "zinc", "calcium"),
+                ("calories", "iron", "protein", "vitamin_d", "calcium"),
             ),
             (
                 30,
                 DietPreference.OMNIVORE,
-                ("calories", "protein", "iron", "vitamin_d", "zinc", "calcium"),
+                ("calories", "protein", "iron", "vitamin_d", "calcium"),
             ),
             (
                 48,
                 DietPreference.PESCATARIAN,
-                ("calories", "protein", "iron", "vitamin_d", "zinc", "calcium"),
+                ("calories", "protein", "iron", "vitamin_d", "calcium"),
             ),
             (
                 30,
                 DietPreference.VEGETARIAN,
-                ("calories", "protein", "iron", "vitamin_d", "vitamin_b12", "zinc", "calcium"),
+                ("calories", "protein", "iron", "vitamin_d", "vitamin_b12", "calcium"),
             ),
             (
                 30,
@@ -202,7 +185,6 @@ class TestDisplayOrder:
                     "vitamin_b12",
                     "iron",
                     "vitamin_d",
-                    "zinc",
                     "calcium",
                     "dha",
                 ),
@@ -216,7 +198,6 @@ class TestDisplayOrder:
                     "protein",
                     "vitamin_b12",
                     "vitamin_d",
-                    "zinc",
                     "calcium",
                     "dha",
                 ),

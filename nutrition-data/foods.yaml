@@ -21,6 +21,12 @@
 # Unsafe foods are deliberately present, flagged, so the filter is exercised against real
 # entries rather than trusted to work on an empty set.
 #
+# Optional micronutrients (food-micronutrients): zinc_mg, vitamin_a_ug, iodine_ug,
+# vitamin_b12_ug, folate_ug, vitamin_c_mg, fiber_g. An absent key means "not measured" --
+# never zero -- and a value must carry its provenance like every other number here (the
+# table `source`, or the entry's own `source`). No entry below records one yet; values are
+# entered through the admin page or a sourced import.
+#
 # Validation: backend/nutrition/foods.py rejects the whole file on any invalid entry.
 
 version: "2026-08-26.1"

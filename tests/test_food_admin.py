@@ -113,6 +113,14 @@ class TestValidateTable:
 
 CSV_HEADER = (
     "id,name,category,serving_size,serving_unit,calories,protein_g,fat_g,carbohydrate_g,"
+    "iron_mg,calcium_mg,zinc_mg,vitamin_a_ug,iodine_ug,vitamin_b12_ug,folate_ug,"
+    "vitamin_c_mg,fiber_g,allergens,choking_hazard,contains_honey,commonly_unpasteurized,"
+    "min_age_months,source\n"
+)
+
+# The pre-micronutrient column set: files written against it must keep importing.
+LEGACY_CSV_HEADER = (
+    "id,name,category,serving_size,serving_unit,calories,protein_g,fat_g,carbohydrate_g,"
     "iron_mg,calcium_mg,allergens,choking_hazard,contains_honey,commonly_unpasteurized,"
     "min_age_months,source\n"
 )
@@ -133,13 +141,28 @@ class TestParseImport:
         rows, source = parse_import(
             "csv",
             CSV_HEADER
-            + "pear,Pear ripe,fruit,60,g,34,0.2,0.1,9,0.1,5,egg;soy,false,false,false,6,\n",
+            + "pear,Pear ripe,fruit,60,g,34,0.2,0.1,9,0.1,5,0.06,,,,,2.7,1.9,"
+            + "egg;soy,false,false,false,6,\n",
         )
         assert source is None
         [row] = rows
         assert row["serving_size"] == 60 and row["calories"] == 34 and row["fat_g"] == 0.1
         assert row["allergens"] == ["egg", "soy"] and row["choking_hazard"] is False
         assert row["min_age_months"] == 6 and row["source"] is None
+        # Filled micronutrient cells coerce to numbers; blank ones stay absent (not zero).
+        assert row["zinc_mg"] == 0.06 and row["vitamin_c_mg"] == 2.7 and row["fiber_g"] == 1.9
+        for absent in ("vitamin_a_ug", "iodine_ug", "vitamin_b12_ug", "folate_ug"):
+            assert absent not in row
+
+    def test_csv_without_micronutrient_columns_still_imports(self) -> None:
+        rows, _ = parse_import(
+            "csv",
+            LEGACY_CSV_HEADER
+            + "pear,Pear ripe,fruit,60,g,34,0.2,0.1,9,0.1,5,egg;soy,false,false,false,6,\n",
+        )
+        [row] = rows
+        assert row["calories"] == 34
+        assert "zinc_mg" not in row and "fiber_g" not in row
 
     def test_size_cap_and_unknown_format(self) -> None:
         with pytest.raises(ValueError, match="KiB"):
@@ -160,6 +183,27 @@ class TestPlanImport:
         [error] = plan.errors
         assert (error.row, error.id, error.field) == (2, "plum", "iron_mg")
         assert "greater than or equal to 0" in error.message
+
+    def test_bad_micronutrient_cell_fails_its_row(self, table: FoodTable) -> None:
+        rows = [PEAR, {**PEAR, "id": "plum", "name": "Plum", "zinc_mg": -2}]
+        plan = plan_import(table, rows, "upsert", None)
+        assert plan.table is None and plan.created == []
+        [error] = plan.errors
+        assert (error.row, error.id, error.field) == (2, "plum", "zinc_mg")
+        assert "greater than or equal to 0" in error.message
+
+    def test_micronutrients_import_filled_and_blank(self, table: FoodTable) -> None:
+        rows = [
+            {**PEAR, "zinc_mg": 0.06, "vitamin_b12_ug": 0},
+            {**LENTILS_ENTRY, "source": "test source", "folate_ug": 90},
+        ]
+        plan = plan_import(table, rows, "upsert", None)
+        assert plan.errors == [] and plan.table is not None
+        by_id = plan.table.by_id()
+        pear = by_id["pear"]
+        assert pear.zinc_mg == 0.06 and pear.vitamin_b12_ug == 0.0
+        assert pear.iodine_ug is None  # not measured, never zero
+        assert by_id["lentils"].folate_ug == 90
 
     def test_clean_file_reports_created_updated_unchanged(self, table: FoodTable) -> None:
         rows = [

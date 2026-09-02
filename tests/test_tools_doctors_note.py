@@ -394,7 +394,7 @@ class TestOverrideBoundary:
 
     def test_override_on_a_widened_set_changes_only_the_named_row(self) -> None:
         general = general_targets(self.displayed_child(8))
-        assert len(general.items) == 6  # calories, iron, protein, vitamin D, zinc, calcium
+        assert len(general.items) == 5  # calories, iron, protein, vitamin D, calcium
         applied, outcome = apply_override(
             general,
             DoctorsNoteOverride(nutrient="calories", direction="max", value=650, unit="kcal"),

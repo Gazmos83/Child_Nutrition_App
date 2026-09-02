@@ -33,7 +33,6 @@ class TestGeneralTargets:
             "iron",
             "protein",
             "vitamin_d",
-            "zinc",
             "calcium",
         )
         # 89 × 8.5 − 100 + 22 = 678 kcal (2005 DRI infant equation)
@@ -51,8 +50,6 @@ class TestGeneralTargets:
         vitamin_d = targets.require("vitamin_d")
         assert vitamin_d.amount == 400 and vitamin_d.unit == "IU"
         assert vitamin_d.tracked is False and vitamin_d.not_tracked_reason
-        zinc = targets.require("zinc")
-        assert zinc.amount == 3 and zinc.tracked is False and zinc.not_tracked_reason
 
     def test_vegan_toddler_gains_b12_and_the_dha_advisory(self) -> None:
         targets = general_targets(child(age_months=30, weight_kg=13.0, diet=DietPreference.VEGAN))

@@ -24,6 +24,13 @@ export interface FoodForm {
   carbohydrate_g: string;
   iron_mg: string;
   calcium_mg: string;
+  zinc_mg: string;
+  vitamin_a_ug: string;
+  iodine_ug: string;
+  vitamin_b12_ug: string;
+  folate_ug: string;
+  vitamin_c_mg: string;
+  fiber_g: string;
   allergens: Allergen[];
   choking_hazard: YesNo;
   contains_honey: YesNo;
@@ -37,6 +44,16 @@ export type FoodFormErrors = Partial<Record<keyof FoodForm, string>>;
 
 export const SAFETY_FIELDS = ["choking_hazard", "contains_honey", "commonly_unpasteurized"] as const;
 const NUMBER_FIELDS = ["calories", "protein_g", "fat_g", "carbohydrate_g", "iron_mg", "calcium_mg"] as const;
+// Optional: a blank field is omitted from the write and stays "not measured"; 0 is a measured zero.
+export const MICRONUTRIENT_FIELDS = [
+  "zinc_mg",
+  "vitamin_a_ug",
+  "iodine_ug",
+  "vitamin_b12_ug",
+  "folate_ug",
+  "vitamin_c_mg",
+  "fiber_g",
+] as const;
 
 export function emptyFoodForm(): FoodForm {
   return {
@@ -51,6 +68,13 @@ export function emptyFoodForm(): FoodForm {
     carbohydrate_g: "",
     iron_mg: "",
     calcium_mg: "",
+    zinc_mg: "",
+    vitamin_a_ug: "",
+    iodine_ug: "",
+    vitamin_b12_ug: "",
+    folate_ug: "",
+    vitamin_c_mg: "",
+    fiber_g: "",
     allergens: [],
     choking_hazard: "",
     contains_honey: "",
@@ -76,6 +100,13 @@ export function fromFood(food: FoodItem): FoodForm {
     carbohydrate_g: String(food.carbohydrate_g),
     iron_mg: String(food.iron_mg),
     calcium_mg: String(food.calcium_mg),
+    zinc_mg: food.zinc_mg === null ? "" : String(food.zinc_mg),
+    vitamin_a_ug: food.vitamin_a_ug === null ? "" : String(food.vitamin_a_ug),
+    iodine_ug: food.iodine_ug === null ? "" : String(food.iodine_ug),
+    vitamin_b12_ug: food.vitamin_b12_ug === null ? "" : String(food.vitamin_b12_ug),
+    folate_ug: food.folate_ug === null ? "" : String(food.folate_ug),
+    vitamin_c_mg: food.vitamin_c_mg === null ? "" : String(food.vitamin_c_mg),
+    fiber_g: food.fiber_g === null ? "" : String(food.fiber_g),
     allergens: [...food.allergens],
     choking_hazard: yesNo(food.choking_hazard),
     contains_honey: yesNo(food.contains_honey),
@@ -111,6 +142,17 @@ export function toFoodWrite(form: FoodForm): FoodFormResult {
       numbers[field] = value;
     }
   }
+  // Micronutrients are optional: blank stays out of the write ("not measured"), 0 is sent.
+  const micronutrients: Partial<Record<(typeof MICRONUTRIENT_FIELDS)[number], number>> = {};
+  for (const field of MICRONUTRIENT_FIELDS) {
+    if (form[field].trim() === "") continue;
+    const value = Number(form[field]);
+    if (!Number.isFinite(value) || value < 0) {
+      errors[field] = copy.ADMIN_ERROR_NON_NEGATIVE;
+    } else {
+      micronutrients[field] = value;
+    }
+  }
   for (const field of SAFETY_FIELDS) {
     if (form[field] === "") errors[field] = copy.ADMIN_SAFETY_REQUIRED;
   }
@@ -137,6 +179,7 @@ export function toFoodWrite(form: FoodForm): FoodFormResult {
       carbohydrate_g: numbers.carbohydrate_g!,
       iron_mg: numbers.iron_mg!,
       calcium_mg: numbers.calcium_mg!,
+      ...micronutrients,
       allergens: [...form.allergens],
       choking_hazard: form.choking_hazard === "yes",
       contains_honey: form.contains_honey === "yes",

@@ -44,6 +44,18 @@ const NUMBER_FIELDS: readonly [keyof FoodForm, string][] = [
   ["calcium_mg", copy.ADMIN_FIELD_CALCIUM],
 ];
 
+// A separate, visibly optional group: an empty box must read as "leave it blank", never as
+// a value to guess (design Decision 6; hard rule 5).
+const MICRONUTRIENT_LABELS: readonly [keyof FoodForm, string][] = [
+  ["zinc_mg", copy.ADMIN_FIELD_ZINC],
+  ["vitamin_a_ug", copy.ADMIN_FIELD_VITAMIN_A],
+  ["iodine_ug", copy.ADMIN_FIELD_IODINE],
+  ["vitamin_b12_ug", copy.ADMIN_FIELD_VITAMIN_B12],
+  ["folate_ug", copy.ADMIN_FIELD_FOLATE],
+  ["vitamin_c_mg", copy.ADMIN_FIELD_VITAMIN_C],
+  ["fiber_g", copy.ADMIN_FIELD_FIBER],
+];
+
 function toggle(list: Allergen[], value: Allergen, on: boolean): Allergen[] {
   return on ? [...new Set([...list, value])] : list.filter((v) => v !== value);
 }
@@ -151,6 +163,26 @@ export function FoodForm({ initial, busy, serverError, onSubmit, onCancel }: Pro
           </Field>
         ))}
       </div>
+
+      <fieldset>
+        <legend className="mb-1 text-sm font-medium">{copy.ADMIN_MICRONUTRIENTS_LEGEND}</legend>
+        <p className="mb-2 text-xs text-muted-foreground">{copy.ADMIN_MICRONUTRIENTS_HINT}</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {MICRONUTRIENT_LABELS.map(([key, label]) => (
+            <Field key={key} id={`food-${key}`} label={label} error={errors[key]}>
+              <Input
+                id={`food-${key}`}
+                type="number"
+                step="any"
+                inputMode="decimal"
+                value={form[key] as string}
+                onChange={(e) => update(key, e.target.value as FoodForm[typeof key])}
+                aria-invalid={Boolean(errors[key])}
+              />
+            </Field>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium">{copy.ADMIN_FIELD_ALLERGENS}</legend>
