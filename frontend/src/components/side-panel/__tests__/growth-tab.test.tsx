@@ -19,8 +19,7 @@ const PROFILE = {
   height_cm: 70,
   diet_preference: "omnivore",
   allergies: [],
-  doctors_note: null,
-  doctors_note_recorded_at: null,
+  notes: [],
   activity_level: "low_active",
   created_at: "2026-08-27T09:00:00Z",
 };

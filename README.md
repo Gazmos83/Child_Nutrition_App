@@ -1,6 +1,6 @@
 # Child Nutrition App
 
-A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years. It answers nutrition questions from a curated pediatric-guideline corpus and generates nutrient-specific meal plans from a stored child profile: date of birth (age is derived from it in months), weight, gender, allergies, diet preference, and any doctor's note.
+A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years. It answers nutrition questions from a curated pediatric-guideline corpus and generates nutrient-specific meal plans from a stored child profile: date of birth (age is derived from it in months), weight, gender, allergies, diet preference, and doctor's-note and preference rows.
 
 > **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
 
@@ -12,7 +12,7 @@ A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years.
 - **Grounded nutrition answers** — retrieval over a curated corpus drawn from recognized pediatric guidelines (WHO Child Growth Standards, AAP, national infant dietary guidelines). Every RAG-backed answer cites its source and publication date.
 - **Deterministic nutrition tools** — BMI, calorie and protein targets, food lookup, per-meal nutrition, daily totals, and remaining targets. Typed inputs, Pydantic-validated, authorization-checked, with structured results and graceful failure handling.
 - **Hard-coded infant-safety filter** — every meal plan passes safety checks that run independently of the RAG/LLM pipeline and cannot be bypassed or overridden by the model: no honey under 12 months, no choking hazards, no unpasteurized products.
-- **Doctor's-note precedence** — when a clinician's note conflicts with general nutrient targets, the note wins. The conflict is surfaced in the UI rather than silently blended away.
+- **Doctor's-note precedence** — notes are rows, each a doctor's instruction or a household preference. When a doctor's row conflicts with a general nutrient target, the row wins and the conflict is surfaced in the UI rather than silently blended away. Foods and food groups a row names to avoid are left out of every plan, listed with the row as the reason; a preference row can only leave foods out, never change a target.
 - **Intent routing** — a lightweight classifier picks the execution path per query, then runs it deterministically.
 - **Meal logging and daily tracking** — log meals and meal items, then read back nutrition summaries and what's still outstanding against the day's targets.
 - **Transparent responses** — streamed answers carrying citations, tool-activity indicators, and conversation history, so it's visible which sources and which tools produced a given reply.
@@ -75,7 +75,7 @@ All API inputs, tool inputs, and LLM-generated tool arguments are validated with
 
 **Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, the client address, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
 
-Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, doctor's note, rule/source used) for auditability.
+Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, the note rows with their kinds, what each row did, rule/source used) for auditability.
 
 ## Development
 
@@ -161,10 +161,10 @@ them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
 | `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
 | `lookup_food` | one food's per-serving nutrients and safety flags by identifier or plain name (amount words are ignored when matching); with a `quantity` and `unit` (g or ml) the result also carries the nutrients for exactly that amount, scaled in code | `nutrition-data/foods.yaml` |
 | `calculate_meal_nutrition` | totals over a list of foods, each measured in table servings or as a quantity with unit; unknown foods are reported, never dropped | `nutrition-data/foods.yaml` |
-| `generate_meal_plan` | targets → doctor's-note override → diet filter → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log; optionally steered by a gap report and today's logged feeds (below) | all of the above |
+| `generate_meal_plan` | targets → doctor's-row overrides → diet filter → note avoidances → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log; optionally steered by a gap report and today's logged feeds (below) | all of the above |
 | `log_feeding` | validates one feed (type from a closed vocabulary, table food, quantity, unit), prices it from the table, assigns an id; stores nothing until Day 6 | `nutrition-data/foods.yaml` |
 | `get_daily_nutrition` | one local day's totals from the feeding log | `nutrition-data/foods.yaml` |
-| `get_remaining_targets` | the day's targets (doctor's note honoured) minus intake, floored at zero | DRI + food table |
+| `get_remaining_targets` | the day's targets (doctor's rows honoured) minus intake, floored at zero | DRI + food table |
 | `detect_nutrient_gaps` | rolling-window intake vs. targets with confidence that grows with complete days logged | DRI + food table |
 
 `nutrition-data/foods.yaml` is a hand-curated, validated table (~55 infant/toddler foods,
@@ -180,11 +180,18 @@ URL, sha256, and retrieval date recorded. Rebuild it with
 `uv run --with openpyxl scripts/build_growth_tables.py`; the app reads only the
 committed YAML and validates it whole at load.
 
-A doctor's note is extracted by the chat model into a bounded structure (nutrient ∈
-calories/protein/iron, direction, value, unit) and applied by plain Python: on conflict the
-note wins and the conflict is an explicit field; if extraction fails, the plan is still
-generated and the note is flagged as not applied. Every `generate_meal_plan` call emits one
-JSON line on the `backend.tools.audit` logger with the full input snapshot.
+The profile's note rows (`child_notes`: kind `doctor` | `preference`, text) are extracted by
+the chat model in one pass into bounded structures — per row at most one numeric target
+(nutrient ∈ calories/protein/iron, direction, value, unit; doctor rows only, one per
+nutrient) and the plain phrases of foods or food groups to avoid — and applied by plain
+Python: a target wins on conflict and the conflict is an explicit entry in `overrides`; a
+phrase is resolved by code (`backend/nutrition/avoidance.py`: food category first, else every
+table food it names; never a milk feed) and the matched foods are left out before the safety
+filter with the row quoted as the reason. Every row gets an outcome (`note_outcomes`), so a
+phrase the table does not know is shown as not applied rather than dropped; if extraction
+fails, the plan is still generated and every row is flagged. Every `generate_meal_plan` call
+emits one JSON line on the `backend.tools.audit` logger with the full input snapshot,
+including the rows, overrides, avoidances, and outcomes.
 
 ```bash
 uv run pytest tests/test_nutrition_*.py tests/test_tools_*.py tests/test_schemas_tools.py
@@ -201,7 +208,7 @@ blocks and/or validated tool results. At most four tool calls per message, one r
 agent loop.
 
 The child's details (age in **months**, weight, sex, optional height, diet preference,
-allergies from the controlled vocabulary, doctor's note, activity level) come from the side
+allergies from the controlled vocabulary, note rows, activity level) come from the side
 panel in the UI and travel in the request body. They are **authoritative**: any
 profile-backed argument the model proposes is replaced by the request's value and the tool
 activity says so (`used_context`). Nothing is persisted and no identity is taken — Day 6
@@ -228,8 +235,8 @@ retrieval statistics, and latency.
 The UI (`frontend/`, Next.js App Router + Tailwind + shadcn/ui + TanStack Query) is one
 screen: the child-details panel and the chat. Each assistant message shows the intent, one
 chip per tool (expandable to arguments and result), a structured meal-plan card when
-`generate_meal_plan` ran — with an unmissable banner when the doctor's note overrode a
-target — the answer with `[n]` citation markers, a numbered Sources list with publication
+`generate_meal_plan` ran — with an unmissable banner per nutrient a doctor's row overrode
+and a "Not applied, and why" list for rows the plan could not act on — the answer with `[n]` citation markers, a numbered Sources list with publication
 year, and the not-medical-advice disclaimer. All parent-facing copy lives in
 `frontend/src/lib/copy.ts` and `backend/chat/copy.py` (warm by default; direct about
 safety and errors).

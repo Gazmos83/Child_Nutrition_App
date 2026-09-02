@@ -3,6 +3,8 @@ import {
   EMPTY_CHILD_FORM,
   completedMonths,
   fromProfile,
+  newNoteRow,
+  noteRowError,
   parseIsoDate,
   toChildContext,
   todayIsoDate,
@@ -55,7 +57,11 @@ describe("toChildContext", () => {
   });
 
   it("valid form becomes a ChildProfileWrite with a birth date and no typed age", () => {
-    const r = toChildContext({ ...FILLED, allergies: ["peanut"], doctors_note: "  " });
+    const r = toChildContext({
+      ...FILLED,
+      allergies: ["peanut"],
+      notes: [{ key: "k1", kind: "preference", text: "  no pork  " }],
+    });
     expect(r.child).toEqual({
       birth_date: FILLED.birth_date,
       weight_kg: 8.5,
@@ -63,7 +69,7 @@ describe("toChildContext", () => {
       height_cm: null,
       diet_preference: "omnivore",
       allergies: ["peanut"],
-      doctors_note: null,
+      notes: [{ kind: "preference", text: "no pork" }],
       activity_level: "low_active",
     });
     expect(r.child).not.toHaveProperty("age_months");
@@ -103,12 +109,15 @@ describe("fromProfile", () => {
       height_cm: null,
       diet_preference: "omnivore",
       allergies: ["peanut"],
-      doctors_note: null,
-      doctors_note_recorded_at: null,
+      notes: [{ id: "n1", kind: "doctor", text: "no honey", recorded_at: "2026-08-28T09:00:00Z" }],
       activity_level: "low_active",
       created_at: "2026-08-28T09:00:00Z",
     });
-    expect(form).toEqual({ ...FILLED, allergies: ["peanut"] });
+    expect(form).toEqual({
+      ...FILLED,
+      allergies: ["peanut"],
+      notes: [{ key: "n1", kind: "doctor", text: "no honey" }],
+    });
     // And back again without loss.
     expect(toChildContext(form).child).toEqual({
       birth_date: FILLED.birth_date,
@@ -117,8 +126,46 @@ describe("fromProfile", () => {
       height_cm: null,
       diet_preference: "omnivore",
       allergies: ["peanut"],
-      doctors_note: null,
+      notes: [{ kind: "doctor", text: "no honey" }],
       activity_level: "low_active",
     });
+  });
+});
+
+describe("note rows", () => {
+  const row = (text: string, kind: "doctor" | "preference" = "preference") => ({
+    key: text,
+    kind,
+    text,
+  });
+
+  it("a fresh row is a preference with no text", () => {
+    const fresh = newNoteRow();
+    expect(fresh.kind).toBe("preference");
+    expect(fresh.text).toBe("");
+    expect(newNoteRow().key).not.toBe(fresh.key);
+  });
+
+  it("blank, over-long, and duplicate rows block the save with one error", () => {
+    for (const notes of [
+      [row("   ")],
+      [row("x".repeat(501))],
+      [row("no pork"), { key: "other", kind: "preference" as const, text: " no pork " }],
+      Array.from({ length: 21 }, (_, i) => row(`row ${i}`)),
+    ]) {
+      const r = toChildContext({ ...FILLED, notes });
+      expect(r.child).toBeNull();
+      expect(r.errors.notes).toBe(copy.FORM_ERROR_NOTE);
+    }
+    expect(noteRowError(row("   "), [])).toBe(copy.FORM_ERROR_NOTE);
+    expect(noteRowError(row("no pork"), [row("no pork", "doctor")])).toBeUndefined();
+  });
+
+  it("the same text under two kinds is two rows", () => {
+    const r = toChildContext({ ...FILLED, notes: [row("no pork", "doctor"), row("no pork")] });
+    expect(r.child?.notes).toEqual([
+      { kind: "doctor", text: "no pork" },
+      { kind: "preference", text: "no pork" },
+    ]);
   });
 });

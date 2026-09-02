@@ -13,18 +13,19 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.models.enums import ActivityLevel, Allergen, DietPreference, Sex
+from backend.models.enums import ActivityLevel, Allergen, DietPreference, NoteKind, Sex
 from backend.nutrition.age import DATE_TOLERANCE, completed_months, today
 from backend.schemas.tools import (
     _WEIGHT,
     HEIGHT_REQUIRED_FROM_MONTHS,
     MAX_AGE_MONTHS,
     MAX_HEIGHT_CM,
+    MAX_NOTES,
     GrowthAssessmentResult,
+    NoteRow,
     NutrientTargets,
+    check_unique_notes,
 )
-
-MAX_DOCTORS_NOTE_CHARS = 4000
 
 AGE_OUT_OF_RANGE_DETAIL = (
     f"The supported range is newborn through {MAX_AGE_MONTHS} months; this child's date of "
@@ -63,7 +64,7 @@ class ChildProfileWrite(BaseModel):
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
     diet_preference: DietPreference = DietPreference.default()
     allergies: frozenset[Allergen] = Field(default_factory=frozenset)
-    doctors_note: str | None = Field(default=None, max_length=MAX_DOCTORS_NOTE_CHARS)
+    notes: list[NoteRow] = Field(default_factory=list, max_length=MAX_NOTES)
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
 
     @model_validator(mode="after")
@@ -74,9 +75,19 @@ class ChildProfileWrite(BaseModel):
                 f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
                 "energy equation for 3–8 years uses height"
             )
-        if self.doctors_note is not None and not self.doctors_note.strip():
-            self.doctors_note = None
+        check_unique_notes(self.notes)
         return self
+
+
+class ChildNoteResponse(BaseModel):
+    """One stored note row with its provenance (child-profile spec)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: uuid.UUID
+    kind: NoteKind
+    text: str
+    recorded_at: dt.datetime
 
 
 class ChildProfileResponse(BaseModel):
@@ -92,8 +103,7 @@ class ChildProfileResponse(BaseModel):
     height_cm: float | None
     diet_preference: DietPreference
     allergies: list[Allergen]
-    doctors_note: str | None
-    doctors_note_recorded_at: dt.datetime | None
+    notes: list[ChildNoteResponse]
     activity_level: ActivityLevel
     created_at: dt.datetime
 
@@ -102,7 +112,8 @@ class DailyTargetsResponse(BaseModel):
     """The child's daily reference targets, for the side panel (child-profile spec).
 
     Deterministic: computed from the stored profile and the nutrient registry alone. The
-    doctor's note is disclosed via ``doctors_note_present``, never applied here -- it takes
+    note rows are disclosed via ``doctor_notes_present`` and
+    ``preferences_present``, never applied here -- it takes
     effect when meal plans are generated (day-9 design Decision 6).
     """
 
@@ -110,7 +121,8 @@ class DailyTargetsResponse(BaseModel):
 
     targets: NutrientTargets
     diet_preference: DietPreference
-    doctors_note_present: bool
+    doctor_notes_present: bool
+    preferences_present: bool
     disclaimer: str
 
 

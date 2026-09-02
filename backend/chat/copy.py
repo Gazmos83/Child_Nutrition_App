@@ -10,6 +10,8 @@ Day 6 evaluation and deliberately do not live here.
 
 from collections.abc import Sequence
 
+from backend.models.enums import NoteKind
+
 MISSING_CHILD_INFO_HINT = "Your little one's details go in the side panel — then we're good to go"
 
 SAFETY_STOP = (
@@ -34,7 +36,7 @@ FIELD_LABELS: dict[str, str] = {
     "sex": "sex",
     "diet_preference": "diet preference",
     "allergies": "allergies",
-    "doctors_note": "doctor's note",
+    "notes": "doctor's note and preferences",
     "activity_level": "activity level",
     "food_id": "food",
     "items": "meal items",
@@ -73,6 +75,49 @@ def _display_name(suggestion: str) -> str:
     if open_paren != -1 and suggestion.endswith(")"):
         return suggestion[open_paren + 1 : -1]
     return suggestion
+
+
+# Note rows (child-notes-restrictions): every row gets an outcome the parent can read. Direct
+# voice -- a doctor's instruction is never a joke.
+NOTE_PREFERENCE_TARGET = (
+    "Only a doctor's note can change a target; this row's food exclusions still apply"
+)
+NOTE_MILK_FEED = (
+    "Breast milk and formula are never left out by a note — please talk to your pediatrician "
+    "about milk feeds"
+)
+NOTE_TARGET_UNREADABLE = (
+    "We couldn't read a daily target from this row — a target needs a nutrient, a direction, "
+    "and a daily number"
+)
+NOTE_NOTHING = (
+    "Nothing here we could act on — a target needs a daily number, and leaving a food out "
+    "needs the food or food group named"
+)
+NOTE_EXTRACTION_UNAVAILABLE = (
+    "We couldn't read the notes this time; the plan uses the general targets"
+)
+
+
+def note_exclusion_reason(kind: NoteKind, text: str) -> str:
+    whose = "your doctor's note" if kind is NoteKind.DOCTOR else "your preference"
+    return f"left out by {whose}: “{text}”"
+
+
+def note_no_match(phrase: str) -> str:
+    return (
+        f"We don't have a food or food group called “{phrase}” in our table, so this row "
+        "wasn't applied"
+    )
+
+
+def note_duplicate_nutrient(label: str) -> str:
+    return f"More than one doctor row sets {label}; neither was applied — keep one"
+
+
+def avoidance_applied(phrase: str, count: int) -> str:
+    foods = "one food" if count == 1 else f"{count} foods"
+    return f"“{phrase}” left {foods} out of the plan"
 
 
 # Growth assessment: reasons an indicator is skipped, never failed (growth-assessment spec).

@@ -10,6 +10,7 @@ import json
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from backend.models.enums import NoteKind
 from backend.schemas.chat import ChatTurn, ChildContext, ToolActivity
 
 ROUTER_SYSTEM_PROMPT = """You route a parent's message about feeding their child (birth to
@@ -66,9 +67,10 @@ How to answer:
   `requested_quantity` and `requested_unit` the parent asked about: lead with them and
   mention the table serving only as context. Without it, give the per-serving figures and
   say what the serving is. Never scale from one to the other yourself.
-- If a result shows a doctor's-note override (`override.conflict` is true), say the
-  doctor's note takes priority, and give both the note's value and the general value it
-  replaced.
+- If a result lists overrides with `conflict` true, say the doctor's note takes priority
+  for each such nutrient, and give both the note's value and the general value it replaced.
+- If a meal plan lists `note_outcomes` that were not applied, tell the parent which row
+  (quote its text) and why, in plain words -- never a field name or status code.
 - If a meal plan is present, summarise it briefly; the parent also sees the full plan as a
   card. Mention any excluded foods and why. If it shows `already_logged` or
   `adjustments`, say the plan covers the rest of the day and what it leaned toward.
@@ -110,7 +112,8 @@ def format_child_context(child: ChildContext | None) -> str:
         return NO_CHILD_CONTEXT_LINE
     allergies = ", ".join(sorted(a.value for a in child.allergies)) or "none recorded"
     height = f"{child.height_cm:g} cm" if child.height_cm is not None else "not given"
-    note = child.doctors_note if child.doctors_note else "none"
+    doctor_rows = "; ".join(f"“{n.text}”" for n in child.notes if n.kind is NoteKind.DOCTOR)
+    preference_rows = "; ".join(f"“{n.text}”" for n in child.notes if n.kind is NoteKind.PREFERENCE)
     return "\n".join(
         [
             "Child details (from the parent's side panel; authoritative):",
@@ -120,7 +123,8 @@ def format_child_context(child: ChildContext | None) -> str:
             f"- height: {height}",
             f"- diet preference: {child.diet_preference.value}",
             f"- allergies: {allergies}",
-            f"- doctor's note: {note}",
+            f"- doctor's notes: {doctor_rows or 'none'}",
+            f"- preferences: {preference_rows or 'none'}",
             f"- activity level: {child.activity_level.value}",
         ]
     )

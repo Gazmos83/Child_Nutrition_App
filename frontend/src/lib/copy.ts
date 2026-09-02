@@ -163,9 +163,21 @@ export const FORM_HEIGHT_LABEL = "Height (cm)";
 export const FORM_HEIGHT_HINT = "From 36 months we need height too; it's part of the calorie sums";
 export const FORM_DIET_LABEL = "Diet preference";
 export const FORM_ALLERGIES_LABEL = "Allergies";
-export const FORM_NOTE_LABEL = "Doctor's note";
-export const FORM_NOTE_HINT =
-  "Anything your doctor wrote about calories, protein, or iron — we'll follow it";
+// Note rows (child-notes-restrictions). Direct voice: a doctor's instruction is never a joke.
+export const FORM_NOTES_LABEL = "Doctor's note and personal preferences";
+export const FORM_NOTES_HINT =
+  "One instruction per row. A doctor's row can set calorie, protein, or iron targets and leave foods out; a preference row only leaves foods out";
+export const FORM_NOTE_TEXT_LABEL = "Instruction";
+export const FORM_NOTE_PLACEHOLDER = "e.g. no iron-fortified oat cereal";
+export const FORM_NOTES_ADD = "Add a row";
+export const FORM_NOTES_REMOVE = "Remove";
+export function noteNotApplied(detail: string): string {
+  return `Not applied in the last meal plan — ${detail}`;
+}
+export function quoted(text: string): string {
+  return `“${text}”`;
+}
+export const PLAN_NOT_APPLIED_TITLE = "Not applied, and why";
 export const FORM_ACTIVITY_LABEL = "Activity level";
 export const FORM_CLEAR = "Clear details";
 export const FORM_SAVE = "Save details";
@@ -265,7 +277,8 @@ export const FORM_ERROR_WEIGHT = "Weight needs to be more than 0 and up to 60 kg
 export const FORM_ERROR_HEIGHT = "Height needs to be more than 0 and up to 150 cm";
 export const FORM_ERROR_HEIGHT_REQUIRED = "From 36 months we need a height to work out calories";
 export const FORM_ERROR_SEX = "Pick one so the growth references line up";
-export const FORM_ERROR_NOTE = "That note is a little long — 4000 characters is the most we can take";
+export const FORM_ERROR_NOTE =
+  "Each row needs some text, up to 500 characters, with no two rows the same — and 20 rows is the most we can take";
 
 // -- status --------------------------------------------------------------------------------
 
@@ -476,8 +489,12 @@ export const TARGETS_NEEDS_CHILD =
 export const TARGETS_SAVE_FIRST =
   "Save the details first — targets always come from the saved profile, never a draft";
 // Direct: touches a doctor's instruction (hard rule 3 — disclosure, never silence).
-export const TARGETS_NOTE_ON_FILE =
+export const TARGETS_DOCTOR_NOTE_ON_FILE =
   "Your doctor's note is on file. These are the general targets; the note is applied when meal plans are made";
+export const TARGETS_PREFERENCES_ON_FILE =
+  "Your preferences are on file. These are the general targets; the preferences are applied when meal plans are made";
+export const TARGETS_NOTES_ON_FILE =
+  "Your doctor's note and preferences are on file. These are the general targets; both are applied when meal plans are made";
 export const TARGETS_UNAVAILABLE =
   "We couldn't load the targets. Check your connection and try again";
 export const TARGETS_LOADING = "Fetching the day's targets…";

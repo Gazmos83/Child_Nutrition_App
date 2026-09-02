@@ -23,9 +23,12 @@ from backend.schemas.tools import (
     HEIGHT_REQUIRED_FROM_MONTHS,
     MAX_HEIGHT_CM,
     MAX_LOG_ENTRIES,
+    MAX_NOTES,
     ActivityLevel,
     FeedingEntry,
+    NoteRow,
     TimeZoneName,
+    check_unique_notes,
 )
 
 MAX_MESSAGE_CHARS = 2000
@@ -60,7 +63,7 @@ class ChildContext(_Strict):
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
     diet_preference: DietPreference = DietPreference.default()
     allergies: frozenset[Allergen] = Field(default_factory=frozenset)
-    doctors_note: str | None = Field(default=None, max_length=4000)
+    notes: tuple[NoteRow, ...] = Field(default_factory=tuple, max_length=MAX_NOTES)
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
 
     @model_validator(mode="after")
@@ -70,8 +73,7 @@ class ChildContext(_Strict):
                 f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
                 "energy equation for 3–8 years uses height"
             )
-        if self.doctors_note is not None and not self.doctors_note.strip():
-            object.__setattr__(self, "doctors_note", None)
+        check_unique_notes(self.notes)
         return self
 
 

@@ -3,6 +3,7 @@
 import inspect
 
 from backend.chat import copy
+from backend.models.enums import NoteKind
 from backend.tools.meal_plan import NO_SAFE_PLAN_MESSAGE
 
 CONSTANTS = {
@@ -14,6 +15,12 @@ RENDERED = [
     copy.missing_field_hint("age_months"),
     copy.unknown_food("nope"),
     copy.wrong_unit("Avocado, mashed", "g", "ml"),
+    copy.note_exclusion_reason(NoteKind.DOCTOR, "no honey"),
+    copy.note_exclusion_reason(NoteKind.PREFERENCE, "no pork"),
+    copy.note_no_match("kale chips"),
+    copy.note_duplicate_nutrient("calories"),
+    copy.avoidance_applied("dairy", 3),
+    copy.avoidance_applied("pork", 1),
     NO_SAFE_PLAN_MESSAGE,
 ]
 

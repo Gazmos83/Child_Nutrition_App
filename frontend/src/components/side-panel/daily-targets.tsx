@@ -32,9 +32,13 @@ export function DailyTargets({ childId, dirty }: { childId: string | null; dirty
         <p className="text-sm text-muted-foreground">{copy.TARGETS_LOADING}</p>
       ) : (
         <>
-          {query.data.doctors_note_present && (
+          {(query.data.doctor_notes_present || query.data.preferences_present) && (
             <p className="text-sm" data-testid="targets-note-on-file">
-              {copy.TARGETS_NOTE_ON_FILE}
+              {query.data.doctor_notes_present && query.data.preferences_present
+                ? copy.TARGETS_NOTES_ON_FILE
+                : query.data.doctor_notes_present
+                  ? copy.TARGETS_DOCTOR_NOTE_ON_FILE
+                  : copy.TARGETS_PREFERENCES_ON_FILE}
             </p>
           )}
           <ul className="space-y-3">

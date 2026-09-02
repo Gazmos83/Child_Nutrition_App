@@ -10,6 +10,7 @@ precision (kcal whole, g/mg one decimal, BMI two).
 """
 
 import datetime as dt
+from collections.abc import Sequence
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -20,10 +21,18 @@ from pydantic import (
     ConfigDict,
     Field,
     computed_field,
+    field_validator,
     model_validator,
 )
 
-from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
+from backend.models.enums import (
+    ActivityLevel,
+    Allergen,
+    DietPreference,
+    FeedingType,
+    NoteKind,
+    Sex,
+)
 from backend.nutrition.nutrients import REGISTRY, NutrientKey, NutrientUnit, ReferenceType
 
 MIN_AGE_MONTHS = 0
@@ -579,6 +588,45 @@ class MealNutritionResult(_Frozen):
     source: str
 
 
+# -- Doctor's-note and preference rows (child-notes-restrictions) -----------------------------
+
+MAX_NOTES = 20
+MAX_NOTE_CHARS = 500
+
+
+class NoteRow(_Strict):
+    """One instruction on the child's profile, tagged with who it came from (hard rule 2 for
+    ``kind``). Only a ``doctor`` row may change a nutrient target (hard rule 3)."""
+
+    kind: NoteKind
+    text: str = Field(min_length=1, max_length=MAX_NOTE_CHARS)
+
+    @field_validator("text")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("a note row must not be blank")
+        return value
+
+
+def check_unique_notes(notes: Sequence[NoteRow]) -> None:
+    """No two identical rows (same kind and text); a repeat is a mistake, not emphasis."""
+    seen: set[tuple[NoteKind, str]] = set()
+    for row in notes:
+        key = (row.kind, row.text)
+        if key in seen:
+            raise ValueError(f"note rows must not repeat: {row.kind.value} “{row.text}”")
+        seen.add(key)
+
+
+_NOTES = Field(
+    default_factory=list,
+    max_length=MAX_NOTES,
+    description="Doctor's-note and preference rows, in the profile's order.",
+)
+
+
 # -- Doctor's-note override -----------------------------------------------------------------
 
 OverridableNutrient = Literal["calories", "protein", "iron"]
@@ -609,17 +657,43 @@ class DoctorsNoteOverride(_Strict):
         return self
 
 
-NoteExtractionStatus = Literal["not_present", "applied", "no_numeric_target", "unparsed"]
+class NoteTarget(_Frozen):
+    """A validated numeric instruction and the doctor row it came from."""
+
+    note_index: int = Field(ge=0)
+    override: DoctorsNoteOverride
+
+
+class ExtractedAvoidance(_Frozen):
+    """A food or food-group phrase a row says to avoid, as the model extracted it. Resolved
+    to table foods or a category by code before anything acts on it."""
+
+    note_index: int = Field(ge=0)
+    phrase: str = Field(min_length=1, max_length=80)
+
+
+class NoteIssue(_Frozen):
+    """Why a row (or part of it) was not applied."""
+
+    note_index: int = Field(ge=0)
+    detail: str
+
+
+NoteExtractionStatus = Literal["not_present", "applied", "nothing_to_apply", "unparsed"]
 
 
 class NoteExtraction(_Frozen):
-    status: NoteExtractionStatus
-    override: DoctorsNoteOverride | None = None
-    detail: str = Field(default="", description="Why, when status is not 'applied'.")
+    status: NoteExtractionStatus = Field(
+        description="applied when at least one target or avoidance phrase was extracted."
+    )
+    targets: list[NoteTarget] = Field(default_factory=list)
+    avoid: list[ExtractedAvoidance] = Field(default_factory=list)
+    issues: list[NoteIssue] = Field(default_factory=list)
+    detail: str = Field(default="", description="Why, when status is 'unparsed'.")
 
 
 class OverrideOutcome(_Frozen):
-    """What deterministic override application decided (hard rule 3)."""
+    """What deterministic override application decided for one nutrient (hard rule 3)."""
 
     conflict: bool
     source: Literal["general_target", "doctors_note"]
@@ -627,6 +701,32 @@ class OverrideOutcome(_Frozen):
     general_value: float | None = None
     applied_value: float | None = None
     detail: str = ""
+
+
+class Avoidance(_Frozen):
+    """One extracted phrase after deterministic resolution against the food table."""
+
+    note_index: int = Field(ge=0)
+    kind: NoteKind
+    phrase: str
+    category: str | None = Field(
+        default=None, description="Food category when the phrase named one."
+    )
+    food_ids: list[str] = Field(
+        default_factory=list, description="Every food left out because of it."
+    )
+    applied: bool
+    detail: str
+
+
+class NoteOutcome(_Frozen):
+    """What one row did to the plan, for the parent (never silently dropped)."""
+
+    index: int = Field(ge=0)
+    kind: NoteKind
+    text: str
+    applied: bool
+    detail: str
 
 
 # -- Feeding log (Day 5 change 2; feeding-log spec) -----------------------------------------
@@ -724,7 +824,7 @@ class _ChildForTargets(_Strict):
     sex: Sex
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
     diet_preference: DietPreference = DietPreference.default()
-    doctors_note: str | None = Field(default=None, max_length=4000)
+    notes: list[NoteRow] = _NOTES
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
 
     @model_validator(mode="after")
@@ -734,8 +834,7 @@ class _ChildForTargets(_Strict):
                 f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
                 "energy equation for 3–8 years uses height"
             )
-        if self.doctors_note is not None and not self.doctors_note.strip():
-            object.__setattr__(self, "doctors_note", None)
+        check_unique_notes(self.notes)
         return self
 
 
@@ -758,7 +857,7 @@ class RemainingTargetsResult(_Frozen):
     intake: NutrientTotals
     remaining: RemainingNutrients = Field(description="targets minus intake, floored at zero.")
     note_extraction: NoteExtraction
-    override: OverrideOutcome
+    overrides: list[OverrideOutcome] = Field(default_factory=list)
     source: str
 
 
@@ -803,7 +902,7 @@ class NutrientGapReport(_Frozen):
     gaps: list[NutrientGap] = Field(default_factory=list)
     targets: NutrientTargets
     note_extraction: NoteExtraction | None = None
-    override: OverrideOutcome | None = None
+    overrides: list[OverrideOutcome] | None = None
 
 
 class Adjustment(_Frozen):
@@ -837,7 +936,7 @@ class MealPlanRequest(_Strict):
     height_cm: float | None = Field(default=None, gt=0, le=MAX_HEIGHT_CM)
     diet_preference: DietPreference = DietPreference.default()
     allergies: frozenset[Allergen] = Field(default_factory=frozenset)
-    doctors_note: str | None = Field(default=None, max_length=4000)
+    notes: list[NoteRow] = _NOTES
     activity_level: ActivityLevel = ActivityLevel.LOW_ACTIVE
     # Change 2 (feeding log): both optional; with neither, the plan is byte-identical to
     # the Day 4 planner (meal-plan-generation spec, "No log inputs, unchanged output").
@@ -858,8 +957,7 @@ class MealPlanRequest(_Strict):
                 f"height_cm is required from {HEIGHT_REQUIRED_FROM_MONTHS} months: the DRI "
                 "energy equation for 3–8 years uses height"
             )
-        if self.doctors_note is not None and not self.doctors_note.strip():
-            object.__setattr__(self, "doctors_note", None)
+        check_unique_notes(self.notes)
         return self
 
 
@@ -899,7 +997,15 @@ class MealPlanResult(_Frozen):
         description="Against what the plan set out to cover: the day, or what remained of it."
     )
     note_extraction: NoteExtraction
-    override: OverrideOutcome
+    overrides: list[OverrideOutcome] = Field(
+        default_factory=list, description="One entry per nutrient a doctor's row addressed."
+    )
+    avoidances: list[Avoidance] = Field(
+        default_factory=list, description="Each avoidance phrase and what it left out."
+    )
+    note_outcomes: list[NoteOutcome] = Field(
+        default_factory=list, description="What every note row did, applied or not."
+    )
     exclusions: list[Exclusion]
     message: str = Field(description="Plain-language summary, or why no safe plan exists.")
     disclaimer: str

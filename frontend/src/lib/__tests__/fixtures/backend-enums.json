@@ -32,5 +32,9 @@
     "formula",
     "solid",
     "water"
+  ],
+  "note_kind": [
+    "doctor",
+    "preference"
   ]
 }

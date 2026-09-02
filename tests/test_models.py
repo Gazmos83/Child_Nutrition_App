@@ -14,8 +14,8 @@ import pytest
 from sqlalchemy import CheckConstraint, DateTime, UniqueConstraint
 
 from backend.db.base import Base
-from backend.models import ChildAllergy, ChildProfile, GrowthMeasurement, User
-from backend.models.enums import Allergen, DietPreference, Sex
+from backend.models import ChildAllergy, ChildNote, ChildProfile, GrowthMeasurement, User
+from backend.models.enums import Allergen, DietPreference, NoteKind, Sex
 from backend.nutrition.age import today
 
 
@@ -139,33 +139,39 @@ class TestWeight:
         assert "ck_child_profiles_weight_kg_positive" in _check_constraints(ChildProfile)
 
 
-class TestDoctorsNote:
-    """Task 5.4 / design.md Decision 9."""
+class TestChildNote:
+    """child-notes-restrictions design Decision 1: rows with a kind replace the note column."""
 
-    def test_note_and_timestamp_are_both_optional(self) -> None:
+    def test_profile_has_no_note_columns(self) -> None:
         columns = ChildProfile.__table__.c
-        assert columns.doctors_note.nullable is True
-        assert columns.doctors_note_recorded_at.nullable is True
+        assert "doctors_note" not in columns and "doctors_note_recorded_at" not in columns
+        assert not any("doctors_note" in name for name in _check_constraints(ChildProfile))
 
-    def test_paired_check_constraint_exists(self) -> None:
-        checks = _check_constraints(ChildProfile)
-        name = "ck_child_profiles_doctors_note_paired_with_timestamp"
-        assert name in checks
-        assert "IS NULL" in checks[name]
+    def test_row_columns_and_checks(self) -> None:
+        columns = ChildNote.__table__.c
+        assert columns.kind.type.name == "note_kind"
+        assert set(columns.kind.type.enums) == {"doctor", "preference"}
+        assert columns.text.nullable is False and columns.position.nullable is False
+        checks = _check_constraints(ChildNote)
+        assert "ck_child_notes_text_not_blank" in checks
+        assert "ck_child_notes_position_non_negative" in checks
 
-    def test_profile_is_valid_with_no_note(self) -> None:
+    def test_foreign_key_cascades_and_rows_load_eagerly_in_order(self) -> None:
+        fk = next(iter(ChildNote.__table__.c.child_profile_id.foreign_keys))
+        assert fk.ondelete == "CASCADE"
+        relationship = ChildProfile.__mapper__.relationships["notes"]
+        assert relationship.lazy == "selectin"
+        assert relationship.cascade.delete_orphan
+
+    def test_profile_is_valid_with_no_rows_and_rows_carry_provenance(self) -> None:
         profile = _build_profile()
-        assert profile.doctors_note is None
-        assert profile.doctors_note_recorded_at is None
-
-    def test_note_carries_provenance(self) -> None:
+        assert profile.notes == []
         recorded = datetime(2026, 8, 25, 12, 0, tzinfo=UTC)
-        profile = _build_profile(
-            doctors_note="Iron supplementation advised.",
-            doctors_note_recorded_at=recorded,
-        )
-        assert profile.doctors_note == "Iron supplementation advised."
-        assert profile.doctors_note_recorded_at == recorded
+        row = ChildNote(kind=NoteKind.DOCTOR, text="Iron supplementation advised.", position=0)
+        row.created_at = recorded
+        profile.notes.append(row)
+        assert profile.notes[0].kind is NoteKind.DOCTOR
+        assert profile.notes[0].created_at == recorded
 
 
 class TestTimestampsAreTimezoneAware:

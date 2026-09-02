@@ -32,7 +32,7 @@ def _audit(request: GapDetectionRequest, report: NutrientGapReport) -> None:
             "weight_kg": request.weight_kg,
             "height_cm": request.height_cm,
             "sex": request.sex.value,
-            "doctors_note": request.doctors_note,
+            "notes": [row.model_dump(mode="json") for row in request.notes],
             "activity_level": request.activity_level.value,
             "entries": len(request.entries),
             "timezone": request.timezone,
@@ -47,7 +47,11 @@ def _audit(request: GapDetectionRequest, report: NutrientGapReport) -> None:
         "note_extraction": (
             report.note_extraction.model_dump(mode="json") if report.note_extraction else None
         ),
-        "override": report.override.model_dump(mode="json") if report.override else None,
+        "overrides": (
+            [o.model_dump(mode="json") for o in report.overrides]
+            if report.overrides is not None
+            else None
+        ),
     }
     audit_logger.info("nutrient_gaps_audit %s", json.dumps(record, sort_keys=True))
 
@@ -59,11 +63,11 @@ async def detect_nutrient_gaps(
 ) -> NutrientGapReport:
     """Normalise -> group by local day -> resolve targets -> compare windows -> audit."""
     table = table or get_food_table()
-    targets, extraction, override = await resolve_targets(request, chat_model)
+    targets, extraction, overrides = await resolve_targets(request, chat_model)
     daily = daily_totals(group_by_day(normalise_entries(request.entries, table), request.timezone))
     as_of = request.as_of or dt.datetime.now(ZoneInfo(request.timezone)).date()
     report = compute_gap_report(daily, targets, as_of).model_copy(
-        update={"note_extraction": extraction, "override": override}
+        update={"note_extraction": extraction, "overrides": overrides}
     )
     _audit(request, report)
     return report

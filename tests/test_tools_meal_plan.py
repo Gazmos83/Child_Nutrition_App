@@ -8,13 +8,20 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from backend.chat import copy as chat_copy
 from backend.chat.copy import TARGETS_MET_MESSAGE
-from backend.models.enums import Allergen, DietPreference, FeedingType, Sex
+from backend.models.enums import Allergen, DietPreference, FeedingType, NoteKind, Sex
 from backend.nutrition.diet import EXCLUDED_CATEGORIES
 from backend.nutrition.foods import FoodCategory, get_food_table, load_food_table
 from backend.nutrition.safety import check_food
 from backend.rag.prompts import DISCLAIMER
-from backend.schemas.tools import FeedingEntry, MealPlanRequest, NutrientGap, NutrientGapReport
+from backend.schemas.tools import (
+    FeedingEntry,
+    MealPlanRequest,
+    NoteRow,
+    NutrientGap,
+    NutrientGapReport,
+)
 from backend.tools.meal_plan import (
     IRON_UL_MG,
     MAX_ITEMS,
@@ -33,6 +40,21 @@ def request(**overrides) -> MealPlanRequest:
 
 async def plan(**overrides):
     return await generate_meal_plan(request(**overrides), None)
+
+
+def doctor(text: str) -> NoteRow:
+    return NoteRow(kind=NoteKind.DOCTOR, text=text)
+
+
+def preference(text: str) -> NoteRow:
+    return NoteRow(kind=NoteKind.PREFERENCE, text=text)
+
+
+def note_reply(*rows: dict) -> str:
+    return json.dumps({"rows": list(rows)})
+
+
+CALORIES_650 = {"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}
 
 
 def categories_of(result) -> set[FoodCategory]:
@@ -175,22 +197,21 @@ class TestPlanShape:
     async def test_no_note_means_no_override(self) -> None:
         result = await plan()
         assert result.note_extraction.status == "not_present"
-        assert result.override.conflict is False
-        assert result.override.source == "general_target"
+        assert result.overrides == [] and result.note_outcomes == []
 
     async def test_note_without_model_is_flagged_unparsed_and_plan_still_generated(self) -> None:
-        result = await plan(doctors_note="Limit to 650 kcal per day.")
+        result = await plan(notes=[doctor("Limit to 650 kcal per day.")])
         assert result.outcome == "plan"
         assert result.note_extraction.status == "unparsed"
-        assert result.override.conflict is False
+        assert result.overrides == []
+        [outcome] = result.note_outcomes
+        assert outcome.applied is False and outcome.detail == chat_copy.NOTE_EXTRACTION_UNAVAILABLE
 
 
 class TestComposedConstraints:
     async def test_all_four_constraints_compose(self) -> None:
         llm = RecordingChatModel(
-            responses=[
-                '{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}'
-            ],
+            responses=[note_reply({"row": 1, "target": CALORIES_650, "avoid": []})],
             calls=[],
         )
         result = await generate_meal_plan(
@@ -199,15 +220,16 @@ class TestComposedConstraints:
                 weight_kg=8.5,
                 diet_preference=DietPreference.VEGETARIAN,
                 allergies={Allergen.PEANUT},
-                doctors_note="Please limit intake to 650 kcal per day.",
+                notes=[doctor("Please limit intake to 650 kcal per day.")],
             ),
             llm,
         )
         table = get_food_table()
         assert result.outcome == "plan"
         # Doctor's note wins on conflict: general 89*8.5-100+22 = 678 > 650.
-        assert result.override.conflict is True
-        assert result.override.general_value == 678
+        [override] = result.overrides
+        assert override.conflict is True
+        assert override.general_value == 678
         assert result.targets.calories.calories == 650
         assert result.note_extraction.status == "applied"
         # Allergen, diet, and safety all honoured.
@@ -265,7 +287,7 @@ class TestAuditLog:
             age_months=9,
             weight_kg=8.8,
             allergies={Allergen.EGG},
-            doctors_note="Limit to 650 kcal per day.",
+            notes=[doctor("Limit to 650 kcal per day.")],
         )
         [record] = audit_records(caplog)
         assert record["outcome"] == "plan"
@@ -276,13 +298,14 @@ class TestAuditLog:
             "sex": "female",
             "diet_preference": "omnivore",
             "allergies": ["egg"],
-            "doctors_note": "Limit to 650 kcal per day.",
+            "notes": [{"kind": "doctor", "text": "Limit to 650 kcal per day."}],
             "activity_level": "low_active",
         }
         assert record["note_extraction"]["status"] == "unparsed"
         for key in ("calories", "protein_g", "iron_mg"):
             assert record["targets"][key]["source"] and record["targets"][key]["band"]
-        assert record["override"]["conflict"] is False
+        assert record["overrides"] == [] and record["avoidances"] == []
+        assert record["note_outcomes"][0]["applied"] is False
         assert {e["food_id"] for e in record["exclusions"]} >= {"honey", "egg_scrambled"}
         assert [i["food_id"] for i in record["items"]] == [i.food_id for i in result.items]
         assert record["totals"]["calories"] == result.totals.calories
@@ -370,7 +393,19 @@ class TestChangeTwoRegression:
         targets = {k: v for k, v in dumped.pop("targets").items() if k != "items"}
         assert targets == case["result"]["targets"]
         expected = {k: v for k, v in case["result"].items() if k != "targets"}
-        assert {k: v for k, v in dumped.items() if k not in NEW_RESULT_FIELDS} == expected
+        # child-notes-restrictions reshaped the note fields; the fixture keeps the Day 4 shape.
+        # Every fixture case has no note, so both shapes must say "nothing happened".
+        assert expected.pop("override")["conflict"] is False
+        assert expected.pop("note_extraction")["status"] == "not_present"
+        assert dumped["note_extraction"]["status"] == "not_present"
+        assert dumped["overrides"] == [] and dumped["note_outcomes"] == []
+        skipped = NEW_RESULT_FIELDS | {
+            "note_extraction",
+            "overrides",
+            "avoidances",
+            "note_outcomes",
+        }
+        assert {k: v for k, v in dumped.items() if k not in skipped} == expected
 
 
 class TestGapSteering:
@@ -461,18 +496,18 @@ class TestLoggedToday:
 
     async def test_override_still_wins_with_intake_subtracted(self) -> None:
         llm = RecordingChatModel(
-            responses=['{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}']
+            responses=[note_reply({"row": 1, "target": CALORIES_650, "avoid": []})]
         )
         result = await generate_meal_plan(
             request(
                 age_months=8,
                 weight_kg=8.5,
-                doctors_note="Limit to 650 kcal per day.",
+                notes=[doctor("Limit to 650 kcal per day.")],
                 logged_today=[cereal_today(75)],
             ),
             llm,
         )
-        assert result.override.conflict is True and result.targets.calories.calories == 650
+        assert result.overrides[0].conflict is True and result.targets.calories.calories == 650
         assert result.already_logged is not None and result.already_logged.calories == 300.0
         assert result.totals.calories <= 1.1 * 350
         assert result.outcome == "plan"
@@ -536,3 +571,121 @@ class TestAuditLogChangeTwo:
         assert record["outcome"] == "no_safe_plan"
         assert record["gaps"] is None and record["logged_today"] is None
         assert record["adjustments"] == []
+
+
+class TestNoteAvoidances:
+    """child-notes-restrictions: foods a row names are left out, deterministically, and
+    every row gets an outcome."""
+
+    def llm(self, *rows: dict) -> RecordingChatModel:
+        return RecordingChatModel(responses=[note_reply(*rows)], calls=[])
+
+    async def test_named_food_is_left_out_with_the_row_as_reason(self) -> None:
+        text = "no iron fortified oat cereal"
+        result = await generate_meal_plan(
+            request(notes=[doctor(text)]),
+            self.llm({"row": 1, "target": None, "avoid": ["iron fortified oat cereal"]}),
+        )
+        assert result.outcome == "plan"
+        assert "infant_cereal_iron_fortified" not in {i.food_id for i in result.items}
+        excluded = {e.food_id: e.reasons for e in result.exclusions}
+        assert excluded["infant_cereal_iron_fortified"] == [
+            chat_copy.note_exclusion_reason(NoteKind.DOCTOR, text)
+        ]
+        [avoidance] = result.avoidances
+        assert avoidance.applied and avoidance.food_ids == ["infant_cereal_iron_fortified"]
+        [outcome] = result.note_outcomes
+        assert outcome.applied is True and outcome.kind is NoteKind.DOCTOR
+        assert result.overrides == []
+
+    async def test_food_group_is_left_out_but_the_milk_feed_stays(self) -> None:
+        result = await generate_meal_plan(
+            request(age_months=8, weight_kg=8.5, notes=[preference("avoid dairy")]),
+            self.llm({"row": 1, "target": None, "avoid": ["dairy"]}),
+        )
+        assert result.outcome == "plan"
+        assert FoodCategory.DAIRY not in categories_of(result)
+        assert FoodCategory.MILK_FEED in categories_of(result)
+        [avoidance] = result.avoidances
+        assert avoidance.category == "dairy" and "plain_whole_yogurt" in avoidance.food_ids
+        reasons = {e.food_id: e.reasons for e in result.exclusions}
+        assert reasons["plain_whole_yogurt"] == [
+            chat_copy.note_exclusion_reason(NoteKind.PREFERENCE, "avoid dairy")
+        ]
+
+    async def test_ambiguous_phrase_excludes_every_candidate(self) -> None:
+        result = await generate_meal_plan(
+            request(notes=[preference("no apple")]),
+            self.llm({"row": 1, "target": None, "avoid": ["apple"]}),
+        )
+        [avoidance] = result.avoidances
+        assert set(avoidance.food_ids) == {
+            "apple_cooked",
+            "raw_apple_chunks",
+            "unpasteurized_juice",
+        }
+        assert set(avoidance.food_ids) <= {e.food_id for e in result.exclusions}
+        assert not set(avoidance.food_ids) & {i.food_id for i in result.items}
+
+    async def test_unknown_phrase_is_not_applied_and_the_plan_still_comes(self) -> None:
+        result = await generate_meal_plan(
+            request(notes=[preference("no kale chips")]),
+            self.llm({"row": 1, "target": None, "avoid": ["kale chips"]}),
+        )
+        assert result.outcome == "plan"
+        [outcome] = result.note_outcomes
+        assert outcome.applied is False
+        assert outcome.detail == chat_copy.note_no_match("kale chips")
+
+    async def test_milk_feeds_cannot_be_avoided_by_a_note(self) -> None:
+        result = await generate_meal_plan(
+            request(notes=[preference("no breast milk")]),
+            self.llm({"row": 1, "target": None, "avoid": ["breast milk"]}),
+        )
+        assert FoodCategory.MILK_FEED in categories_of(result)
+        [outcome] = result.note_outcomes
+        assert outcome.applied is False and outcome.detail == chat_copy.NOTE_MILK_FEED
+
+    async def test_no_milk_leaves_dairy_out_but_keeps_the_milk_feed_and_says_so(self) -> None:
+        result = await generate_meal_plan(
+            request(notes=[preference("no milk")]),
+            self.llm({"row": 1, "target": None, "avoid": ["milk"]}),
+        )
+        assert FoodCategory.MILK_FEED in categories_of(result)
+        assert "whole_cows_milk" in {e.food_id for e in result.exclusions}
+        [outcome] = result.note_outcomes
+        assert outcome.applied is True and chat_copy.NOTE_MILK_FEED in outcome.detail
+
+    async def test_doctor_target_and_preference_avoidance_compose(self) -> None:
+        result = await generate_meal_plan(
+            request(
+                age_months=8,
+                weight_kg=8.5,
+                notes=[doctor("Limit to 650 kcal."), preference("no pork")],
+            ),
+            self.llm(
+                {"row": 1, "target": CALORIES_650, "avoid": []},
+                {"row": 2, "target": None, "avoid": ["pork"]},
+            ),
+        )
+        assert result.targets.calories.calories == 650
+        assert [o.applied for o in result.note_outcomes] == [True, True]
+        assert "pork_tenderloin_cooked" in {e.food_id for e in result.exclusions}
+
+    async def test_no_model_leaves_every_row_not_applied(self) -> None:
+        result = await plan(notes=[doctor("no honey"), preference("no pork")])
+        assert result.outcome == "plan"
+        assert [o.applied for o in result.note_outcomes] == [False, False]
+        assert result.avoidances == []
+
+    async def test_audit_records_avoidances_and_outcomes(self, caplog) -> None:
+        caplog.set_level(logging.INFO, logger="backend.tools.audit")
+        await generate_meal_plan(
+            request(notes=[preference("no pork")]),
+            self.llm({"row": 1, "target": None, "avoid": ["pork"]}),
+        )
+        [record] = audit_records(caplog)
+        assert record["input"]["notes"] == [{"kind": "preference", "text": "no pork"}]
+        assert record["avoidances"][0]["food_ids"] == ["pork_tenderloin_cooked"]
+        assert record["note_outcomes"][0]["applied"] is True
+        assert "note_avoidances" in record["rules"]

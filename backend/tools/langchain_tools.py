@@ -141,9 +141,11 @@ def build_tools(chat_model: BaseChatModel | None) -> list[StructuredTool]:
             description=(
                 "Generate a one-day meal plan for a child from age in months, weight, sex, "
                 "diet preference, recorded allergies, optional height (required from 36 "
-                "months) and optional doctor's note. Applies the infant-safety filter and "
-                "reports targets, totals, exclusions, any doctor's-note override, and a "
-                "not-medical-advice disclaimer. When the parent has logged feeds, today's "
+                "months) and the doctor's-note and preference rows. Foods a row names are "
+                "left out and listed with the reason; a doctor's row can also change a "
+                "target. Applies the infant-safety filter and reports targets, totals, "
+                "exclusions, overrides, what each row did, and a not-medical-advice "
+                "disclaimer. When the parent has logged feeds, today's "
                 "intake is subtracted so the plan covers the rest of the day, and a "
                 "nutrient-gap report steers which foods are favoured."
             ),

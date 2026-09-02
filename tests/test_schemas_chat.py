@@ -57,10 +57,18 @@ def test_twelve_turns_are_accepted() -> None:
 
 def test_child_context_matches_meal_plan_input_rules() -> None:
     child = ChildContext.model_validate(
-        {**CHILD, "allergies": ["peanut", "peanut"], "doctors_note": "   "}
+        {
+            **CHILD,
+            "allergies": ["peanut", "peanut"],
+            "notes": [{"kind": "doctor", "text": "  no honey "}],
+        }
     )
     assert child.allergies == frozenset({"peanut"})
-    assert child.doctors_note is None  # blank note normalised away
+    assert child.notes[0].text == "no honey"  # rows are stripped, never blank
+    with pytest.raises(ValidationError):
+        ChildContext.model_validate({**CHILD, "notes": [{"kind": "doctor", "text": "   "}]})
+    with pytest.raises(ValidationError):
+        ChildContext.model_validate({**CHILD, "doctors_note": "no honey"})  # the old field
     assert child.diet_preference == "omnivore"
     older = ChildContext.model_validate({**CHILD, "age_months": 40, "height_cm": 100})
     assert older.height_cm == 100

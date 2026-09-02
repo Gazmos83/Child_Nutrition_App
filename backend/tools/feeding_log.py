@@ -87,7 +87,7 @@ async def get_remaining_targets(
 ) -> RemainingTargetsResult:
     """The child's targets (doctor's note honoured) minus the day's intake, floored at zero."""
     table = table or get_food_table()
-    targets, extraction, override = await resolve_targets(params, chat_model)
+    targets, extraction, overrides = await resolve_targets(params, chat_model)
     daily = get_daily_nutrition(
         DailyNutritionInput(entries=params.entries, timezone=params.timezone, date=params.date),
         table,
@@ -105,6 +105,6 @@ async def get_remaining_targets(
         intake=intake,
         remaining=remaining,
         note_extraction=extraction,
-        override=override,
+        overrides=overrides,
         source=table.table.source,
     )

@@ -147,8 +147,10 @@ class TestDoctorsNoteOverride:
 
 class TestMealPlanRequestNormalisation:
     def test_blank_note_becomes_none(self) -> None:
-        request = MealPlanRequest(age_months=8, weight_kg=8, sex=Sex.FEMALE, doctors_note="   ")
-        assert request.doctors_note is None
+        request = MealPlanRequest(
+            age_months=8, weight_kg=8, sex=Sex.FEMALE, notes=[{"kind": "doctor", "text": " x "}]
+        )
+        assert request.notes[0].text == "x"
 
     def test_meal_item_servings_positive(self) -> None:
         with pytest.raises(ValidationError):
@@ -267,3 +269,33 @@ class TestFoodLookupQuantity:
         ):
             with pytest.raises(ValidationError):
                 MealItem.model_validate(body)
+
+
+class TestNoteRows:
+    """child-notes-restrictions: rows are validated before any extraction runs."""
+
+    @pytest.mark.parametrize(
+        "notes",
+        [
+            [{"kind": "doctor", "text": "   "}],
+            [{"kind": "doctor", "text": "x" * 501}],
+            [{"kind": "doctor", "text": "no pork"}, {"kind": "doctor", "text": "no pork"}],
+            [{"kind": "nurse", "text": "no pork"}],
+            [{"kind": "doctor", "text": f"row {i}"} for i in range(21)],
+        ],
+    )
+    def test_bad_rows_are_rejected(self, notes: list[dict]) -> None:
+        with pytest.raises(ValidationError):
+            MealPlanRequest(age_months=8, weight_kg=8, sex=Sex.FEMALE, notes=notes)
+
+    def test_same_text_under_two_kinds_is_allowed(self) -> None:
+        request = MealPlanRequest(
+            age_months=8,
+            weight_kg=8,
+            sex=Sex.FEMALE,
+            notes=[
+                {"kind": "doctor", "text": "no pork"},
+                {"kind": "preference", "text": "no pork"},
+            ],
+        )
+        assert [n.kind.value for n in request.notes] == ["doctor", "preference"]

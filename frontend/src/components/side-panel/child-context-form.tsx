@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import type { NoteOutcome } from "@/lib/api-types";
 import type { ChildForm, ChildFormErrors } from "@/lib/child-context-store";
 import {
   HEIGHT_REQUIRED_FROM_MONTHS,
-  MAX_NOTE_CHARS,
   completedMonths,
   todayIsoDate,
 } from "@/lib/child-context-store";
@@ -25,6 +24,7 @@ import {
   type Option,
   type Sex,
 } from "@/lib/enums";
+import { ChildNotesFields } from "./child-notes-fields";
 
 interface Props {
   form: ChildForm;
@@ -42,6 +42,8 @@ interface Props {
   save: () => void;
   /** Deletes the saved profile, its feeding log, and its growth log; the form asks first. */
   clear: () => void;
+  /** The latest meal plan's verdict on each note row, to mark rows it could not apply. */
+  noteOutcomes?: readonly NoteOutcome[];
 }
 
 export function ChildContextForm({
@@ -57,6 +59,7 @@ export function ChildContextForm({
   update,
   save,
   clear,
+  noteOutcomes = [],
 }: Props) {
   const age = completedMonths(form.birth_date);
   const heightNeeded = age !== null && age >= HEIGHT_REQUIRED_FROM_MONTHS;
@@ -183,15 +186,12 @@ export function ChildContextForm({
         </ul>
       </fieldset>
 
-      <Field label={copy.FORM_NOTE_LABEL} hint={copy.FORM_NOTE_HINT} error={errors.doctors_note} htmlFor="doctors_note">
-        <Textarea
-          id="doctors_note"
-          rows={3}
-          maxLength={MAX_NOTE_CHARS}
-          value={form.doctors_note}
-          onChange={(e) => update("doctors_note", e.target.value)}
-        />
-      </Field>
+      <ChildNotesFields
+        rows={form.notes}
+        error={errors.notes}
+        outcomes={noteOutcomes}
+        onChange={(rows) => update("notes", rows)}
+      />
 
       <Field label={copy.FORM_ACTIVITY_LABEL} htmlFor="activity_level">
         <EnumSelect<ActivityLevel>
@@ -258,7 +258,7 @@ function Field({
   );
 }
 
-function EnumSelect<T extends string>({
+export function EnumSelect<T extends string>({
   id,
   value,
   options,

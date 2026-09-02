@@ -13,8 +13,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models import ChildAllergy, ChildProfile, Feeding, GrowthMeasurement, User
-from backend.models.enums import Allergen, FeedingType, Sex
+from backend.models import ChildAllergy, ChildNote, ChildProfile, Feeding, GrowthMeasurement, User
+from backend.models.enums import Allergen, FeedingType, NoteKind, Sex
 from backend.schemas.child import ChildProfileWrite
 from tests.conftest import make_user
 
@@ -128,12 +128,15 @@ class TestCascadeDeletion:
                 weight_kg=Decimal("7.2"),
             )
         )
+        db_session.add(
+            ChildNote(child_profile_id=child.id, kind=NoteKind.DOCTOR, text="no honey", position=0)
+        )
         await db_session.flush()
 
         await db_session.delete(user)
         await db_session.flush()
 
-        for table in (ChildProfile, ChildAllergy, Feeding, GrowthMeasurement):
+        for table in (ChildProfile, ChildAllergy, Feeding, GrowthMeasurement, ChildNote):
             count = await db_session.scalar(select(func.count()).select_from(table))
             assert count == 0, table.__tablename__
 
@@ -155,11 +158,30 @@ class TestWeightPrecision:
             await db_session.flush()
 
 
-class TestDoctorsNotePairing:
-    async def test_note_without_timestamp_rejected(self, db_session: AsyncSession, user: User):
-        db_session.add(profile(user, doctors_note="limit to 650 kcal"))
-        with pytest.raises(IntegrityError, match="doctors_note_paired_with_timestamp"):
+class TestChildNoteRules:
+    async def test_blank_row_rejected(self, db_session: AsyncSession, user: User) -> None:
+        child = profile(user)
+        db_session.add(child)
+        await db_session.flush()
+        db_session.add(
+            ChildNote(child_profile_id=child.id, kind=NoteKind.DOCTOR, text="   ", position=0)
+        )
+        with pytest.raises(IntegrityError, match="child_notes_text_not_blank"):
             await db_session.flush()
+
+    async def test_rows_round_trip_in_order(self, db_session: AsyncSession, user: User) -> None:
+        child = profile(user)
+        child.notes = [
+            ChildNote(kind=NoteKind.PREFERENCE, text="no pork", position=1),
+            ChildNote(kind=NoteKind.DOCTOR, text="no honey", position=0),
+        ]
+        db_session.add(child)
+        await db_session.flush()
+        await db_session.refresh(child, attribute_names=["notes"])
+        assert [(n.kind, n.text) for n in child.notes] == [
+            (NoteKind.DOCTOR, "no honey"),
+            (NoteKind.PREFERENCE, "no pork"),
+        ]
 
 
 class TestFeedingRules:

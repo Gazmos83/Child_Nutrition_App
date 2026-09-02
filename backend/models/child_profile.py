@@ -1,17 +1,16 @@
 """Child nutrition profile models.
 
 These carry the schema-level hard rules: age in months (rule 1), allergies and diet
-preference as controlled vocabularies (rule 2), and the doctor's note whose guidance
-overrides general nutrient targets (rule 3).
+preference as controlled vocabularies (rule 2), and -- through ``child_notes`` -- the
+doctor's rows whose guidance overrides general nutrient targets (rule 3).
 """
 
 import datetime as dt
 import uuid
-from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric, Text
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +19,7 @@ from backend.models.enums import ActivityLevel, Allergen, DietPreference, Sex
 from backend.nutrition.age import completed_months, today
 
 if TYPE_CHECKING:
+    from backend.models.child_note import ChildNote
     from backend.models.feeding import Feeding
     from backend.models.growth_measurement import GrowthMeasurement
     from backend.models.user import User
@@ -73,13 +73,6 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default=DietPreference.default().value,
     )
 
-    # Clinician free text on purpose: this is professional input, not a system
-    # vocabulary. Hard rule 2's no-free-text constraint governs allergies and diet
-    # preference, not this field. Day 4 parses it into structured overrides; Day 1 only
-    # guarantees it is captured with provenance (design.md Decision 9).
-    doctors_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    doctors_note_recorded_at: Mapped[datetime | None] = mapped_column(nullable=True)
-
     user: Mapped[User] = relationship(back_populates="child_profiles")
 
     allergies: Mapped[list[ChildAllergy]] = relationship(
@@ -101,6 +94,16 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         passive_deletes=True,
     )
 
+    # Doctor's-note and preference rows, in display order. Eager like ``allergies``: the
+    # API and chat seam read them synchronously under async SQLAlchemy.
+    notes: Mapped[list[ChildNote]] = relationship(
+        back_populates="child_profile",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="selectin",
+        order_by="(ChildNote.position, ChildNote.created_at)",
+    )
+
     #: Read/write view of :attr:`allergies` as plain :class:`Allergen` values.
     allergens: AssociationProxy[list[Allergen]] = association_proxy(
         "allergies",
@@ -111,12 +114,6 @@ class ChildProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("weight_kg > 0", name="weight_kg_positive"),
         CheckConstraint("height_cm IS NULL OR height_cm > 0", name="height_cm_positive"),
-        # Either a note with its timestamp, or neither. Keeps "a note nobody can date"
-        # out of the database (design.md Decision 9).
-        CheckConstraint(
-            "(doctors_note IS NULL) = (doctors_note_recorded_at IS NULL)",
-            name="doctors_note_paired_with_timestamp",
-        ),
     )
 
     def age_months_on(self, as_of: dt.date) -> int:

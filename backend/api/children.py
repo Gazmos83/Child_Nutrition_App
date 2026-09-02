@@ -18,8 +18,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.api.deps import CurrentUser, DbSession, OwnedChild
-from backend.models import ChildProfile, Feeding, GrowthMeasurement
-from backend.models.enums import FeedingType
+from backend.models import ChildNote, ChildProfile, Feeding, GrowthMeasurement
+from backend.models.enums import FeedingType, NoteKind
 from backend.nutrition.feeding import (
     FeedingEntryError,
     daily_totals,
@@ -33,6 +33,7 @@ from backend.rag.prompts import DISCLAIMER
 from backend.schemas.chat import ChildContext
 from backend.schemas.child import (
     AGE_OUT_OF_RANGE_DETAIL,
+    ChildNoteResponse,
     ChildProfileResponse,
     ChildProfileWrite,
     DailyTargetsResponse,
@@ -46,6 +47,7 @@ from backend.schemas.tools import (
     GrowthAssessmentInput,
     GrowthCurvesResponse,
     LoggedFeeding,
+    NoteRow,
 )
 from backend.tools import nutrient_tools
 from backend.tools.feeding_log import log_feeding
@@ -71,12 +73,15 @@ def _apply(profile: ChildProfile, body: ChildProfileWrite) -> None:
     profile.diet_preference = body.diet_preference
     profile.activity_level = body.activity_level
     profile.allergens = sorted(body.allergies)
-    # A note is dated when it changes (design.md Decision 9: both set or both null).
-    if body.doctors_note != profile.doctors_note:
-        profile.doctors_note = body.doctors_note
-        profile.doctors_note_recorded_at = (
-            dt.datetime.now(dt.UTC) if body.doctors_note is not None else None
-        )
+    # Note rows are replaced as a set: an unchanged row keeps its id and recorded-at and takes
+    # its new position; a changed row is a new row (child-notes-restrictions Decision 1).
+    existing = {(n.kind, n.text): n for n in profile.notes}
+    rows: list[ChildNote] = []
+    for position, row in enumerate(body.notes):
+        note = existing.pop((row.kind, row.text), None) or ChildNote(kind=row.kind, text=row.text)
+        note.position = position
+        rows.append(note)
+    profile.notes = rows  # delete-orphan removes whatever is left in ``existing``
 
 
 def to_response(profile: ChildProfile) -> ChildProfileResponse:
@@ -89,8 +94,10 @@ def to_response(profile: ChildProfile) -> ChildProfileResponse:
         height_cm=float(profile.height_cm) if profile.height_cm is not None else None,
         diet_preference=profile.diet_preference,
         allergies=sorted(profile.allergens),
-        doctors_note=profile.doctors_note,
-        doctors_note_recorded_at=profile.doctors_note_recorded_at,
+        notes=[
+            ChildNoteResponse(id=n.id, kind=n.kind, text=n.text, recorded_at=n.created_at)
+            for n in profile.notes
+        ],
         activity_level=profile.activity_level,
         created_at=profile.created_at,
     )
@@ -105,7 +112,7 @@ def to_child_context(profile: ChildProfile) -> ChildContext:
         height_cm=float(profile.height_cm) if profile.height_cm is not None else None,
         diet_preference=profile.diet_preference,
         allergies=frozenset(profile.allergens),
-        doctors_note=profile.doctors_note,
+        notes=tuple(NoteRow(kind=n.kind, text=n.text) for n in profile.notes),
         activity_level=profile.activity_level,
     )
 
@@ -239,7 +246,8 @@ async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
     return DailyTargetsResponse(
         targets=targets_with_intake(daily, targets, as_of),
         diet_preference=child.diet_preference,
-        doctors_note_present=child.doctors_note is not None,
+        doctor_notes_present=any(n.kind is NoteKind.DOCTOR for n in child.notes),
+        preferences_present=any(n.kind is NoteKind.PREFERENCE for n in child.notes),
         disclaimer=DISCLAIMER,
     )
 

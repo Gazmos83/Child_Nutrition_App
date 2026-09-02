@@ -1,10 +1,11 @@
-"""Doctor's-note extraction and deterministic override application (tasks 4.1, 4.2)."""
+"""Note-row extraction and deterministic override application (child-notes-restrictions)."""
 
 from typing import get_args
 
 import pytest
 
-from backend.models.enums import DietPreference, Sex
+from backend.chat import copy
+from backend.models.enums import DietPreference, NoteKind, Sex
 from backend.nutrition.nutrients import REGISTRY, displayed_specs
 from backend.nutrition.targets import (
     calculate_calorie_target,
@@ -16,100 +17,220 @@ from backend.schemas.tools import (
     CalorieTargetInput,
     DoctorsNoteOverride,
     GapDetectionRequest,
+    NoteRow,
     NutrientTargets,
     OverridableNutrient,
     ProteinTargetInput,
 )
 from backend.tools.doctors_note import (
     EXTRACT_SYSTEM_PROMPT,
-    _parse_override,
+    _parse_reply,
     apply_override,
-    extract_override,
+    apply_overrides,
+    extract_notes,
 )
 from backend.tools.targets_resolution import general_targets, resolve_targets
 from tests.fixtures.fake_llm import RecordingChatModel
 
 NOTE = "Please limit intake to 650 kcal per day while we monitor weight gain."
+CALORIES_650 = {"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}
 
 
 def model(*responses: str, fail: str | None = None) -> RecordingChatModel:
     return RecordingChatModel(responses=list(responses), calls=[], fail_with=fail)
 
 
-class TestExtractOverride:
-    async def test_clear_note_is_extracted_and_validated(self) -> None:
-        llm = model('{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}')
-        result = await extract_override(NOTE, llm)
+def doctor(text: str) -> NoteRow:
+    return NoteRow(kind=NoteKind.DOCTOR, text=text)
+
+
+def preference(text: str) -> NoteRow:
+    return NoteRow(kind=NoteKind.PREFERENCE, text=text)
+
+
+def reply(*rows: dict) -> str:
+    import json
+
+    return json.dumps({"rows": list(rows)})
+
+
+class TestExtractNotes:
+    async def test_clear_doctor_target_is_extracted_and_validated(self) -> None:
+        llm = model(reply({"row": 1, "target": CALORIES_650, "avoid": []}))
+        result = await extract_notes([doctor(NOTE)], llm)
         assert result.status == "applied"
-        assert result.override == DoctorsNoteOverride(
+        [target] = result.targets
+        assert target.note_index == 0
+        assert target.override == DoctorsNoteOverride(
             nutrient="calories", direction="max", value=650, unit="kcal"
         )
+        assert result.avoid == [] and result.issues == []
 
-    async def test_prompt_contains_note_and_instructions(self) -> None:
-        llm = model("null")
-        await extract_override(NOTE, llm)
+    async def test_prompt_numbers_and_tags_the_rows(self) -> None:
+        llm = model(reply())
+        await extract_notes([doctor(NOTE), preference("no pork")], llm)
         [messages] = llm.calls
         assert messages[0].content == EXTRACT_SYSTEM_PROMPT
-        assert messages[1].content == NOTE
-        assert "null" in EXTRACT_SYSTEM_PROMPT and '"iron"' in EXTRACT_SYSTEM_PROMPT
+        assert messages[1].content == f"1. [doctor] {NOTE}\n2. [preference] no pork"
+        assert '"iron"' in EXTRACT_SYSTEM_PROMPT and "[preference]" in EXTRACT_SYSTEM_PROMPT
+        assert "NEVER a target" in EXTRACT_SYSTEM_PROMPT and "never use 0" in EXTRACT_SYSTEM_PROMPT
+        assert "dairy" in EXTRACT_SYSTEM_PROMPT and "milk_feed" not in EXTRACT_SYSTEM_PROMPT
+
+    async def test_avoidance_phrase_is_extracted_for_its_row(self) -> None:
+        llm = model(reply({"row": 1, "target": None, "avoid": ["dairy"]}))
+        result = await extract_notes([doctor("Avoid dairy; recheck in 3 months.")], llm)
+        assert result.status == "applied"
+        assert result.targets == []
+        [item] = result.avoid
+        assert (item.note_index, item.phrase) == (0, "dairy")
 
     async def test_fenced_json_parses(self) -> None:
         llm = model(
-            '```json\n{"nutrient": "iron", "direction": "target", "value": 15, "unit": "mg"}\n```'
+            "```json\n"
+            + reply(
+                {
+                    "row": 1,
+                    "target": {
+                        "nutrient": "iron",
+                        "direction": "target",
+                        "value": 15,
+                        "unit": "mg",
+                    },
+                    "avoid": [],
+                }
+            )
+            + "\n```"
         )
-        result = await extract_override("Aim for 15 mg iron daily.", llm)
+        result = await extract_notes([doctor("Aim for 15 mg iron daily.")], llm)
         assert result.status == "applied"
-        assert result.override.nutrient == "iron" and result.override.value == 15
+        assert result.targets[0].override.nutrient == "iron"
 
-    async def test_null_means_no_numeric_target(self) -> None:
-        result = await extract_override("Avoid dairy; recheck in 3 months.", model("null"))
-        assert result.status == "no_numeric_target"
-        assert result.override is None
-        assert result.detail
+    async def test_nothing_to_apply(self) -> None:
+        llm = model(reply({"row": 1, "target": None, "avoid": []}))
+        result = await extract_notes([doctor("Recheck in 3 months.")], llm)
+        assert result.status == "nothing_to_apply"
+        assert result.targets == [] and result.avoid == []
 
-    async def test_unknown_nutrient_is_unparsed(self) -> None:
-        llm = model('{"nutrient": "sodium", "direction": "max", "value": 400, "unit": "mg"}')
-        result = await extract_override("Limit sodium to 400 mg.", llm)
-        assert result.status == "unparsed"
-        assert result.override is None
-        assert "nutrient" in result.detail
+    async def test_preference_target_is_dropped_but_its_avoidances_apply(self) -> None:
+        llm = model(reply({"row": 1, "target": CALORIES_650, "avoid": ["pork"]}))
+        result = await extract_notes([preference("limit to 650 kcal, no pork")], llm)
+        assert result.targets == []
+        assert [a.phrase for a in result.avoid] == ["pork"]
+        assert [i.detail for i in result.issues] == [copy.NOTE_PREFERENCE_TARGET]
+        assert result.status == "applied"
 
-    async def test_mismatched_unit_is_unparsed(self) -> None:
-        llm = model('{"nutrient": "calories", "direction": "max", "value": 650, "unit": "g"}')
-        result = await extract_override(NOTE, llm)
-        assert result.status == "unparsed"
-        assert "kcal" in result.detail
+    async def test_two_doctor_rows_on_one_nutrient_are_both_refused(self) -> None:
+        llm = model(
+            reply(
+                {"row": 1, "target": CALORIES_650, "avoid": []},
+                {"row": 2, "target": {**CALORIES_650, "value": 700}, "avoid": []},
+            )
+        )
+        result = await extract_notes([doctor(NOTE), doctor("Or 700 kcal at most.")], llm)
+        assert result.targets == []
+        assert sorted(i.note_index for i in result.issues) == [0, 1]
+        assert all("neither was applied" in i.detail for i in result.issues)
+        assert result.status == "nothing_to_apply"
+
+    async def test_unknown_nutrient_fails_its_row_only(self) -> None:
+        sodium = {"nutrient": "sodium", "direction": "max", "value": 400, "unit": "mg"}
+        llm = model(
+            reply(
+                {"row": 1, "target": sodium, "avoid": []},
+                {"row": 2, "target": None, "avoid": ["dairy"]},
+            )
+        )
+        result = await extract_notes(
+            [doctor("Limit sodium to 400 mg."), preference("no dairy")], llm
+        )
+        assert result.targets == []
+        assert [i.note_index for i in result.issues] == [0]
+        assert result.issues[0].detail == copy.NOTE_TARGET_UNREADABLE
+        assert [a.phrase for a in result.avoid] == ["dairy"]
+        assert result.status == "applied"
+
+    async def test_direction_synonyms_are_normalised_before_validation(self) -> None:
+        """Live failure: the model wrote "limit" for a calorie cap."""
+        limit = {"nutrient": "Calories", "direction": "Limit", "value": 600, "unit": "kcal"}
+        llm = model(reply({"row": 1, "target": limit, "avoid": []}))
+        result = await extract_notes([doctor("limit calories to 600 kcal")], llm)
+        [target] = result.targets
+        assert target.override.direction == "max" and target.override.value == 600
+        assert result.issues == []
+
+    async def test_negated_row_falls_back_to_the_rest_of_the_row(self) -> None:
+        """Live failure: the model read "no iron fortified oat cereal" as an iron target of 0."""
+        zero_iron = {"nutrient": "iron", "direction": "max", "value": 0, "unit": "mg"}
+        llm = model(reply({"row": 1, "target": zero_iron, "avoid": []}))
+        result = await extract_notes([doctor("no iron fortified oat cereal")], llm)
+        assert result.targets == []
+        assert [a.phrase for a in result.avoid] == ["iron fortified oat cereal"]
+        assert [i.detail for i in result.issues] == [copy.NOTE_TARGET_UNREADABLE]
+        assert result.status == "applied"
+
+    async def test_fallback_only_for_rows_that_open_with_a_negation(self) -> None:
+        llm = model(
+            reply(
+                {"row": 1, "target": None, "avoid": []},
+                {"row": 2, "target": None, "avoid": []},
+            )
+        )
+        rows = [doctor("Recheck in 3 months."), preference("Never pork")]
+        result = await extract_notes(rows, llm)
+        assert [(a.note_index, a.phrase) for a in result.avoid] == [(1, "pork")]
+
+    async def test_mismatched_unit_fails_its_row(self) -> None:
+        llm = model(reply({"row": 1, "target": {**CALORIES_650, "unit": "g"}, "avoid": []}))
+        result = await extract_notes([doctor(NOTE)], llm)
+        assert result.targets == [] and result.issues[0].detail == copy.NOTE_TARGET_UNREADABLE
 
     async def test_garbage_reply_is_unparsed(self) -> None:
-        result = await extract_override(NOTE, model("Sure! The doctor wants fewer calories."))
+        result = await extract_notes(
+            [doctor(NOTE)], model("Sure! The doctor wants fewer calories.")
+        )
+        assert result.status == "unparsed"
+
+    async def test_wrong_envelope_is_unparsed(self) -> None:
+        result = await extract_notes([doctor(NOTE)], model('{"nutrient": "calories"}'))
         assert result.status == "unparsed"
 
     async def test_model_failure_is_unparsed(self, caplog) -> None:
-        result = await extract_override(NOTE, model(fail="upstream 503"))
+        result = await extract_notes([doctor(NOTE)], model(fail="upstream 503"))
         assert result.status == "unparsed"
         assert "503" in result.detail
         assert "not applied" in caplog.text
 
     async def test_no_model_is_unparsed(self) -> None:
-        result = await extract_override(NOTE, None)
+        result = await extract_notes([doctor(NOTE)], None)
         assert result.status == "unparsed"
         assert "no language model" in result.detail
 
-    @pytest.mark.parametrize("note", [None, "", "   "])
-    async def test_missing_note_is_not_present_without_model_call(self, note) -> None:
+    async def test_no_rows_is_not_present_without_model_call(self) -> None:
         llm = model()
-        result = await extract_override(note, llm)
+        result = await extract_notes([], llm)
         assert result.status == "not_present"
         assert llm.calls == []
 
+    async def test_invented_rows_and_duplicate_phrases_are_ignored(self) -> None:
+        llm = model(
+            reply(
+                {"row": 1, "target": None, "avoid": ["pork", "Pork", "  pork  "]},
+                {"row": 7, "target": CALORIES_650, "avoid": ["kale"]},
+            )
+        )
+        result = await extract_notes([preference("no pork")], llm)
+        assert [a.phrase for a in result.avoid] == ["pork"]
+        assert result.targets == []
 
-class TestParseOverride:
-    def test_json_null_inside_object_text(self) -> None:
-        assert _parse_override(" null ") is None
 
+class TestParseReply:
     def test_array_rejected(self) -> None:
         with pytest.raises(ValueError):
-            _parse_override("[1, 2]")
+            _parse_reply("[1, 2]")
+
+    def test_extra_keys_rejected(self) -> None:
+        with pytest.raises(Exception):  # noqa: B017 -- pydantic ValidationError or ValueError
+            _parse_reply('{"rows": [], "notes": []}')
 
 
 def targets_for(age: int, weight: float) -> NutrientTargets:
@@ -200,6 +321,29 @@ class TestApplyOverride:
         assert applied.calories.calories == 500
 
 
+class TestApplyOverrides:
+    def test_three_nutrients_apply_independently(self) -> None:
+        general = targets_for(8, 8.5)
+        applied, outcomes = apply_overrides(
+            general,
+            [
+                DoctorsNoteOverride(nutrient="calories", direction="max", value=650, unit="kcal"),
+                DoctorsNoteOverride(nutrient="protein", direction="min", value=14, unit="g"),
+                DoctorsNoteOverride(nutrient="iron", direction="target", value=15, unit="mg"),
+            ],
+        )
+        assert [o.nutrient for o in outcomes] == ["calories", "protein", "iron"]
+        assert all(o.conflict for o in outcomes)
+        assert applied.calories.calories == 650
+        assert applied.protein.protein_g == 14.0
+        assert applied.iron.iron_mg == 15.0
+
+    def test_no_overrides_means_no_outcomes(self) -> None:
+        general = targets_for(8, 8.5)
+        applied, outcomes = apply_overrides(general, [])
+        assert applied == general and outcomes == []
+
+
 class TestPromptDerivation:
     """Prompt and unit map derive from the registry's overridable rows (day-9 task 3.2)."""
 
@@ -217,22 +361,27 @@ class TestOverrideBoundary:
 
     def displayed_child(self, age: int, note: str | None = None) -> GapDetectionRequest:
         return GapDetectionRequest(
-            age_months=age, weight_kg=12.0, sex=Sex.FEMALE, doctors_note=note
+            age_months=age,
+            weight_kg=12.0,
+            sex=Sex.FEMALE,
+            notes=[doctor(note)] if note else [],
         )
 
     async def test_calcium_note_is_rejected_like_any_unknown_nutrient(self) -> None:
-        llm = model('{"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}')
-        result = await extract_override("Limit calcium to 500 mg daily.", llm)
-        assert result.status == "unparsed"
-        assert result.override is None
-        assert "nutrient" in result.detail
+        calcium = {"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}
+        llm = model(reply({"row": 1, "target": calcium, "avoid": []}))
+        result = await extract_notes([doctor("Limit calcium to 500 mg daily.")], llm)
+        assert result.status == "nothing_to_apply"
+        assert result.targets == []
+        assert result.issues[0].detail == copy.NOTE_TARGET_UNREADABLE
 
     async def test_calcium_note_leaves_the_displayed_target_general(self) -> None:
         request = self.displayed_child(24, note="Limit calcium to 500 mg daily.")
-        llm = model('{"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}')
-        targets, extraction, override = await resolve_targets(request, llm)
-        assert extraction.status == "unparsed"
-        assert override.conflict is False and override.source == "general_target"
+        calcium = {"nutrient": "calcium", "direction": "max", "value": 500, "unit": "mg"}
+        llm = model(reply({"row": 1, "target": calcium, "avoid": []}))
+        targets, extraction, overrides = await resolve_targets(request, llm)
+        assert extraction.status == "nothing_to_apply"
+        assert overrides == []
         # Calcium is displayed with the general 1-3 years RDA, not the note's 500.
         assert targets.require("calcium").amount == 700.0
         assert targets == general_targets(request)

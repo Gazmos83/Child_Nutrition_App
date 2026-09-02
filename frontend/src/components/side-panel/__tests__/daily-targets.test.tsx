@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useChildContext } from "@/hooks/use-child-context";
 import type { DailyTargetsResponse, NutrientTargetRow } from "@/lib/api-types";
@@ -50,7 +50,8 @@ const OMNIVORE: DailyTargetsResponse = {
     ],
   },
   diet_preference: "omnivore",
-  doctors_note_present: false,
+  doctor_notes_present: false,
+  preferences_present: false,
   disclaimer: copy.DISCLAIMER_FALLBACK,
 };
 
@@ -71,7 +72,8 @@ const VEGAN: DailyTargetsResponse = {
     ],
   },
   diet_preference: "vegan",
-  doctors_note_present: true,
+  doctor_notes_present: true,
+  preferences_present: false,
 };
 
 function jsonResponse(body: unknown): Response {
@@ -140,7 +142,7 @@ describe("DailyTargets", () => {
     expect(dha?.getAttribute("data-kind")).toBe("advisory");
     expect(dha?.textContent).not.toContain("a day");
     expect(screen.getByText(copy.advisoryFrom("AAP Pediatric Nutrition (2020)", "2020"))).toBeInTheDocument();
-    expect(screen.getByTestId("targets-note-on-file")).toHaveTextContent(copy.TARGETS_NOTE_ON_FILE);
+    expect(screen.getByTestId("targets-note-on-file")).toHaveTextContent(copy.TARGETS_DOCTOR_NOTE_ON_FILE);
   });
 
   it("explains itself with no saved child, showing no numbers and fetching nothing", () => {
@@ -166,8 +168,7 @@ describe("DailyTargets", () => {
       height_cm: null,
       diet_preference: "omnivore",
       allergies: [],
-      doctors_note: null,
-      doctors_note_recorded_at: null,
+      notes: [],
       activity_level: "low_active",
       created_at: "2026-08-27T09:00:00Z",
     };
@@ -205,5 +206,17 @@ describe("DailyTargets", () => {
     fireEvent.click(screen.getByRole("button", { name: "save" }));
     await waitFor(() => expect(targetsCalls).toHaveLength(2));
     expect(fetchMock).toHaveBeenCalled();
+  });
+});
+
+describe("DailyTargets note disclosure (child-notes-restrictions)", () => {
+  it("names preferences alone, and both together", async () => {
+    renderPanel({ ...OMNIVORE, doctor_notes_present: false, preferences_present: true });
+    await screen.findAllByTestId("target-row");
+    expect(screen.getByTestId("targets-note-on-file")).toHaveTextContent(copy.TARGETS_PREFERENCES_ON_FILE);
+    cleanup();
+    renderPanel({ ...OMNIVORE, doctor_notes_present: true, preferences_present: true });
+    await screen.findAllByTestId("target-row");
+    expect(screen.getByTestId("targets-note-on-file")).toHaveTextContent(copy.TARGETS_NOTES_ON_FILE);
   });
 });

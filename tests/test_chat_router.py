@@ -100,6 +100,23 @@ class TestResolveContext:
         assert "height_cm" not in args  # child has none recorded; tool keeps its own default
         assert set(used) >= {"age_months", "weight_kg", "sex", "allergies", "diet_preference"}
 
+    def test_note_rows_come_from_the_child_even_when_empty(self) -> None:
+        request = ChatRequest.model_validate({"message": "m", "child": CHILD})
+        args, used = resolve_context(
+            "generate_meal_plan",
+            {"notes": [{"kind": "preference", "text": "no vegetables"}]},
+            request,
+            MealPlanRequest,
+        )
+        assert args["notes"] == [] and "notes" in used  # the model can never add a row
+
+    def test_note_rows_are_serialised_with_their_kinds(self) -> None:
+        child = {**CHILD, "notes": [{"kind": "doctor", "text": "no honey"}]}
+        request = ChatRequest.model_validate({"message": "m", "child": child})
+        args, used = resolve_context("generate_meal_plan", {}, request, MealPlanRequest)
+        assert args["notes"] == [{"kind": "doctor", "text": "no honey"}]
+        MealPlanRequest.model_validate(args)  # the tool accepts exactly what the seam sends
+
     def test_model_height_is_dropped_when_child_has_none(self) -> None:
         request = ChatRequest.model_validate({"message": "m", "child": CHILD})
         args, _ = resolve_context(

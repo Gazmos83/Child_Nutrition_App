@@ -4,9 +4,14 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from backend.models.enums import FeedingType, Sex
+from backend.models.enums import FeedingType, NoteKind, Sex
 from backend.nutrition.foods import FoodNotFoundError
-from backend.schemas.tools import DailyNutritionInput, FeedingEntry, RemainingTargetsInput
+from backend.schemas.tools import (
+    DailyNutritionInput,
+    FeedingEntry,
+    NoteRow,
+    RemainingTargetsInput,
+)
 from backend.tools.feeding_log import get_daily_nutrition, get_remaining_targets, log_feeding
 from tests.fixtures.fake_llm import RecordingChatModel
 
@@ -128,21 +133,24 @@ class TestDailyNutrition:
 class TestRemainingTargets:
     async def test_note_wins_and_remaining_subtracts_intake(self) -> None:
         llm = RecordingChatModel(
-            responses=['{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}']
+            responses=[
+                '{"rows": [{"row": 1, "target": {"nutrient": "calories", "direction": "max", '
+                '"value": 650, "unit": "kcal"}, "avoid": []}]}'
+            ]
         )
         result = await get_remaining_targets(
             RemainingTargetsInput(
                 age_months=8,
                 weight_kg=8.5,
                 sex=Sex.FEMALE,
-                doctors_note="Limit to 650 kcal per day.",
+                notes=[NoteRow(kind=NoteKind.DOCTOR, text="Limit to 650 kcal per day.")],
                 entries=[cereal(75)],  # 5 servings x 60 kcal = 300 kcal
                 date=DAY,
             ),
             llm,
         )
-        assert result.override.conflict is True
-        assert result.override.general_value == 678
+        assert result.overrides[0].conflict is True
+        assert result.overrides[0].general_value == 678
         assert result.targets.calories.calories == 650
         assert result.intake.calories == 300.0
         assert result.remaining.calories == 350.0
@@ -158,7 +166,7 @@ class TestRemainingTargets:
         assert result.intake.calories == 1200.0
         assert result.remaining.calories == 0.0
         assert result.remaining.iron_mg == 0.0  # 100 mg logged against an 11 mg target
-        assert result.override.conflict is False
+        assert result.overrides == []
 
     async def test_no_entries_means_remaining_equals_targets(self) -> None:
         result = await get_remaining_targets(

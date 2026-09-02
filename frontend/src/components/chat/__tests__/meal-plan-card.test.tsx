@@ -65,17 +65,27 @@ const BASE: MealPlanResult = {
   coverage: { calories: 0.95, protein: 0.97, iron: 0.93 },
   note_extraction: {
     status: "applied",
-    override: { nutrient: "calories", direction: "max", value: 650, unit: "kcal" },
+    targets: [
+      { note_index: 0, override: { nutrient: "calories", direction: "max", value: 650, unit: "kcal" } },
+    ],
+    avoid: [],
+    issues: [],
     detail: "",
   },
-  override: {
-    conflict: true,
-    source: "doctors_note",
-    nutrient: "calories",
-    general_value: 743,
-    applied_value: 650,
-    detail: "note max 650 below general 743",
-  },
+  overrides: [
+    {
+      conflict: true,
+      source: "doctors_note",
+      nutrient: "calories",
+      general_value: 743,
+      applied_value: 650,
+      detail: "note max 650 below general 743",
+    },
+  ],
+  avoidances: [],
+  note_outcomes: [
+    { index: 0, kind: "doctor", text: "Limit to 650 kcal", applied: true, detail: "note max 650" },
+  ],
   exclusions: [
     { food_id: "peanut_butter_thinned", reasons: ["contains a recorded allergen: peanut"] },
     { food_id: "honey", reasons: ["honey is not safe under 12 months (infant botulism)"] },
@@ -118,7 +128,7 @@ describe("MealPlanCard", () => {
       ...BASE,
       outcome: "no_safe_plan",
       items: [],
-      override: { ...BASE.override, conflict: false, source: "general_target" },
+      overrides: [],
       message: "We couldn't build a safe plan with these details — here's why, and what you might want to check",
     };
     render(<MealPlanCard plan={plan} />);
@@ -161,7 +171,7 @@ describe("MealPlanCard", () => {
           outcome: "targets_met",
           items: [],
           message,
-          override: { ...BASE.override, conflict: false, source: "general_target" },
+          overrides: [],
           already_logged: { calories: 640, protein_g: 9, fat_g: 20, carbohydrate_g: 70, iron_mg: 10, calcium_mg: 300 },
         }}
       />,
@@ -172,5 +182,44 @@ describe("MealPlanCard", () => {
     expect(screen.queryByText(copy.PLAN_ITEMS_TITLE)).toBeNull();
     expect(screen.queryByText(copy.PLAN_COVERAGE_TITLE)).toBeNull();
     expect(screen.getByTestId("meal-plan-card")).toHaveAttribute("data-outcome", "targets_met");
+  });
+});
+
+describe("MealPlanCard note rows (child-notes-restrictions)", () => {
+  it("shows one banner per overridden nutrient", () => {
+    const plan: MealPlanResult = {
+      ...BASE,
+      overrides: [
+        BASE.overrides[0],
+        { conflict: true, source: "doctors_note", nutrient: "iron", general_value: 11, applied_value: 15, detail: "" },
+        { conflict: false, source: "general_target", nutrient: "protein", general_value: 9.4, applied_value: 9.4, detail: "" },
+      ],
+    };
+    render(<MealPlanCard plan={plan} />);
+    const banners = screen.getAllByTestId("override-banner");
+    expect(banners).toHaveLength(2);
+    expect(banners[1]).toHaveTextContent("15 mg");
+  });
+
+  it("lists rows the plan could not apply, with the reason, and nothing when all applied", () => {
+    const plan: MealPlanResult = {
+      ...BASE,
+      note_outcomes: [
+        ...BASE.note_outcomes,
+        { index: 1, kind: "preference", text: "no kale chips", applied: false, detail: "not in our table" },
+      ],
+    };
+    render(<MealPlanCard plan={plan} />);
+    expect(screen.getByText(copy.PLAN_NOT_APPLIED_TITLE)).toBeInTheDocument();
+    const list = screen.getByTestId("not-applied");
+    expect(list).toHaveTextContent(copy.quoted("no kale chips"));
+    expect(list).toHaveTextContent("not in our table");
+    expect(list).not.toHaveTextContent("Limit to 650 kcal");
+  });
+
+  it("has no not-applied section when every row applied", () => {
+    render(<MealPlanCard plan={BASE} />);
+    expect(screen.queryByTestId("not-applied")).toBeNull();
+    expect(screen.queryByText(copy.PLAN_NOT_APPLIED_TITLE)).toBeNull();
   });
 });

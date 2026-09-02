@@ -47,8 +47,26 @@ def test_child_block_lists_age_in_months_and_sorted_allergens() -> None:
     assert "age: 8 months" in block
     assert "allergies: egg, peanut" in block
     assert "height: not given" in block
-    assert "doctor's note: none" in block
+    assert "doctor's notes: none" in block and "preferences: none" in block
     assert "years" not in block
+
+
+def test_child_block_lists_note_rows_by_kind() -> None:
+    child = ChildContext.model_validate(
+        {
+            "age_months": 8,
+            "weight_kg": 8.5,
+            "sex": "female",
+            "notes": [
+                {"kind": "doctor", "text": "no honey"},
+                {"kind": "preference", "text": "no pork"},
+            ],
+        }
+    )
+    block = format_child_context(child)
+    assert "doctor's notes: “no honey”" in block
+    assert "preferences: “no pork”" in block
+    assert "note_outcomes" in ANSWER_WITH_TOOLS_SYSTEM_PROMPT
 
 
 def test_missing_child_is_stated_not_guessed() -> None:

@@ -22,8 +22,13 @@ export function MealPlanCard({ plan }: { plan: MealPlanResult }) {
         {!noSafePlan && <p className="text-sm text-muted-foreground">{plan.message}</p>}
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        {plan.override.conflict && <OverrideBanner override={plan.override} />}
+        {plan.overrides
+          .filter((o) => o.conflict)
+          .map((o) => (
+            <OverrideBanner key={o.nutrient ?? "override"} override={o} />
+          ))}
         <LogLines plan={plan} />
+        <NotApplied plan={plan} />
         {targetsMet ? null : noSafePlan ? (
           <>
             <Section title={copy.NO_SAFE_PLAN_WHY}>
@@ -99,6 +104,24 @@ export function OverrideBanner({ override }: { override: OverrideOutcome }) {
       <p className="font-medium">{copy.OVERRIDE_TITLE}</p>
       <p>{copy.overrideBody(nutrient, applied_value, general_value, UNIT_FOR_NUTRIENT[nutrient])}</p>
     </div>
+  );
+}
+
+/** Rows the plan could not act on, with the reason (child-notes-restrictions). */
+function NotApplied({ plan }: { plan: MealPlanResult }) {
+  const rows = plan.note_outcomes.filter((o) => !o.applied);
+  if (rows.length === 0) return null;
+  return (
+    <Section title={copy.PLAN_NOT_APPLIED_TITLE}>
+      <ul className="space-y-1" data-testid="not-applied">
+        {rows.map((o) => (
+          <li key={o.index}>
+            <span className="font-medium">{copy.quoted(o.text)}</span>
+            <span className="text-muted-foreground"> — {o.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
   );
 }
 

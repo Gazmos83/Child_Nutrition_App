@@ -42,7 +42,7 @@ PROFILE_FIELDS = frozenset(
         "height_cm",
         "allergies",
         "diet_preference",
-        "doctors_note",
+        "notes",
         "activity_level",
     }
 )
@@ -91,8 +91,12 @@ def search_guidelines_tool() -> StructuredTool:
 def _json_value(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
     if isinstance(value, frozenset | set):
         return sorted(_json_value(v) for v in value)  # type: ignore[type-var]
+    if isinstance(value, list | tuple):
+        return [_json_value(v) for v in value]
     return value
 
 

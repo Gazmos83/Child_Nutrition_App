@@ -17,6 +17,8 @@ export type Allergen =
   | "sesame";
 export type ActivityLevel = "sedentary" | "low_active" | "active" | "very_active";
 export type FeedingType = "breastmilk" | "formula" | "solid" | "water";
+/** Who a note row comes from; only a doctor's row may change a nutrient target. */
+export type NoteKind = "doctor" | "preference";
 
 export interface Option<T extends string> {
   value: T;
@@ -66,3 +68,8 @@ export const NUTRIENT_LABELS: Record<string, string> = {
   protein: "protein",
   iron: "iron",
 };
+
+export const NOTE_KIND_OPTIONS: readonly Option<NoteKind>[] = [
+  { value: "doctor", label: "Doctor's note" },
+  { value: "preference", label: "Preference" },
+];

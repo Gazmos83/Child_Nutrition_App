@@ -22,6 +22,7 @@ from langchain_core.language_models import BaseChatModel
 
 from backend.chat import copy as chat_copy
 from backend.models.enums import Allergen, DietPreference
+from backend.nutrition.avoidance import filter_by_avoidances, resolve_avoidance
 from backend.nutrition.diet import filter_by_diet
 from backend.nutrition.feeding import normalise_entries, sum_totals
 from backend.nutrition.foods import FoodCategory, FoodItem, LoadedFoodTable, get_food_table
@@ -29,6 +30,7 @@ from backend.nutrition.safety import assert_plan_safe, filter_foods
 from backend.rag.prompts import DISCLAIMER
 from backend.schemas.tools import (
     Adjustment,
+    Avoidance,
     Exclusion,
     GapNutrient,
     MealItem,
@@ -37,6 +39,8 @@ from backend.schemas.tools import (
     MealPlanResult,
     MealSlot,
     NoteExtraction,
+    NoteOutcome,
+    NoteRow,
     NutrientCoverage,
     NutrientGapReport,
     NutrientTargets,
@@ -350,18 +354,56 @@ def _message(
     )
 
 
+def _note_outcomes(
+    notes: list[NoteRow],
+    extraction: NoteExtraction,
+    overrides: list[OverrideOutcome],
+    avoidances: list[Avoidance],
+) -> list[NoteOutcome]:
+    """What every row did, applied or not, with the reason (design Decision 6)."""
+    outcomes: list[NoteOutcome] = []
+    for index, row in enumerate(notes):
+        details: list[str] = []
+        applied = False
+        if extraction.status == "unparsed":
+            details.append(chat_copy.NOTE_EXTRACTION_UNAVAILABLE)
+        for target, outcome in zip(extraction.targets, overrides, strict=True):
+            if target.note_index == index:
+                applied = True
+                details.append(outcome.detail)
+        for avoidance in avoidances:
+            if avoidance.note_index == index:
+                applied = applied or avoidance.applied
+                details.append(avoidance.detail)
+        details.extend(i.detail for i in extraction.issues if i.note_index == index)
+        if not details:
+            details.append(chat_copy.NOTE_NOTHING)
+        outcomes.append(
+            NoteOutcome(
+                index=index,
+                kind=row.kind,
+                text=row.text,
+                applied=applied,
+                detail="; ".join(details),
+            )
+        )
+    return outcomes
+
+
 def _audit(
     request: MealPlanRequest,
     outcome: str,
     targets: NutrientTargets,
     extraction: NoteExtraction,
-    override: OverrideOutcome,
+    overrides: list[OverrideOutcome],
     exclusions: list[Exclusion],
     items: list[PlannedItem],
     totals: NutrientTotals,
     table_version: str,
     already_logged: NutrientTotals | None = None,
     adjustments: list[Adjustment] | None = None,
+    avoidances: list[Avoidance] | None = None,
+    note_outcomes: list[NoteOutcome] | None = None,
 ) -> None:
     gaps = request.gaps
     record = {
@@ -374,7 +416,7 @@ def _audit(
             "sex": request.sex.value,
             "diet_preference": request.diet_preference.value,
             "allergies": sorted(a.value for a in request.allergies),
-            "doctors_note": request.doctors_note,
+            "notes": [row.model_dump(mode="json") for row in request.notes],
             "activity_level": request.activity_level.value,
         },
         "targets": {
@@ -395,7 +437,9 @@ def _audit(
             },
         },
         "note_extraction": extraction.model_dump(mode="json"),
-        "override": override.model_dump(mode="json"),
+        "overrides": [o.model_dump(mode="json") for o in overrides],
+        "avoidances": [a.model_dump(mode="json") for a in avoidances or []],
+        "note_outcomes": [o.model_dump(mode="json") for o in note_outcomes or []],
         "exclusions": [e.model_dump(mode="json") for e in exclusions],
         "items": [{"food_id": i.food_id, "servings": i.servings} for i in items],
         "totals": totals.model_dump(mode="json"),
@@ -436,6 +480,7 @@ def _audit(
             "no_recorded_allergen",
             "below_minimum_age",
             f"diet_preference:{request.diet_preference.value}",
+            *(["note_avoidances"] if any(a.applied for a in avoidances or []) else []),
         ],
     }
     audit_logger.info("meal_plan_audit %s", json.dumps(record, sort_keys=True))
@@ -457,7 +502,12 @@ async def generate_meal_plan(
     allergens: frozenset[Allergen] = request.allergies
     preference: DietPreference = request.diet_preference
 
-    targets, extraction, override = await resolve_targets(request, chat_model)
+    targets, extraction, overrides = await resolve_targets(request, chat_model)
+    avoidances = [
+        resolve_avoidance(item, request.notes[item.note_index].kind, table)
+        for item in extraction.avoid
+    ]
+    note_outcomes = _note_outcomes(request.notes, extraction, overrides, avoidances)
 
     # Change 2: the log may narrow what is left to cover and which nutrient to favour.
     # Neither touches ``targets`` -- the day's targets stay the reference (Decision 7).
@@ -471,11 +521,23 @@ async def generate_meal_plan(
     adjustments = [adjustment] if adjustment else []
 
     diet_ok, diet_excluded = filter_by_diet(table.foods, preference)
-    safe, safety_excluded = filter_foods(diet_ok, age, allergens)
-    exclusions = [
-        Exclusion(food_id=f.id, reasons=[f"not part of a {preference.value} diet"])
-        for f in diet_excluded
-    ] + [Exclusion(food_id=e.food.id, reasons=e.reasons) for e in safety_excluded]
+    # Note avoidances narrow the list before the safety filter, which stays the last word.
+    note_ok, note_excluded = filter_by_avoidances(
+        diet_ok,
+        avoidances,
+        reason_for=lambda a: chat_copy.note_exclusion_reason(
+            a.kind, request.notes[a.note_index].text
+        ),
+    )
+    safe, safety_excluded = filter_foods(note_ok, age, allergens)
+    exclusions = (
+        [
+            Exclusion(food_id=f.id, reasons=[f"not part of a {preference.value} diet"])
+            for f in diet_excluded
+        ]
+        + [Exclusion(food_id=f.id, reasons=reasons) for f, reasons in note_excluded]
+        + [Exclusion(food_id=e.food.id, reasons=e.reasons) for e in safety_excluded]
+    )
 
     zero = NutrientTotals(
         calories=0, protein_g=0, fat_g=0, carbohydrate_g=0, iron_mg=0, calcium_mg=0
@@ -489,13 +551,15 @@ async def generate_meal_plan(
             "targets_met",
             targets,
             extraction,
-            override,
+            overrides,
             exclusions,
             [],
             zero,
             table.version,
             already_logged,
             adjustments,
+            avoidances,
+            note_outcomes,
         )
         return MealPlanResult(
             outcome="targets_met",
@@ -504,7 +568,9 @@ async def generate_meal_plan(
             targets=targets,
             coverage=_coverage(zero, composition_targets),
             note_extraction=extraction,
-            override=override,
+            overrides=overrides,
+            avoidances=avoidances,
+            note_outcomes=note_outcomes,
             exclusions=exclusions,
             message=chat_copy.TARGETS_MET_MESSAGE,
             disclaimer=DISCLAIMER,
@@ -546,13 +612,15 @@ async def generate_meal_plan(
         outcome,
         targets,
         extraction,
-        override,
+        overrides,
         exclusions,
         items,
         totals,
         table.version,
         already_logged,
         adjustments,
+        avoidances,
+        note_outcomes,
     )
 
     return MealPlanResult(
@@ -562,7 +630,9 @@ async def generate_meal_plan(
         targets=targets,
         coverage=_coverage(totals, composition_targets),
         note_extraction=extraction,
-        override=override,
+        overrides=overrides,
+        avoidances=avoidances,
+        note_outcomes=note_outcomes,
         exclusions=exclusions,
         message=message,
         disclaimer=DISCLAIMER,

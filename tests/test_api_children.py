@@ -70,12 +70,15 @@ async def profile_of(client: AsyncClient, child_id: str) -> dict:
 
 class TestProfiles:
     async def test_create_and_read_back(self, auth_client: AsyncClient) -> None:
-        created = await create_child(auth_client, doctors_note="  limit to 650 kcal/day ")
+        created = await create_child(
+            auth_client, notes=[{"kind": "doctor", "text": "  limit to 650 kcal/day "}]
+        )
         assert created["age_months"] == 8 and created["weight_kg"] == 8.5
         assert created["birth_date"] == CHILD["birth_date"]  # stored; the age is derived
         assert created["allergies"] == ["milk", "peanut"]  # sorted, deduplicated
-        assert created["doctors_note"] == "  limit to 650 kcal/day "
-        assert created["doctors_note_recorded_at"] is not None
+        [row] = created["notes"]
+        assert row["kind"] == "doctor" and row["text"] == "limit to 650 kcal/day"
+        assert row["recorded_at"] is not None and uuid.UUID(row["id"])
         assert created["activity_level"] == "low_active" and created["height_cm"] is None
 
         listed = await auth_client.get("/api/children")
@@ -86,21 +89,38 @@ class TestProfiles:
     async def test_replace_updates_every_field_and_dates_a_changed_note(
         self, auth_client: AsyncClient
     ) -> None:
-        created = await create_child(auth_client)
+        honey = {"kind": "doctor", "text": "no honey"}
+        pork = {"kind": "preference", "text": "no pork"}
+        created = await create_child(auth_client, notes=[honey])
+        [kept_before] = created["notes"]
         replaced = await auth_client.put(
             f"/api/children/{created['id']}",
-            json={**CHILD, "weight_kg": 9.1, "allergies": [], "doctors_note": "no honey"},
+            json={**CHILD, "weight_kg": 9.1, "allergies": [], "notes": [pork, honey]},
         )
         assert replaced.status_code == 200
         body = replaced.json()
         assert body["weight_kg"] == 9.1 and body["allergies"] == []
-        assert body["doctors_note"] == "no honey" and body["doctors_note_recorded_at"]
+        assert [(n["kind"], n["text"]) for n in body["notes"]] == [
+            ("preference", "no pork"),
+            ("doctor", "no honey"),
+        ]
+        # The unchanged row keeps its identity and date in its new position; the new row is new.
+        kept_after = next(n for n in body["notes"] if n["text"] == "no honey")
+        assert kept_after["id"] == kept_before["id"]
+        assert kept_after["recorded_at"] == kept_before["recorded_at"]
+        assert next(n for n in body["notes"] if n["text"] == "no pork")["id"] != kept_before["id"]
+
+        changed = await auth_client.put(
+            f"/api/children/{created['id']}",
+            json={**CHILD, "notes": [{"kind": "doctor", "text": "no honey at all"}]},
+        )
+        [row] = changed.json()["notes"]
+        assert row["id"] != kept_before["id"]  # a changed text is a new row
 
         cleared = await auth_client.put(
-            f"/api/children/{created['id']}", json={**CHILD, "doctors_note": "   "}
+            f"/api/children/{created['id']}", json={**CHILD, "notes": []}
         )
-        assert cleared.json()["doctors_note"] is None
-        assert cleared.json()["doctors_note_recorded_at"] is None
+        assert cleared.json()["notes"] == []
 
     async def test_delete_removes_the_profile_and_its_log(self, auth_client: AsyncClient) -> None:
         created = await create_child(auth_client)
@@ -122,6 +142,11 @@ class TestProfiles:
             {"birth_date": born(40)},  # height required from 36 months
             {"nickname": "bean"},
             {"activity_level": "olympic"},
+            {"doctors_note": "no honey"},  # the old single field is gone
+            {"notes": [{"kind": "doctor", "text": "   "}]},
+            {"notes": [{"kind": "doctor", "text": "x"}, {"kind": "doctor", "text": "x"}]},
+            {"notes": [{"kind": "doctor", "text": f"row {i}"} for i in range(21)]},
+            {"notes": [{"kind": "nurse", "text": "no honey"}]},
         ],
     )
     async def test_invalid_profile_is_422(self, auth_client: AsyncClient, overrides) -> None:
@@ -218,20 +243,26 @@ class TestDailyTargets:
             "calcium",
         ]
         assert body["diet_preference"] == "omnivore"
-        assert body["doctors_note_present"] is False
+        assert body["doctor_notes_present"] is False and body["preferences_present"] is False
         assert "not" in body["disclaimer"] and "pediatrician" in body["disclaimer"]
 
     async def test_deterministic_and_unflagged_with_no_logged_days(
         self, auth_client: AsyncClient
     ) -> None:
         """No language-model call and no log read: byte-identical, and never a flag."""
-        child = await create_child(auth_client, doctors_note="Limit to 650 kcal per day.")
+        child = await create_child(
+            auth_client,
+            notes=[
+                {"kind": "doctor", "text": "Limit to 650 kcal per day."},
+                {"kind": "preference", "text": "no pork"},
+            ],
+        )
         first = await auth_client.get(f"/api/children/{child['id']}/targets")
         second = await auth_client.get(f"/api/children/{child['id']}/targets")
         assert first.status_code == second.status_code == 200
         assert first.content == second.content
         body = first.json()
-        assert body["doctors_note_present"] is True
+        assert body["doctor_notes_present"] is True and body["preferences_present"] is True
         # The note is disclosed, not applied (Decision 6): calories stay the general 678.
         assert body["targets"]["calories"]["calories"] == 678
         for row in body["targets"]["items"]:

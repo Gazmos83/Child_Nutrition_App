@@ -5,8 +5,16 @@ this package alone -- Alembic autogenerate and the test schema fixtures both rel
 """
 
 from backend.db.base import Base
+from backend.models.child_note import ChildNote
 from backend.models.child_profile import ChildAllergy, ChildProfile
-from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
+from backend.models.enums import (
+    ActivityLevel,
+    Allergen,
+    DietPreference,
+    FeedingType,
+    NoteKind,
+    Sex,
+)
 from backend.models.feeding import Feeding
 from backend.models.growth_measurement import GrowthMeasurement
 from backend.models.user import User
@@ -16,11 +24,13 @@ __all__ = [
     "Allergen",
     "Base",
     "ChildAllergy",
+    "ChildNote",
     "ChildProfile",
     "DietPreference",
     "Feeding",
     "FeedingType",
     "GrowthMeasurement",
+    "NoteKind",
     "Sex",
     "User",
 ]

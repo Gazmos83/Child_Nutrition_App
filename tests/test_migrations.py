@@ -18,16 +18,18 @@ from tests.conftest import alembic_config
 
 pytestmark = pytest.mark.db
 
-ENUM_TYPES = {"sex", "diet_preference", "allergen", "feeding_type", "activity_level"}
+ENUM_TYPES = {"sex", "diet_preference", "allergen", "feeding_type", "activity_level", "note_kind"}
 TABLES = {
     "users",
     "child_profiles",
     "child_allergies",
     "feedings",
     "growth_measurements",
+    "child_notes",
     "alembic_version",
 }
 INITIAL_REVISION = "a1d6f0c0b001"
+GROWTH_REVISION = "b2e7f1d1c002"
 
 
 def test_downgrade_base_then_upgrade_head_round_trips(test_database_url: str) -> None:
@@ -44,7 +46,14 @@ def test_downgrade_base_then_upgrade_head_round_trips(test_database_url: str) ->
 
 
 def test_enum_labels_match_the_python_vocabularies(test_database_url: str) -> None:
-    from backend.models.enums import ActivityLevel, Allergen, DietPreference, FeedingType, Sex
+    from backend.models.enums import (
+        ActivityLevel,
+        Allergen,
+        DietPreference,
+        FeedingType,
+        NoteKind,
+        Sex,
+    )
 
     labels = _enum_labels(test_database_url)
     for name, enum in {
@@ -53,6 +62,7 @@ def test_enum_labels_match_the_python_vocabularies(test_database_url: str) -> No
         "allergen": Allergen,
         "feeding_type": FeedingType,
         "activity_level": ActivityLevel,
+        "note_kind": NoteKind,
     }.items():
         assert labels[name] == [member.value for member in enum], name
 
@@ -101,6 +111,74 @@ def test_upgrade_backfills_birth_date_from_age_in_months(test_database_url: str)
             ).scalar_one(),
         )
         assert measurements == 0
+    finally:
+        command.upgrade(config, "head")
+        _run(test_database_url, cleanup)
+
+
+def test_upgrade_splits_doctors_note_into_rows(test_database_url: str) -> None:
+    """child-notes-restrictions design Decision 2: one doctor row per non-blank line, dated as
+    the note; the downgrade joins the doctor rows back with newlines."""
+    config = alembic_config(test_database_url)
+    user_id, child_id = uuid.uuid7(), uuid.uuid7()
+    recorded = dt.datetime(2026, 8, 30, 10, 0, tzinfo=dt.UTC)
+
+    def seed(conn) -> None:
+        conn.execute(
+            text("INSERT INTO users (id, email, hashed_password) VALUES (:id, :email, 'x')"),
+            {"id": user_id, "email": f"notes-{user_id}@example.com"},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO child_profiles "
+                "(id, user_id, birth_date, weight_kg, sex, doctors_note, doctors_note_recorded_at) "
+                "VALUES (:id, :user_id, '2026-01-10', 8.5, 'female', :note, :recorded)"
+            ),
+            {
+                "id": child_id,
+                "user_id": user_id,
+                "note": "Limit to 650 kcal\n\nno honey",
+                "recorded": recorded,
+            },
+        )
+        conn.commit()
+
+    def cleanup(conn) -> None:
+        conn.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
+        conn.commit()
+
+    command.downgrade(config, GROWTH_REVISION)
+    _run(test_database_url, seed)
+    try:
+        command.upgrade(config, "head")
+        rows = _run(
+            test_database_url,
+            lambda conn: conn.execute(
+                text(
+                    "SELECT kind::text, text, position, created_at FROM child_notes "
+                    "WHERE child_profile_id = :id ORDER BY position"
+                ),
+                {"id": child_id},
+            ).all(),
+        )
+        assert [(r[0], r[1], r[2]) for r in rows] == [
+            ("doctor", "Limit to 650 kcal", 0),
+            ("doctor", "no honey", 1),
+        ]
+        assert all(r[3] == recorded for r in rows)
+
+        command.downgrade(config, GROWTH_REVISION)
+        joined = _run(
+            test_database_url,
+            lambda conn: conn.execute(
+                text(
+                    "SELECT doctors_note, doctors_note_recorded_at FROM child_profiles "
+                    "WHERE id = :id"
+                ),
+                {"id": child_id},
+            ).one(),
+        )
+        assert joined[0] == "Limit to 650 kcal\nno honey" and joined[1] == recorded
     finally:
         command.upgrade(config, "head")
         _run(test_database_url, cleanup)

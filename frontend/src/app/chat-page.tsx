@@ -13,6 +13,7 @@ import { useChat, type RequestContext } from "@/hooks/use-chat";
 import { useChildContext } from "@/hooks/use-child-context";
 import { useFeedingLog } from "@/hooks/use-feeding-log";
 import { useGrowthLog } from "@/hooks/use-growth-log";
+import { latestNoteOutcomes } from "@/lib/note-outcomes";
 import type { CurrentUser, LoggedFeeding } from "@/lib/api-types";
 import {
   APP_TITLE,
@@ -99,6 +100,7 @@ export function ChatPage({ user, onSignOut }: Props) {
               update={childContext.update}
               save={childContext.save}
               clear={childContext.clear}
+              noteOutcomes={latestNoteOutcomes(chat.messages)}
             />
           </TabsContent>
           <TabsContent value="log">

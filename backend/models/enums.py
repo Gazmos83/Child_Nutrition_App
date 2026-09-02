@@ -97,3 +97,14 @@ class ActivityLevel(StrEnum):
     LOW_ACTIVE = "low_active"
     ACTIVE = "active"
     VERY_ACTIVE = "very_active"
+
+
+class NoteKind(StrEnum):
+    """Who a child note row comes from (child-notes-restrictions; hard rule 2).
+
+    Only a ``DOCTOR`` row may change a nutrient target (hard rule 3); a ``PREFERENCE`` row
+    may only leave foods out of a plan. Stored as a PostgreSQL enum on ``child_notes``.
+    """
+
+    DOCTOR = "doctor"
+    PREFERENCE = "preference"

@@ -27,7 +27,7 @@ const GROWTH_FIXTURE = {
 const MEAL_PLAN_SHAPE = {
   outcome: "plan",
   items: [],
-  override: { conflict: false },
+  overrides: [],
   message: "a day of meals",
 };
 

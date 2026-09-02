@@ -4,8 +4,8 @@ Every expected figure is typed by hand from the knowledge-base documents -- neve
 ``REGISTRY`` -- so a registry slip fails here instead of reaching a parent.
 """
 
-from backend.models.enums import DietPreference, Sex
-from backend.schemas.tools import GapDetectionRequest
+from backend.models.enums import DietPreference, NoteKind, Sex
+from backend.schemas.tools import GapDetectionRequest, NoteRow
 from backend.tools.targets_resolution import general_targets, resolve_targets
 from tests.fixtures.fake_llm import RecordingChatModel
 
@@ -21,7 +21,7 @@ def child(
         weight_kg=weight_kg,
         sex=Sex.FEMALE,
         diet_preference=diet,
-        doctors_note=doctors_note,
+        notes=[NoteRow(kind=NoteKind.DOCTOR, text=doctors_note)] if doctors_note else [],
     )
 
 
@@ -85,19 +85,23 @@ class TestAntiDrift:
     async def test_without_a_note_resolved_equals_general(self) -> None:
         request = child()
         general = general_targets(request)
-        resolved, extraction, override = await resolve_targets(request, None)
+        resolved, extraction, overrides = await resolve_targets(request, None)
         assert resolved == general
         assert resolved.amount_of("calories") == general.amount_of("calories") == 678.0
         assert extraction.status == "not_present"
-        assert override.conflict is False
+        assert overrides == []
 
     async def test_with_a_note_only_the_named_row_moves(self) -> None:
         request = child(doctors_note="Limit to 650 kcal per day.")
-        reply = '{"nutrient": "calories", "direction": "max", "value": 650, "unit": "kcal"}'
+        reply = (
+            '{"rows": [{"row": 1, "target": {"nutrient": "calories", "direction": "max", '
+            '"value": 650, "unit": "kcal"}, "avoid": []}]}'
+        )
         llm = RecordingChatModel(responses=[reply], calls=[])
         general = general_targets(request)
-        resolved, extraction, override = await resolve_targets(request, llm)
+        resolved, extraction, overrides = await resolve_targets(request, llm)
         assert extraction.status == "applied"
+        [override] = overrides
         assert override.conflict is True and override.source == "doctors_note"
         assert general.amount_of("calories") == 678.0
         assert resolved.amount_of("calories") == 650.0

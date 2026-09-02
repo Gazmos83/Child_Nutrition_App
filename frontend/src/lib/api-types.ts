@@ -1,10 +1,16 @@
 // Wire types mirrored from backend/schemas/{chat,rag,tools,auth,child}.py.
 
-import type { ActivityLevel, Allergen, DietPreference, FeedingType, Sex } from "./enums";
+import type { ActivityLevel, Allergen, DietPreference, FeedingType, NoteKind, Sex } from "./enums";
 
 export type Strategy = "basic" | "advanced";
 export type Intent = "rag" | "tool" | "hybrid";
 export type ToolStatus = "ok" | "error";
+
+/** One doctor's-note or preference row (child-notes-restrictions). */
+export interface NoteRow {
+  kind: NoteKind;
+  text: string;
+}
 
 export interface ChildContext {
   age_months: number;
@@ -13,7 +19,7 @@ export interface ChildContext {
   height_cm?: number | null;
   diet_preference: DietPreference;
   allergies: Allergen[];
-  doctors_note?: string | null;
+  notes?: NoteRow[];
   activity_level: ActivityLevel;
 }
 
@@ -55,9 +61,14 @@ export interface ChildProfile extends ChildContext {
   /** YYYY-MM-DD; `age_months` is derived from it server-side as of today. */
   birth_date: string;
   height_cm: number | null;
-  doctors_note: string | null;
-  doctors_note_recorded_at: string | null;
+  notes: ChildNoteRecord[];
   created_at: string;
+}
+
+/** A stored note row with its provenance. */
+export interface ChildNoteRecord extends NoteRow {
+  id: string;
+  recorded_at: string;
 }
 
 // -- feeding log (backend/schemas/tools.py; feeding-log spec) ------------------------------
@@ -118,7 +129,7 @@ export interface NutrientGapReport {
   gaps: NutrientGap[];
   targets: NutrientTargets;
   note_extraction: NoteExtraction | null;
-  override: OverrideOutcome | null;
+  overrides: OverrideOutcome[] | null;
 }
 
 export interface Adjustment {
@@ -276,7 +287,8 @@ export interface NutrientTargets {
 export interface DailyTargetsResponse {
   targets: NutrientTargets;
   diet_preference: DietPreference;
-  doctors_note_present: boolean;
+  doctor_notes_present: boolean;
+  preferences_present: boolean;
   disclaimer: string;
 }
 
@@ -286,14 +298,38 @@ export interface NutrientCoverage {
   iron: number;
 }
 
+export interface DoctorsNoteOverride {
+  nutrient: OverridableNutrient;
+  direction: "max" | "min" | "target";
+  value: number;
+  unit: "kcal" | "g" | "mg";
+}
+
 export interface NoteExtraction {
-  status: "not_present" | "applied" | "no_numeric_target" | "unparsed";
-  override: {
-    nutrient: OverridableNutrient;
-    direction: "max" | "min" | "target";
-    value: number;
-    unit: "kcal" | "g" | "mg";
-  } | null;
+  status: "not_present" | "applied" | "nothing_to_apply" | "unparsed";
+  targets: { note_index: number; override: DoctorsNoteOverride }[];
+  avoid: { note_index: number; phrase: string }[];
+  issues: { note_index: number; detail: string }[];
+  detail: string;
+}
+
+/** One avoidance phrase after the server resolved it against the food table. */
+export interface Avoidance {
+  note_index: number;
+  kind: NoteKind;
+  phrase: string;
+  category: string | null;
+  food_ids: string[];
+  applied: boolean;
+  detail: string;
+}
+
+/** What one note row did to the plan, applied or not, with the reason. */
+export interface NoteOutcome {
+  index: number;
+  kind: NoteKind;
+  text: string;
+  applied: boolean;
   detail: string;
 }
 
@@ -320,7 +356,9 @@ export interface MealPlanResult {
   targets: NutrientTargets;
   coverage: NutrientCoverage;
   note_extraction: NoteExtraction;
-  override: OverrideOutcome;
+  overrides: OverrideOutcome[];
+  avoidances: Avoidance[];
+  note_outcomes: NoteOutcome[];
   exclusions: Exclusion[];
   message: string;
   disclaimer: string;
@@ -341,7 +379,7 @@ export function isMealPlanResult(value: unknown): value is MealPlanResult {
   return (
     (v.outcome === "plan" || v.outcome === "no_safe_plan" || v.outcome === "targets_met") &&
     Array.isArray(v.items) &&
-    typeof v.override === "object" &&
+    Array.isArray(v.overrides) &&
     typeof v.message === "string"
   );
 }

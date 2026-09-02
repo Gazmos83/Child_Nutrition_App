@@ -11,6 +11,7 @@ three-field picture of the set this module now widens. Diet selects which rows a
 their order; it never changes a number.
 """
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from langchain_core.language_models import BaseChatModel
@@ -19,11 +20,12 @@ from backend.models.enums import ActivityLevel, DietPreference, Sex
 from backend.nutrition.nutrients import TargetInputs, displayed_specs, evaluate
 from backend.schemas.tools import (
     NoteExtraction,
+    NoteRow,
     NutrientTarget,
     NutrientTargets,
     OverrideOutcome,
 )
-from backend.tools.doctors_note import apply_override, extract_override
+from backend.tools.doctors_note import apply_overrides, extract_notes
 
 
 class ChildForTargets(Protocol):
@@ -38,7 +40,7 @@ class ChildForTargets(Protocol):
     @property
     def height_cm(self) -> float | None: ...
     @property
-    def doctors_note(self) -> str | None: ...
+    def notes(self) -> Sequence[NoteRow]: ...
     @property
     def activity_level(self) -> ActivityLevel: ...
     @property
@@ -83,9 +85,10 @@ def general_targets(child: ChildForTargets) -> NutrientTargets:
 
 async def resolve_targets(
     child: ChildForTargets, chat_model: BaseChatModel | None
-) -> tuple[NutrientTargets, NoteExtraction, OverrideOutcome]:
-    """General targets -> note extraction -> deterministic override (note wins on conflict)."""
+) -> tuple[NutrientTargets, NoteExtraction, list[OverrideOutcome]]:
+    """General targets -> note extraction -> deterministic overrides, one per nutrient the
+    doctor's rows addressed (a row wins on conflict). An empty list means no override."""
     general = general_targets(child)
-    extraction = await extract_override(child.doctors_note, chat_model)
-    targets, override = apply_override(general, extraction.override)
-    return targets, extraction, override
+    extraction = await extract_notes(child.notes, chat_model)
+    targets, overrides = apply_overrides(general, (t.override for t in extraction.targets))
+    return targets, extraction, overrides

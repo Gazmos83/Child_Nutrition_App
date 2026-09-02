@@ -29,7 +29,11 @@ export function GapReportCard({ report }: { report: NutrientGapReport }) {
         )}
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {report.override?.conflict && <OverrideBanner override={report.override} />}
+        {(report.overrides ?? [])
+          .filter((o) => o.conflict)
+          .map((o) => (
+            <OverrideBanner key={o.nutrient ?? "override"} override={o} />
+          ))}
         {insufficient ? (
           <p>{copy.GAPS_INSUFFICIENT}</p>
         ) : (

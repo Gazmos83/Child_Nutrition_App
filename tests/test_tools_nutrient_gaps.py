@@ -6,8 +6,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from backend.models.enums import DietPreference, FeedingType, Sex
-from backend.schemas.tools import FeedingEntry, GapDetectionRequest
+from backend.models.enums import DietPreference, FeedingType, NoteKind, Sex
+from backend.schemas.tools import FeedingEntry, GapDetectionRequest, NoteRow
 from backend.tools.nutrient_gaps import detect_nutrient_gaps
 from tests.fixtures.fake_llm import RecordingChatModel
 
@@ -43,20 +43,23 @@ class TestDetection:
         # 100 g cereal = 400 kcal a day: 59% of the general 678 kcal (below), but 80% of a
         # 500 kcal limit (adequate). The note must be what we measure against.
         llm = RecordingChatModel(
-            responses=['{"nutrient": "calories", "direction": "max", "value": 500, "unit": "kcal"}']
+            responses=[
+                '{"rows": [{"row": 1, "target": {"nutrient": "calories", "direction": "max", '
+                '"value": 500, "unit": "kcal"}, "avoid": []}]}'
+            ]
         )
         report = await detect_nutrient_gaps(
             request(
                 [cereal_day(1, 100), cereal_day(2, 100), cereal_day(3, 100)],
-                doctors_note="Limit to 500 kcal per day.",
+                notes=[NoteRow(kind=NoteKind.DOCTOR, text="Limit to 500 kcal per day.")],
             ),
             llm,
         )
         assert report.status == "ok" and report.confidence == "medium"
         calories = next(g for g in report.gaps if g.nutrient == "calories")
         assert calories.target == 500 and calories.ratio == 0.8 and calories.flag == "adequate"
-        assert report.override is not None and report.override.conflict is True
-        assert report.override.general_value == 678
+        assert report.overrides is not None and report.overrides[0].conflict is True
+        assert report.overrides[0].general_value == 678
         assert report.note_extraction is not None and report.note_extraction.status == "applied"
 
     async def test_same_intake_without_the_note_is_below(self) -> None:
@@ -73,7 +76,7 @@ class TestDetection:
         assert report.status == "insufficient_data"
         assert report.gaps == [] and report.days_logged == 0 and report.as_of == AS_OF
         assert report.targets.calories.calories == 678
-        assert report.override is not None and report.override.conflict is False
+        assert report.overrides == []
 
     async def test_reference_day_and_partial_days_excluded(self) -> None:
         unmeasured = FeedingEntry(
@@ -109,7 +112,7 @@ class TestAudit:
         # Calcium joined the trackable set on day 9 (nutrient-gap-detection delta spec).
         assert {g["nutrient"] for g in record["gaps"]} == {"calories", "protein", "iron", "calcium"}
         assert all(g["target_source"] for g in record["gaps"])
-        assert record["override"]["conflict"] is False
+        assert record["overrides"] == [] and record["input"]["notes"] == []
 
     async def test_insufficient_data_is_audited_too(self, caplog) -> None:
         caplog.set_level(logging.INFO, logger="backend.tools.audit")

@@ -51,7 +51,7 @@ const INSUFFICIENT: NutrientGapReport = {
   gaps: [],
   targets: TARGETS,
   note_extraction: null,
-  override: null,
+  overrides: null,
 };
 
 const MEDIUM_IRON_BELOW: NutrientGapReport = {
@@ -69,7 +69,7 @@ const MEDIUM_IRON_BELOW: NutrientGapReport = {
   ],
   targets: TARGETS,
   note_extraction: null,
-  override: null,
+  overrides: null,
 };
 
 describe("GapReportCard", () => {
@@ -125,14 +125,16 @@ describe("GapReportCard", () => {
           days_logged: 2,
           window_days: 2,
           partial_days: 0,
-          override: {
-            conflict: true,
-            source: "doctors_note",
-            nutrient: "calories",
-            general_value: 678,
-            applied_value: 650,
-            detail: "",
-          },
+          overrides: [
+            {
+              conflict: true,
+              source: "doctors_note",
+              nutrient: "calories",
+              general_value: 678,
+              applied_value: 650,
+              detail: "",
+            },
+          ],
         }}
       />,
     );

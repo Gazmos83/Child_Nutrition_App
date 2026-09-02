@@ -3,15 +3,42 @@
 // Age is never typed: the form takes a date of birth and the server derives the months;
 // `completedMonths` here is the same arithmetic, for the hint and the height rule.
 
-import type { ChildProfile, ChildProfileWrite } from "./api-types";
+import type { ChildProfile, ChildProfileWrite, NoteRow } from "./api-types";
 import * as copy from "./copy";
-import type { ActivityLevel, Allergen, DietPreference, Sex } from "./enums";
+import type { ActivityLevel, Allergen, DietPreference, NoteKind, Sex } from "./enums";
 
 export const HEIGHT_REQUIRED_FROM_MONTHS = 36;
 export const MAX_AGE_MONTHS = 60;
 export const MAX_WEIGHT_KG = 60;
 export const MAX_HEIGHT_CM = 150;
-export const MAX_NOTE_CHARS = 4000;
+export const MAX_NOTE_CHARS = 500;
+export const MAX_NOTES = 20;
+
+/** One row of the notes editor; `key` is client-only, for React lists (the row id when saved). */
+export interface NoteRowDraft {
+  key: string;
+  kind: NoteKind;
+  text: string;
+}
+
+function newKey(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
+/** A fresh row. Defaults to a preference: a mislabelled preference can never change a target. */
+export function newNoteRow(kind: NoteKind = "preference"): NoteRowDraft {
+  return { key: newKey(), kind, text: "" };
+}
+
+/** Why a row cannot be saved, or undefined when it can. */
+export function noteRowError(row: NoteRowDraft, rows: NoteRowDraft[]): string | undefined {
+  const text = row.text.trim();
+  if (text === "" || text.length > MAX_NOTE_CHARS) return copy.FORM_ERROR_NOTE;
+  const twin = rows.find((r) => r !== row && r.kind === row.kind && r.text.trim() === text);
+  return twin ? copy.FORM_ERROR_NOTE : undefined;
+}
 
 export interface ChildForm {
   /** YYYY-MM-DD, as a native date input holds it. */
@@ -21,7 +48,7 @@ export interface ChildForm {
   height_cm: string;
   diet_preference: DietPreference;
   allergies: Allergen[];
-  doctors_note: string;
+  notes: NoteRowDraft[];
   activity_level: ActivityLevel;
 }
 
@@ -32,7 +59,7 @@ export const EMPTY_CHILD_FORM: ChildForm = {
   height_cm: "",
   diet_preference: "omnivore",
   allergies: [],
-  doctors_note: "",
+  notes: [],
   activity_level: "low_active",
 };
 
@@ -106,10 +133,12 @@ export function toChildContext(form: ChildForm): ChildFormResult {
   } else if (age !== null && age >= HEIGHT_REQUIRED_FROM_MONTHS) {
     errors.height_cm = copy.FORM_ERROR_HEIGHT_REQUIRED;
   }
-  if (form.doctors_note.length > MAX_NOTE_CHARS) errors.doctors_note = copy.FORM_ERROR_NOTE;
+  if (form.notes.length > MAX_NOTES || form.notes.some((row) => noteRowError(row, form.notes))) {
+    errors.notes = copy.FORM_ERROR_NOTE;
+  }
 
   if (Object.keys(errors).length > 0) return { child: null, errors, isEmpty };
-  const note = form.doctors_note.trim();
+  const notes: NoteRow[] = form.notes.map((row) => ({ kind: row.kind, text: row.text.trim() }));
   return {
     child: {
       birth_date: form.birth_date.trim(),
@@ -118,7 +147,7 @@ export function toChildContext(form: ChildForm): ChildFormResult {
       height_cm: height,
       diet_preference: form.diet_preference,
       allergies: [...form.allergies],
-      doctors_note: note === "" ? null : note,
+      notes,
       activity_level: form.activity_level,
     },
     errors,
@@ -135,7 +164,7 @@ export function fromProfile(profile: ChildProfile): ChildForm {
     height_cm: profile.height_cm == null ? "" : String(profile.height_cm),
     diet_preference: profile.diet_preference,
     allergies: [...profile.allergies],
-    doctors_note: profile.doctors_note ?? "",
+    notes: profile.notes.map((row) => ({ key: row.id, kind: row.kind, text: row.text })),
     activity_level: profile.activity_level,
   };
 }

@@ -277,6 +277,28 @@ class LoadedFoodTable:
 
         return self._raise_with_close_matches(query, normalized)
 
+    def matches(self, query: str) -> list[FoodItem]:
+        """Every food a plain phrase names: the exact id/name match alone, else all
+        token-subset candidates, else nothing. Never a difflib guess -- that path belongs to
+        ``resolve``, which refuses; an avoidance excludes every candidate instead
+        (child-notes-restrictions design Decision 5)."""
+        if query in self._by_id:
+            return [self._by_id[query]]
+        normalized = _normalize(query)
+        exact = self._forms.get(normalized)
+        if exact is not None:
+            return [exact]
+        words = [token for token in normalized.split() if token not in _STOPWORDS]
+        core = [token for token in words if not _is_noise(token)] or words
+        query_tokens = [_variants(token) for token in core]
+        if not query_tokens:
+            return []
+        return [
+            food
+            for food, pool in self._token_pools
+            if all(variants & pool for variants in query_tokens)
+        ]
+
     def _raise_with_close_matches(self, query: str, normalized: str) -> FoodItem:
         close = difflib.get_close_matches(normalized, self._forms, n=_MAX_SUGGESTIONS)
         candidates: list[FoodItem] = []

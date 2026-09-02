@@ -23,6 +23,8 @@ const RENDERED: string[] = [
   copy.monthsOld(8),
   copy.measurementLine(8.5, 69),
   copy.measurementLine(8.5, null),
+  copy.noteNotApplied("no such food"),
+  copy.quoted("no pork"),
   copy.growthTableNote("length"),
   copy.growthTableNote("height"),
   copy.percentileLabel(50),
