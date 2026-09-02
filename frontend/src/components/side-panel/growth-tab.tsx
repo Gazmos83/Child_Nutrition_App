@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { GrowthIndicatorRow } from "@/components/chat/growth-card";
 import { Button } from "@/components/ui/button";
-import type { GrowthLogState } from "@/hooks/use-growth-log";
+import { type GrowthLogState, useGrowthCurves } from "@/hooks/use-growth-log";
 import type { GrowthMeasurement } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 import { formatMeasuredOn } from "@/lib/growth-log-store";
+import { GrowthCharts } from "./growth-charts";
 import { LogMeasurementForm } from "./log-measurement-form";
 
 interface Props {
@@ -17,6 +18,7 @@ interface Props {
 
 export function GrowthTab({ growth, birthDate }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
+  const curves = useGrowthCurves(growth.childId);
 
   if (growth.childId === null) {
     return (
@@ -55,6 +57,14 @@ export function GrowthTab({ growth, birthDate }: Props) {
             <p className="text-sm text-destructive" role="alert">
               {copy.GROWTH_REMOVE_FAILED}
             </p>
+          )}
+          {growth.measurements.length > 0 && curves.isError && (
+            <p className="text-xs text-muted-foreground" data-testid="growth-charts-unavailable">
+              {copy.GROWTH_CHARTS_UNAVAILABLE}
+            </p>
+          )}
+          {growth.measurements.length > 0 && curves.data && (
+            <GrowthCharts measurements={growth.measurements} curves={curves.data} />
           )}
           {growth.measurements.length === 0 ? (
             <p className="rounded-md bg-muted p-3 text-sm" data-testid="growth-empty">

@@ -151,6 +151,48 @@ class GrowthAssessmentResult(_Frozen):
     )
 
 
+# -- Growth reference curves (growth-charts change) ------------------------------------------
+
+CurveXUnit = Literal["months", "cm"]
+CurveTable = Literal["length", "height"]
+
+
+class GrowthCurve(_Frozen):
+    percentile: int = Field(ge=1, le=99)
+    values: list[float] = Field(description="One value per x in the set's ``xs``.")
+
+
+class GrowthCurveSet(_Frozen):
+    """One indicator's percentile curves for one sex, sampled over shared x-values."""
+
+    indicator: GrowthIndicatorKey
+    x_unit: CurveXUnit
+    x_label_table: CurveTable | None = Field(
+        default=None, description="Which WHO table a centimetre axis shows; None for age axes."
+    )
+    y_unit: str
+    xs: list[float]
+    curves: list[GrowthCurve]
+
+    @model_validator(mode="after")
+    def _values_align_with_xs(self) -> GrowthCurveSet:
+        for curve in self.curves:
+            if len(curve.values) != len(self.xs):
+                raise ValueError(
+                    f"{self.indicator} P{curve.percentile}: {len(curve.values)} values for "
+                    f"{len(self.xs)} x-values"
+                )
+        return self
+
+
+class GrowthCurvesResponse(_Frozen):
+    sex: Sex
+    age_months: int
+    indicators: list[GrowthCurveSet]
+    source: str = Field(description="Names the standard and its year (hard rule 5).")
+    source_url: str
+
+
 # -- Calorie target -------------------------------------------------------------------------
 
 

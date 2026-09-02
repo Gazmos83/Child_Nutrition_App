@@ -7,6 +7,7 @@ function measurement(id: string, measured_on: string): GrowthMeasurement {
     id,
     measured_on,
     age_months: 8,
+    age_months_exact: 8.2,
     weight_kg: 8.5,
     height_cm: null,
     assessment: null,

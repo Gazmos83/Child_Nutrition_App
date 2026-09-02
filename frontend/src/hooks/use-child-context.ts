@@ -57,8 +57,10 @@ export function useChildContext() {
     },
     onSuccess: (saved) => {
       queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, [saved]);
-      // The saved profile is what the daily-targets panel reads (design Decision 9).
+      // The saved profile is what the daily-targets panel reads (design Decision 9), and
+      // the growth curves follow its sex and 24-month table.
       queryClient.invalidateQueries({ queryKey: ["daily-targets"] });
+      queryClient.invalidateQueries({ queryKey: ["growth-curves"] });
       setDraft(null);
     },
   });
@@ -71,6 +73,7 @@ export function useChildContext() {
       queryClient.setQueryData<ChildProfile[]>(CHILDREN_KEY, []);
       queryClient.removeQueries({ queryKey: ["feedings"] });
       queryClient.removeQueries({ queryKey: ["growth"] });
+      queryClient.removeQueries({ queryKey: ["growth-curves"] });
       queryClient.removeQueries({ queryKey: ["daily-targets"] });
       setDraft(null);
     },

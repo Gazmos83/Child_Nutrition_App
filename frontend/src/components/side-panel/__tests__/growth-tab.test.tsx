@@ -7,6 +7,7 @@ import { useGrowthLog } from "@/hooks/use-growth-log";
 import { fetchJson } from "@/lib/api";
 import type { GrowthIndicatorResult, GrowthMeasurement } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
+import { curvesFixture } from "@/lib/__tests__/fixtures/growth-curves";
 import { GrowthTab } from "../growth-tab";
 
 const PROFILE = {
@@ -42,6 +43,7 @@ const NEWER: GrowthMeasurement = {
   id: "m2",
   measured_on: "2026-09-02",
   age_months: 7,
+  age_months_exact: 7.7,
   weight_kg: 8.7,
   height_cm: 70,
   assessment: {
@@ -67,6 +69,7 @@ const OLDER: GrowthMeasurement = {
   id: "m1",
   measured_on: "2026-08-02",
   age_months: 6,
+  age_months_exact: 6.7,
   weight_kg: 8.2,
   height_cm: null,
   assessment: {
@@ -92,13 +95,22 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** Drives the real hooks over a mocked fetch; counts calls per URL to prove invalidation. */
-function renderTab(measurements: GrowthMeasurement[], profile: typeof PROFILE | null = PROFILE) {
+function renderTab(
+  measurements: GrowthMeasurement[],
+  profile: typeof PROFILE | null = PROFILE,
+  curvesStatus = 200,
+) {
   const calls: string[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     calls.push(`${init?.method ?? "GET"} ${url}`);
     if (url.endsWith("/api/children")) return Promise.resolve(jsonResponse(profile ? [profile] : []));
     if (url.endsWith("/targets")) return Promise.resolve(jsonResponse({}));
+    if (url.endsWith("/growth/curves")) {
+      return Promise.resolve(
+        curvesStatus === 200 ? jsonResponse(curvesFixture(7)) : jsonResponse({ detail: "down" }, curvesStatus),
+      );
+    }
     if (url.endsWith("/growth") && init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as { measured_on: string; weight_kg: number };
       return Promise.resolve(
@@ -160,6 +172,31 @@ describe("GrowthTab", () => {
     expect(screen.getAllByTestId("growth-entry-no-height")).toHaveLength(1);
     expect(screen.getAllByText(copy.GROWTH_SOURCE_LINE)).toHaveLength(1);
     expect(screen.getAllByText(copy.GROWTH_TREND_NOTE)).toHaveLength(1);
+  });
+
+  it("draws the four charts above the list once curves arrive, and none without measurements", async () => {
+    renderTab([OLDER, NEWER]);
+    await screen.findByTestId("growth-charts");
+    expect(screen.getAllByTestId("growth-chart")).toHaveLength(4);
+    expect(screen.getAllByTestId("percentile-curve")).toHaveLength(36);
+    const charts = screen.getByTestId("growth-charts");
+    const list = screen.getByTestId("growth-entries");
+    expect(charts.compareDocumentPosition(list)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("shows no chart for a child without measurements", async () => {
+    renderTab([]);
+    await screen.findByTestId("growth-empty");
+    expect(screen.queryByTestId("growth-charts")).toBeNull();
+  });
+
+  it("keeps the list when the curves cannot be loaded", async () => {
+    renderTab([OLDER, NEWER], PROFILE, 500);
+    expect(await screen.findByTestId("growth-charts-unavailable")).toHaveTextContent(
+      copy.GROWTH_CHARTS_UNAVAILABLE,
+    );
+    expect(screen.getAllByTestId("growth-entry")).toHaveLength(2);
+    expect(screen.queryByTestId("growth-charts")).toBeNull();
   });
 
   it("removing a measurement deletes it and refreshes the profile and targets", async () => {

@@ -162,6 +162,7 @@ class TestOwnership:
             ("POST", f"/api/children/{mine['id']}/feedings", FORMULA),
             ("DELETE", f"/api/children/{mine['id']}/feedings/{fed['entry']['id']}", None),
             ("GET", f"/api/children/{mine['id']}/growth", None),
+            ("GET", f"/api/children/{mine['id']}/growth/curves", None),
             ("POST", f"/api/children/{mine['id']}/growth", MEASUREMENT),
             ("DELETE", f"/api/children/{mine['id']}/growth/{measured['id']}", None),
         ]:
@@ -190,6 +191,7 @@ class TestOwnership:
             f"/api/children/{mine['id']}",
             f"/api/children/{mine['id']}/feedings",
             f"/api/children/{mine['id']}/growth",
+            f"/api/children/{mine['id']}/growth/curves",
         ):
             response = await api_client.get(path)
             assert response.status_code == 401
@@ -432,6 +434,54 @@ class TestGrowthLog:
             assert row["assessment"]["age_months"] == row["age_months"]
             assert row["assessment"]["source"] == "WHO Child Growth Standards (2006)"
             uuid.UUID(row["id"])
+
+    async def test_exact_age_spreads_measurements_within_a_month(
+        self, auth_client: AsyncClient
+    ) -> None:
+        """growth-charts: two weigh-ins in one completed month sit apart on an age axis."""
+        child = await create_child(auth_client, birth_date="2026-01-10")
+        first = await measure(auth_client, child["id"], measured_on="2026-05-12", weight_kg=6.9)
+        second = await measure(auth_client, child["id"], measured_on="2026-05-25", weight_kg=7.0)
+        assert first["age_months"] == second["age_months"] == 4
+        assert second["age_months_exact"] - first["age_months_exact"] == pytest.approx(0.43, 0.02)
+        assert first["age_months_exact"] == pytest.approx(122 / 30.4375, abs=0.01)
+
+    async def test_percentile_curves_for_the_child_sex_and_table(
+        self, auth_client: AsyncClient
+    ) -> None:
+        """growth-tracking spec: nine curves per indicator, the 50th equal to the median."""
+        child = await create_child(auth_client)  # girl, 8 months
+        response = await auth_client.get(f"/api/children/{child['id']}/growth/curves")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["sex"] == "female" and body["age_months"] == 8
+        assert body["source"] == "WHO Child Growth Standards (2006)"
+        sets = {s["indicator"]: s for s in body["indicators"]}
+        assert set(sets) == {
+            "weight_for_age",
+            "length_height_for_age",
+            "weight_for_length_height",
+            "bmi_for_age",
+        }
+        for curve_set in sets.values():
+            assert [c["percentile"] for c in curve_set["curves"]] == list(range(10, 100, 10))
+            assert all(len(c["values"]) == len(curve_set["xs"]) for c in curve_set["curves"])
+        _, median, _ = get_growth_table().monthly(GrowthIndicator.WEIGHT_FOR_AGE, Sex.FEMALE, 8)
+        p50 = next(c for c in sets["weight_for_age"]["curves"] if c["percentile"] == 50)
+        assert p50["values"][8] == round(median, 1)
+        assert sets["weight_for_length_height"]["x_label_table"] == "length"
+        assert (
+            sets["weight_for_length_height"]["xs"][0],
+            sets["weight_for_length_height"]["xs"][-1],
+        ) == (45.0, 110.0)
+
+        older = await create_child(auth_client, birth_date=born(30), weight_kg=13, sex="male")
+        body = (await auth_client.get(f"/api/children/{older['id']}/growth/curves")).json()
+        wflh = next(s for s in body["indicators"] if s["indicator"] == "weight_for_length_height")
+        assert wflh["x_label_table"] == "height" and (wflh["xs"][0], wflh["xs"][-1]) == (
+            65.0,
+            120.0,
+        )
 
     async def test_height_unlocks_four_indicators(self, auth_client: AsyncClient) -> None:
         child = await create_child(auth_client)

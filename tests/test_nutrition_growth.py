@@ -1,5 +1,6 @@
 """WHO growth standards: table loading and validation (day-6-growth-assessment)."""
 
+import statistics
 from pathlib import Path
 
 import pytest
@@ -7,14 +8,19 @@ import yaml
 
 from backend.models.enums import Sex
 from backend.nutrition.growth import (
+    CURVE_PERCENTILES,
     DEFAULT_GROWTH_TABLE_PATH,
     GrowthIndicator,
     LoadedGrowthTable,
     assess_growth,
     band_for,
     get_growth_table,
+    get_reference_curves,
     load_growth_table,
+    reference,
+    reference_curves,
     reset_growth_table_cache,
+    value_at_percentile,
     who_label_for,
     z_score,
 )
@@ -290,3 +296,77 @@ class TestWhoOracleValues:
         assert bmi.reference.median == 15.5
         assert bmi.reference.sd2pos == 18.5
         assert bmi.z_score == 0.00
+
+
+class TestReferenceCurves:
+    """growth-charts design Decision 1: the LMS read the other way, sampled for the charts."""
+
+    def test_value_at_the_50th_is_the_median_and_round_trips_z(
+        self, table: LoadedGrowthTable
+    ) -> None:
+        big_l, big_m, big_s = table.monthly(GrowthIndicator.WEIGHT_FOR_AGE, Sex.FEMALE, 8)
+        assert value_at_percentile(50, big_l, big_m, big_s) == pytest.approx(big_m)
+        for p in CURVE_PERCENTILES:
+            value = value_at_percentile(p, big_l, big_m, big_s)
+            z = z_score(value, big_l, big_m, big_s, tail_adjust=True)
+            assert z == pytest.approx(statistics.NormalDist().inv_cdf(p / 100)), p
+
+    def test_four_sets_with_nine_ordered_curves(self, table: LoadedGrowthTable) -> None:
+        sets = reference_curves(table, Sex.FEMALE, use_height_table=False)
+        assert [s.indicator for s in sets] == [
+            "weight_for_age",
+            "length_height_for_age",
+            "weight_for_length_height",
+            "bmi_for_age",
+        ]
+        for curve_set in sets:
+            assert [c.percentile for c in curve_set.curves] == list(CURVE_PERCENTILES)
+            for i in range(len(curve_set.xs)):
+                # Non-decreasing at every x; rounding to one decimal can make neighbouring
+                # percentiles coincide at the smallest sizes (2.4 kg at 45 cm).
+                column = [c.values[i] for c in curve_set.curves]
+                assert column == sorted(column), (curve_set.indicator, curve_set.xs[i])
+            at_month_8 = [c.values[8] for c in curve_set.curves]
+            assert len(set(at_month_8)) == 9, curve_set.indicator
+
+    def test_monthly_sets_span_0_to_60_and_the_50th_is_the_published_median(
+        self, table: LoadedGrowthTable
+    ) -> None:
+        sets = {s.indicator: s for s in reference_curves(table, Sex.MALE, use_height_table=False)}
+        for key, indicator in (
+            ("weight_for_age", GrowthIndicator.WEIGHT_FOR_AGE),
+            ("length_height_for_age", GrowthIndicator.LENGTH_HEIGHT_FOR_AGE),
+            ("bmi_for_age", GrowthIndicator.BMI_FOR_AGE),
+        ):
+            curve_set = sets[key]
+            assert curve_set.x_unit == "months" and curve_set.x_label_table is None
+            assert curve_set.xs == [float(m) for m in range(61)]
+            p50 = next(c for c in curve_set.curves if c.percentile == 50)
+            for month in (0, 8, 24, 60):
+                lms = table.monthly(indicator, Sex.MALE, month)
+                assert round(p50.values[month], 1) == reference(*lms).median, (key, month)
+
+    def test_length_or_height_table_by_flag(self, table: LoadedGrowthTable) -> None:
+        length = reference_curves(table, Sex.FEMALE, use_height_table=False)[2]
+        height = reference_curves(table, Sex.FEMALE, use_height_table=True)[2]
+        assert length.x_unit == "cm" and length.x_label_table == "length"
+        assert (length.xs[0], length.xs[-1], len(length.xs)) == (45.0, 110.0, 66)
+        assert height.x_label_table == "height"
+        assert (height.xs[0], height.xs[-1], len(height.xs)) == (65.0, 120.0, 56)
+        assert length.y_unit == "kg" and sets_differ(length, height)
+
+    def test_cached_accessor_is_per_sex_and_table(self) -> None:
+        reset_growth_table_cache()
+        girls = get_reference_curves(Sex.FEMALE, False)
+        assert get_reference_curves(Sex.FEMALE, False) is girls
+        assert get_reference_curves(Sex.MALE, False) is not girls
+        assert (
+            girls[0].curves[4].values != get_reference_curves(Sex.MALE, False)[0].curves[4].values
+        )
+
+
+def sets_differ(a, b) -> bool:
+    """Curves for the overlapping 65-110 cm differ between the length and height tables."""
+    a_at_80 = a.curves[4].values[a.xs.index(80.0)]
+    b_at_80 = b.curves[4].values[b.xs.index(80.0)]
+    return a_at_80 != b_at_80

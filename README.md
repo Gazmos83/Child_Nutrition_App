@@ -305,8 +305,19 @@ one dated before the birth date is a 422 naming it. The UI's fourth tab, **Growt
 measurement form, the list with one percentile row per indicator (the growth card's own
 row), and the same direct-voice WHO note.
 
+**Charts.** `GET /api/children/{id}/growth/curves` returns, for the child's sex, the WHO
+10th–90th percentile curves at every tenth percentile per indicator — months 0–60 for the
+age-based ones, every whole centimetre of the length (under 24 months) or height (from 24)
+table for weight-for-length/height — computed by the inverse of the same LMS arithmetic and
+cached per sex and table. Each measurement also carries `age_months_exact` (two decimals)
+so points within one completed month spread along the age axis; the assessment still uses
+completed months. The Growth tab draws four inline-SVG line charts above the list: thin
+muted percentile curves with the 50th emphasised, the child's measurements as an accent
+line with markers, direct labels on the 10th/50th/90th, and a hover/focus tooltip per
+marker. No charting dependency.
+
 ```bash
-uv run pytest tests/test_nutrition_age.py tests/test_api_children.py -k "Growth or Profiles"
+uv run pytest tests/test_nutrition_age.py tests/test_nutrition_growth.py tests/test_api_children.py -k "Growth or Profiles or Curves"
 pnpm -C frontend test -- growth
 ```
 

@@ -434,6 +434,37 @@ export function measurementLine(weightKg: number, heightCm: number | null): stri
   return heightCm == null ? weight : `${weight} · ${formatNumber(heightCm)} cm`;
 }
 
+// -- growth charts (growth-charts; direct voice) ----------------------------------------------
+
+export const GROWTH_CHARTS_TITLE = "Charts";
+export const GROWTH_CHART_CAPTION =
+  "Thin lines are the WHO 10th to 90th percentiles for this sex; the bold line is the 50th";
+export const GROWTH_CHARTS_UNAVAILABLE =
+  "We couldn't load the percentile curves, so the charts are hidden for now. The measurements below still stand";
+export const GROWTH_AXIS_AGE = "Age (months)";
+export const GROWTH_AXIS_LENGTH_HEIGHT = "Length/height (cm)";
+export function growthTableNote(table: "length" | "height"): string {
+  return table === "length"
+    ? "Shown on the WHO length table (under 24 months)"
+    : "Shown on the WHO height table (from 24 months)";
+}
+export function percentileLabel(percentile: number): string {
+  return ordinal(percentile);
+}
+export function chartPointLabel(
+  date: string,
+  value: number,
+  unit: string,
+  percentile: number | null,
+): string {
+  const reading = `${date}: ${formatNumber(value)} ${unit}`;
+  return percentile == null ? reading : `${reading}, ${ordinal(percentile)} percentile`;
+}
+export function chartAriaLabel(indicator: string, sex: "female" | "male"): string {
+  const whose = sex === "female" ? "girls" : "boys";
+  return `${indicator}: WHO percentile curves for ${whose}, with this child's measurements`;
+}
+
 // -- daily targets panel (day 9) -------------------------------------------------------------
 
 export const TARGETS_TITLE = "Daily targets";

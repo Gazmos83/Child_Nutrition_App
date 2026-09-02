@@ -419,11 +419,42 @@ export interface GrowthMeasurement {
   measured_on: string;
   /** Completed months on `measured_on`, from the profile's date of birth. */
   age_months: number;
+  /** Age on `measured_on` in months to two decimals — for the age axis only. */
+  age_months_exact: number;
   weight_kg: number;
   height_cm: number | null;
   /** Null only when the birth date was moved after this measurement was logged. */
   assessment: GrowthAssessmentResult | null;
   created_at: string;
+}
+
+// -- growth reference curves (backend/schemas/tools.py; growth-charts) ---------------------
+
+export type CurveXUnit = "months" | "cm";
+export type CurveTable = "length" | "height";
+
+export interface GrowthCurve {
+  percentile: number;
+  /** One value per entry of the set's `xs`. */
+  values: number[];
+}
+
+export interface GrowthCurveSet {
+  indicator: GrowthIndicatorKey;
+  x_unit: CurveXUnit;
+  /** Which WHO table a centimetre axis shows; null for age axes. */
+  x_label_table: CurveTable | null;
+  y_unit: string;
+  xs: number[];
+  curves: GrowthCurve[];
+}
+
+export interface GrowthCurvesResponse {
+  sex: Sex;
+  age_months: number;
+  indicators: GrowthCurveSet[];
+  source: string;
+  source_url: string;
 }
 
 // -- server-sent events (design.md Decision 6) --------------------------------------------

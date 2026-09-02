@@ -23,6 +23,12 @@ const RENDERED: string[] = [
   copy.monthsOld(8),
   copy.measurementLine(8.5, 69),
   copy.measurementLine(8.5, null),
+  copy.growthTableNote("length"),
+  copy.growthTableNote("height"),
+  copy.percentileLabel(50),
+  copy.chartPointLabel("Sep 2, 2026", 6.9, "kg", 22.3),
+  copy.chartPointLabel("Sep 2, 2026", 6.9, "kg", null),
+  copy.chartAriaLabel("Weight for age", "female"),
   ...[
     copy.toolSummary("calculate_bmi", { weight_kg: 8.4, height_cm: 68 }, null),
     copy.toolSummary("calculate_calorie_target", { age_months: 8, weight_kg: 8.4 }, null),

@@ -28,6 +28,7 @@ from backend.nutrition.feeding import (
 )
 from backend.nutrition.foods import FoodNotFoundError, get_food_table
 from backend.nutrition.gaps import targets_with_intake
+from backend.nutrition.growth import GROWTH_SOURCE, get_growth_table, get_reference_curves
 from backend.rag.prompts import DISCLAIMER
 from backend.schemas.chat import ChildContext
 from backend.schemas.child import (
@@ -43,6 +44,7 @@ from backend.schemas.tools import (
     MAX_LOG_ENTRIES,
     FeedingEntry,
     GrowthAssessmentInput,
+    GrowthCurvesResponse,
     LoggedFeeding,
 )
 from backend.tools import nutrient_tools
@@ -342,6 +344,8 @@ MEASUREMENT_DAY_TAKEN_DETAIL = "A measurement for that day already exists"
 MEASURED_PAST_RANGE_DETAIL = (
     f"measured_on puts the child past {MAX_AGE_MONTHS} months; the WHO standards stop there"
 )
+# Mean Gregorian month, for the plotting age only (growth-charts design Decision 3).
+DAYS_PER_MONTH = 30.4375
 
 
 def to_growth_response(child: ChildProfile, row: GrowthMeasurement) -> GrowthMeasurementResponse:
@@ -354,6 +358,7 @@ def to_growth_response(child: ChildProfile, row: GrowthMeasurement) -> GrowthMea
     """
     height_cm = float(row.height_cm) if row.height_cm is not None else None
     age_months, assessment = 0, None
+    days_since_birth = max(0, (row.measured_on - child.birth_date).days)
     if child.birth_date <= row.measured_on:
         age_months = child.age_months_on(row.measured_on)
         if age_months <= MAX_AGE_MONTHS:
@@ -371,6 +376,7 @@ def to_growth_response(child: ChildProfile, row: GrowthMeasurement) -> GrowthMea
         id=row.id,
         measured_on=row.measured_on,
         age_months=age_months,
+        age_months_exact=round(days_since_birth / DAYS_PER_MONTH, 2),
         weight_kg=float(row.weight_kg),
         height_cm=height_cm,
         assessment=assessment,
@@ -392,6 +398,23 @@ async def list_growth(child: OwnedChild, db: DbSession) -> list[GrowthMeasuremen
         .order_by(GrowthMeasurement.measured_on.desc())
     )
     return [to_growth_response(child, row) for row in result.scalars()]
+
+
+@router.get(
+    "/{child_id}/growth/curves",
+    response_model=GrowthCurvesResponse,
+    summary="WHO percentile curves for the child's sex, 10th to 90th, per indicator",
+)
+async def growth_curves(child: OwnedChild) -> GrowthCurvesResponse:
+    """Table arithmetic only (growth-charts design Decision 1); the child supplies the sex
+    and whether the length or the height table applies. Owner-scoped like every child read."""
+    return GrowthCurvesResponse(
+        sex=child.sex,
+        age_months=child.age_months,
+        indicators=list(get_reference_curves(child.sex, child.age_months >= 24)),
+        source=GROWTH_SOURCE,
+        source_url=get_growth_table().source_url,
+    )
 
 
 @router.post(

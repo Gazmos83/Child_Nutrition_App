@@ -143,6 +143,12 @@ class GrowthMeasurementResponse(BaseModel):
     id: uuid.UUID
     measured_on: dt.date
     age_months: int
+    age_months_exact: float = Field(
+        description=(
+            "Age on the measurement day in months to two decimals, for placing the point on "
+            "an age axis; the assessment uses completed months."
+        )
+    )
     weight_kg: float
     height_cm: float | None
     assessment: GrowthAssessmentResult | None

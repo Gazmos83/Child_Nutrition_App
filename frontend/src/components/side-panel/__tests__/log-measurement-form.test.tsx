@@ -14,6 +14,7 @@ function stored(body: GrowthMeasurementWrite): GrowthMeasurement {
     id: "m1",
     measured_on: body.measured_on,
     age_months: 7,
+    age_months_exact: 7.5,
     weight_kg: body.weight_kg,
     height_cm: body.height_cm ?? null,
     assessment: null,

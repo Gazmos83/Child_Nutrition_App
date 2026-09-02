@@ -14,6 +14,7 @@ import datetime as dt
 import logging
 import math
 import statistics
+from collections.abc import Callable
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -27,6 +28,8 @@ from backend.schemas.tools import (
     GrowthAssessmentInput,
     GrowthAssessmentResult,
     GrowthBand,
+    GrowthCurve,
+    GrowthCurveSet,
     GrowthIndicatorResult,
     LmsReference,
     SkippedIndicator,
@@ -185,6 +188,10 @@ class LoadedGrowthTable:
         keys = self._by_cm[(sex, part)]
         return (min(keys), max(keys))
 
+    def cm_rows(self, sex: Sex, use_height_table: bool) -> dict[float, tuple[float, float, float]]:
+        """The whole length (under 24 months) or height (from 24) table, keyed by 0.1 cm."""
+        return self._by_cm[(sex, _HEIGHT_PART if use_height_table else _LENGTH_PART)]
+
 
 def load_growth_table(path: str | Path = DEFAULT_GROWTH_TABLE_PATH) -> LoadedGrowthTable:
     """Read and validate the whole table, or raise ``ValueError`` naming the problem."""
@@ -213,6 +220,7 @@ def get_growth_table() -> LoadedGrowthTable:
 def reset_growth_table_cache() -> None:
     """For tests that swap the table."""
     get_growth_table.cache_clear()
+    get_reference_curves.cache_clear()
 
 
 # -- assessment arithmetic (design Decisions 3-5) ---------------------------------------------
@@ -281,6 +289,97 @@ def reference(big_l: float, big_m: float, big_s: float) -> LmsReference:
         median=round(big_m, 1),
         sd2pos=round(_sd(2, big_l, big_m, big_s), 1),
     )
+
+
+# -- reference curves (growth-charts design Decision 1) ---------------------------------------
+#
+# The same LMS parameters read the other way: the value that sits at a given percentile.
+# The 10th-90th percentiles lie within ±1.29 SD, so WHO's tail adjustment never applies.
+
+CURVE_PERCENTILES: tuple[int, ...] = (10, 20, 30, 40, 50, 60, 70, 80, 90)
+
+_CURVE_UNITS: dict[GrowthIndicator, str] = {
+    GrowthIndicator.WEIGHT_FOR_AGE: "kg",
+    GrowthIndicator.LENGTH_HEIGHT_FOR_AGE: "cm",
+    GrowthIndicator.WEIGHT_FOR_LENGTH_HEIGHT: "kg",
+    GrowthIndicator.BMI_FOR_AGE: "kg/m²",
+}
+
+
+def value_at_percentile(p: float, big_l: float, big_m: float, big_s: float) -> float:
+    """The measurement value at percentile ``p`` (0 < p < 100): the inverse of ``z_score``."""
+    return _sd(statistics.NormalDist().inv_cdf(p / 100), big_l, big_m, big_s)
+
+
+def _curve_set(
+    indicator: GrowthIndicator,
+    x_unit: str,
+    x_label_table: str | None,
+    xs: list[float],
+    lms_at: Callable[[float], tuple[float, float, float]],
+) -> GrowthCurveSet:
+    decimals = 2 if indicator is GrowthIndicator.BMI_FOR_AGE else 1
+    curves = [
+        GrowthCurve(
+            percentile=p,
+            values=[round(value_at_percentile(p, *lms_at(x)), decimals) for x in xs],
+        )
+        for p in CURVE_PERCENTILES
+    ]
+    return GrowthCurveSet(
+        indicator=indicator.value,
+        x_unit=x_unit,  # type: ignore[arg-type]  # the two literals are the only callers
+        x_label_table=x_label_table,  # type: ignore[arg-type]
+        y_unit=_CURVE_UNITS[indicator],
+        xs=xs,
+        curves=curves,
+    )
+
+
+def reference_curves(
+    table: LoadedGrowthTable, sex: Sex, use_height_table: bool
+) -> list[GrowthCurveSet]:
+    """The 10th-90th percentile curves for one sex: monthly indicators over months 0-60,
+    weight-for-length/height at every whole centimetre of the chosen table."""
+    months = [float(month) for month in range(0, 61)]
+    sets = [
+        _curve_set(
+            indicator,
+            "months",
+            None,
+            months,
+            lambda x, indicator=indicator: table.monthly(indicator, sex, int(x)),
+        )
+        for indicator in (GrowthIndicator.WEIGHT_FOR_AGE, GrowthIndicator.LENGTH_HEIGHT_FOR_AGE)
+    ]
+    rows = table.cm_rows(sex, use_height_table)
+    lo, hi = int(min(rows)), int(max(rows))
+    centimetres = [float(cm) for cm in range(lo, hi + 1)]
+    sets.append(
+        _curve_set(
+            GrowthIndicator.WEIGHT_FOR_LENGTH_HEIGHT,
+            "cm",
+            _HEIGHT_PART if use_height_table else _LENGTH_PART,
+            centimetres,
+            lambda x: rows[round(x, 1)],
+        )
+    )
+    sets.append(
+        _curve_set(
+            GrowthIndicator.BMI_FOR_AGE,
+            "months",
+            None,
+            months,
+            lambda x: table.monthly(GrowthIndicator.BMI_FOR_AGE, sex, int(x)),
+        )
+    )
+    return sets
+
+
+@lru_cache(maxsize=4)
+def get_reference_curves(sex: Sex, use_height_table: bool) -> tuple[GrowthCurveSet, ...]:
+    """Process-wide curves from the committed table; one entry per (sex, table)."""
+    return tuple(reference_curves(get_growth_table(), sex, use_height_table))
 
 
 def band_for(indicator: GrowthIndicator, z: float) -> GrowthBand:
