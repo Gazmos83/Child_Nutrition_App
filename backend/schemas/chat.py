@@ -11,11 +11,13 @@ vocabularies) so a stored profile can never resolve to what a tool would reject.
 """
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.models.enums import Allergen, DietPreference, Sex
+from backend.nutrition.external_lookup import ExternalNutrientValues, ExternalSource
 from backend.schemas.rag import Citation, RetrievalMeta, Strategy
 from backend.schemas.tools import (
     _AGE,
@@ -119,6 +121,11 @@ class ChatRequest(ChatRequestBody):
 
     child: ChildContext | None = None
     feeding_log: list[FeedingEntry] = Field(default_factory=list, max_length=MAX_LOG_ENTRIES)
+    # Whether an external-lookup citation may offer the inline approval action (hard rule
+    # 10). Computed server-side from the session (backend/api/chat.py); not a body field,
+    # so a client can never grant itself the affordance -- the write it leads to is gated
+    # again, independently, by AdminUser on the admin-foods endpoint itself.
+    is_admin: bool = False
 
 
 # -- routing --------------------------------------------------------------------------------
@@ -142,6 +149,25 @@ class RouteDecision(_Frozen):
     dropped: int = Field(default=0, ge=0, description="Invocations over the per-turn cap.")
 
 
+class ExternalFoodCitation(_Frozen):
+    """A live, whitelisted third-party nutrient lookup, offered when the internal food
+    table missed (hard rule 10). Informational only -- it carries no safety metadata and
+    is never usable in a meal plan; ``admin_approval_eligible`` alone decides whether the
+    frontend also offers to add it for real, and the write it leads to is independently
+    gated by ``AdminUser`` on the admin-foods endpoint, never by this flag."""
+
+    query: str
+    matched_name: str
+    source_key: ExternalSource
+    source_label: str
+    source_url: str
+    retrieved_at: datetime
+    serving_description: str | None
+    nutrients: ExternalNutrientValues
+    admin_approval_eligible: bool
+    disclaimer: str
+
+
 class ToolActivity(_Frozen):
     """What one tool invocation did, for the tool-activity display and the log."""
 
@@ -156,6 +182,10 @@ class ToolActivity(_Frozen):
     )
     error: str | None = Field(default=None, description="Parent-facing message on failure.")
     detail: str | None = Field(default=None, description="Technical detail on failure.")
+    external_lookup: ExternalFoodCitation | None = Field(
+        default=None,
+        description="A live external match for an unknown food, when the lookup is on.",
+    )
 
 
 # -- response -------------------------------------------------------------------------------

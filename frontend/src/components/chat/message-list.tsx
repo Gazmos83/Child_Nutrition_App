@@ -12,10 +12,12 @@ const PIN_THRESHOLD = 64;
 
 export function MessageList({
   messages,
+  isAdmin,
   onRetry,
   retryDisabled,
 }: {
   messages: ChatMessage[];
+  isAdmin: boolean;
   onRetry: (id: string) => void;
   retryDisabled: boolean;
 }) {
@@ -53,7 +55,7 @@ export function MessageList({
             <p className="whitespace-pre-wrap">{m.text}</p>
           </div>
         ) : (
-          <AssistantMessage key={m.id} message={m} onRetry={onRetry} retryDisabled={retryDisabled} />
+          <AssistantMessage key={m.id} message={m} isAdmin={isAdmin} onRetry={onRetry} retryDisabled={retryDisabled} />
         ),
       )}
       {!pinned && (

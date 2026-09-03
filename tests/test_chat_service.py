@@ -10,7 +10,13 @@ from langchain_core.tools import StructuredTool
 from backend.chat import copy
 from backend.chat.router import SEARCH_TOOL_NAME
 from backend.chat.service import ChatService, run_tools
+from backend.core.config import ExternalFoodSettings
 from backend.db.knowledge_store import Document
+from backend.nutrition.external_lookup import (
+    ExternalFoodResult,
+    ExternalNutrientValues,
+    ExternalSource,
+)
 from backend.nutrition.safety import UnsafePlanError
 from backend.rag.pipeline import RagPipeline
 from backend.rag.prompts import DISCLAIMER
@@ -163,6 +169,144 @@ class TestRunTools:
         assert plan.outcome == "plan" and plan.disclaimer == DISCLAIMER
         assert not any("peanut" in item.food_id for item in plan.items)
         assert set(activity.used_context) >= {"age_months", "weight_kg", "sex", "allergies"}
+
+
+def fake_external_result(**overrides) -> ExternalFoodResult:
+    return ExternalFoodResult(
+        **{
+            "query": "nope",
+            "matched_name": "Nope, raw",
+            "source": ExternalSource.USDA_FDC,
+            "source_label": "USDA FoodData Central",
+            "source_url": "https://fdc.nal.usda.gov/food-details/1",
+            "retrieved_at": datetime.now(UTC),
+            "serving_description": "per 100 g",
+            "nutrients": ExternalNutrientValues(calories=52.0),
+            **overrides,
+        }
+    )
+
+
+class TestExternalLookupWiring:
+    """hard rule 10: a live external match rides along with the existing "unknown food"
+    error, never replacing it, and only for the request that asked."""
+
+    async def test_disabled_settings_never_populate_external_lookup(
+        self, tools, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=False),
+        )
+        called = False
+
+        async def boom(*args, **kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", boom)
+        request = ChatRequest.model_validate({"message": "m"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="lookup_food", args={"food_id": "nope"})), request, tools
+        )
+        assert activity.status == "error" and activity.external_lookup is None
+        assert not called  # short-circuited before ever calling the lookup
+
+    async def test_enabled_and_matched_populates_the_citation(self, tools, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=True),
+        )
+
+        async def fake_lookup(food_id, settings):
+            return fake_external_result(query=food_id)
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", fake_lookup)
+        request = ChatRequest.model_validate({"message": "m", "is_admin": True})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="lookup_food", args={"food_id": "nope"})), request, tools
+        )
+        assert activity.status == "error"  # the internal lookup still genuinely failed
+        citation = activity.external_lookup
+        assert citation is not None
+        assert citation.matched_name == "Nope, raw" and citation.source_key == "usda_fdc"
+        assert citation.admin_approval_eligible is True
+        assert citation.disclaimer == copy.EXTERNAL_FOOD_DISCLAIMER
+
+    async def test_non_admin_request_is_not_approval_eligible(self, tools, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=True),
+        )
+        async def fake_lookup(food_id, settings):
+            return fake_external_result(query=food_id)
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", fake_lookup)
+        request = ChatRequest.model_validate({"message": "m"})  # is_admin defaults to False
+        [activity] = await run_tools(
+            decision(PlannedCall(name="lookup_food", args={"food_id": "nope"})), request, tools
+        )
+        assert activity.external_lookup is not None
+        assert activity.external_lookup.admin_approval_eligible is False
+
+    async def test_no_match_leaves_external_lookup_none(self, tools, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=True),
+        )
+
+        async def no_match(food_id, settings):
+            return None
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", no_match)
+        request = ChatRequest.model_validate({"message": "m"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="lookup_food", args={"food_id": "nope"})), request, tools
+        )
+        assert activity.status == "error" and activity.external_lookup is None
+
+    async def test_a_lookup_that_raises_never_breaks_the_chat_turn(
+        self, tools, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=True),
+        )
+
+        async def raises(food_id, settings):
+            raise RuntimeError("network exploded")
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", raises)
+        request = ChatRequest.model_validate({"message": "m"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="lookup_food", args={"food_id": "nope"})), request, tools
+        )
+        assert activity.status == "error" and activity.external_lookup is None
+
+    async def test_other_tool_failures_never_attempt_an_external_lookup(
+        self, tools, monkeypatch
+    ) -> None:
+        """Only ``FoodNotFoundError`` triggers the fallback -- a validation or safety
+        failure has nothing for an external source to resolve."""
+        monkeypatch.setattr(
+            "backend.chat.service.get_external_food_settings",
+            lambda: ExternalFoodSettings(external_food_lookup_enabled=True),
+        )
+        called = False
+
+        async def boom(*args, **kwargs):
+            nonlocal called
+            called = True
+
+        monkeypatch.setattr("backend.chat.service.lookup_external_food", boom)
+        request = ChatRequest.model_validate({"message": "m"})
+        [activity] = await run_tools(
+            decision(PlannedCall(name="calculate_protein_target", args={"weight_kg": 8.5})),
+            request,
+            tools,
+        )
+        assert activity.status == "error" and activity.external_lookup is None
+        assert not called
 
 
 class TestStream:

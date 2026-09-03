@@ -149,6 +149,18 @@ export const SOURCES_TITLE = "Sources";
 export const SHOW_PASSAGE = "Show passage";
 export const HIDE_PASSAGE = "Hide passage";
 
+// -- external food lookup (hard rule 10) ---------------------------------------------------
+
+// Deliberately not grouped with SOURCES_TITLE: this is third-party nutrition data, never a
+// pediatric-guideline citation, and must read as visibly distinct.
+export const EXTERNAL_FOOD_TITLE = "Third-party nutrition data — not a pediatric guideline";
+export function externalFoodRetrieved(retrievedAt: string): string {
+  return `Fetched ${new Date(retrievedAt).toLocaleDateString()}`;
+}
+export const EXTERNAL_FOOD_ADD = "Add to food table";
+export const EXTERNAL_FOOD_ADD_FAILED = "That didn't save. Reload and try again";
+export const EXTERNAL_FOOD_ADDED = "Added — it's a normal food in the table now";
+
 // -- child form ----------------------------------------------------------------------------
 
 export const PANEL_TITLE = "Your little one";
@@ -490,15 +502,24 @@ export const TARGETS_SAVE_FIRST =
   "Save the details first — targets always come from the saved profile, never a draft";
 // Direct: touches a doctor's instruction (hard rule 3 — disclosure, never silence).
 export const TARGETS_DOCTOR_NOTE_ON_FILE =
-  "Your doctor's note is on file. These are the general targets; the note is applied when meal plans are made";
+  "Your doctor's note is on file and applied below";
 export const TARGETS_PREFERENCES_ON_FILE =
-  "Your preferences are on file. These are the general targets; the preferences are applied when meal plans are made";
+  "Your preferences are on file";
 export const TARGETS_NOTES_ON_FILE =
-  "Your doctor's note and preferences are on file. These are the general targets; both are applied when meal plans are made";
+  "Your doctor's note and preferences are on file. The note is applied below";
 export const TARGETS_UNAVAILABLE =
   "We couldn't load the targets. Check your connection and try again";
 export const TARGETS_LOADING = "Fetching the day's targets…";
 export const TARGETS_DISPLAY_ONLY = "Shown without a score";
+export const TARGETS_OVERRIDES_TITLE = "Doctor's note adjustments";
+export function overrideApplied(
+  nutrient: OverridableNutrient | string,
+  applied: number,
+  general: number,
+  unit: string,
+): string {
+  return `Using ${formatNumber(applied)} ${unit} instead of the usual ${formatNumber(general)} ${unit}`;
+}
 export function targetValue(amount: number, unit: string): string {
   return `${formatNumber(amount)} ${unit} a day`;
 }

@@ -61,6 +61,14 @@ def unknown_food(food_id: str, suggestions: Sequence[str] = ()) -> str:
     return f"We don't know a food called “{food_id}” yet"
 
 
+# Hard rule 10: a live external match is informational only, never a pediatric-guideline
+# citation and never usable in a meal plan -- direct, since it borders on safety.
+EXTERNAL_FOOD_DISCLAIMER = (
+    "This is third-party nutrition data, not one of our reviewed pediatric sources — it "
+    "can't be used in a meal plan until an administrator adds it to the food table"
+)
+
+
 def wrong_unit(food_name: str, expected_unit: str, given_unit: str) -> str:
     """An amount in a unit the food is not measured in (food-lookup-quantities)."""
     return (

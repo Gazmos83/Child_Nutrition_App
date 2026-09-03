@@ -2,7 +2,7 @@
 // The four safety questions are tri-state on purpose: "" is "not answered yet", and a food
 // cannot be saved until every one is answered (food-table-admin design Decision 8).
 
-import type { FoodItem, FoodWrite } from "./api-types";
+import type { ExternalFoodCitation, FoodItem, FoodWrite } from "./api-types";
 import * as copy from "./copy";
 import type { Allergen, FoodCategory } from "./enums";
 
@@ -114,6 +114,38 @@ export function fromFood(food: FoodItem): FoodForm {
     min_age_months: String(food.min_age_months),
     source: food.source ?? "",
     notes: food.notes ?? "",
+  };
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * A live external match (hard rule 10), prefilled into a new-food form. Nutrients, name,
+ * and a citation-based source are filled in; category and the three safety questions stay
+ * unanswered ("", not preselected) exactly like a blank form — nothing about safety may be
+ * fetched or guessed, an administrator must always answer it themselves.
+ */
+export function fromExternalCitation(citation: ExternalFoodCitation): FoodForm {
+  const n = citation.nutrients;
+  const numberOrBlank = (value: number | null): string => (value === null ? "" : String(value));
+  return {
+    ...emptyFoodForm(),
+    id: slugify(citation.matched_name || citation.query),
+    name: citation.matched_name,
+    serving_size: citation.serving_description?.includes("100") ? "100" : "",
+    serving_unit: citation.serving_description?.toLowerCase().includes("ml") ? "ml" : "g",
+    calories: numberOrBlank(n.calories),
+    protein_g: numberOrBlank(n.protein_g),
+    fat_g: numberOrBlank(n.fat_g),
+    carbohydrate_g: numberOrBlank(n.carbohydrate_g),
+    iron_mg: numberOrBlank(n.iron_mg),
+    calcium_mg: numberOrBlank(n.calcium_mg),
+    source: `${citation.source_label} (${citation.source_url}), fetched ${citation.retrieved_at.slice(0, 10)}`,
   };
 }
 

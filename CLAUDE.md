@@ -39,12 +39,13 @@ Dependencies are always added through the package manager — `uv add` / `uv add
 7. All tool/API inputs are validated with **Pydantic** before use.
 8. Log every meal-plan recommendation with its full input snapshot (age, weight, allergies, preference, doctor's note, rule/source used) for auditability.
 9. **Every user-scoped read and write is bound to the authenticated user's identity** — User A must never reach User B's child profiles, meals, or conversations. Auth/authz ships before deployment, not after it.
+10. **Live external nutrition lookups are exception-only, whitelisted, and gated.** When a food is not in the internal table, the chatbot may fetch it live, during the chat request, from an explicit, centrally-configured domain whitelist (`ExternalFoodSettings.external_food_domains`, `backend/core/config.py`; whitelist is by exact hostname, never a URL the code happens to construct). Data is parsed by deterministic code only — the LLM never generates or restates a nutrient number from it (rule 2 applies here too). For every user it is shown only as a cited, informational answer, visibly distinguished from a knowledge-base citation (rule 5) — third-party nutrition data is not a pediatric guideline — and it is never usable in a meal plan: it carries no allergen/choking-hazard/honey/pasteurization/min-age metadata and so cannot pass the infant-safety filter (rule 4). For an administrator only, the same answer additionally offers an inline approval action; the admin must supply every missing safety field themselves (never fetched, never inferred), and the write goes through the existing `/api/admin/foods` pipeline unchanged — same validation, same versioning, same auth — there is no parallel write path. No other outbound third-party call is permitted anywhere in the request path.
 
 ## Scope discipline
 
 - Label every proposed feature **[MVP]** or **[Stretch]** — do not silently expand MVP scope.
 - MVP: basic + advanced RAG, 3+ deterministic tools (BMI, calorie/protein targets, food lookup, meal nutrition, nutrient-specific meal plan, feeding log + nutrient-gap detection — reference §9b), simple intent router, production UI with citations + tool-activity display, real-time KB re-ingestion, logging/monitoring, RAGAs A/B evaluation.
-- Stretch (only if MVP done early): full LangGraph orchestration, LangSmith tracing, multi-model support, token/cost dashboards. **Kubernetes/Celery/distributed infra is out of scope entirely.**
+- Stretch (only if MVP done early): full LangGraph orchestration, LangSmith tracing, multi-model support, token/cost dashboards, live external food lookup with admin approval gate (rule 10). **Kubernetes/Celery/distributed infra is out of scope entirely.**
 
 ## Detailed reference
 `Nutrition_App_Full_Reference.md` in this same folder has the full day-by-day

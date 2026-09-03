@@ -32,14 +32,14 @@ function panel(): HTMLElement {
 
 describe("ChatWidget", () => {
   it("starts closed, with an inviting launcher", () => {
-    render(<ChatWidget chat={CHAT} feedNotice={null} />);
+    render(<ChatWidget chat={CHAT} feedNotice={null} isAdmin={false} />);
     expect(launcher()).toHaveAttribute("aria-expanded", "false");
     expect(launcher()).toHaveAccessibleName(CHAT_OPEN_LABEL);
     expect(panel().className).toContain("invisible");
   });
 
   it("opens on the launcher, titled and populated", () => {
-    render(<ChatWidget chat={CHAT} feedNotice={null} />);
+    render(<ChatWidget chat={CHAT} feedNotice={null} isAdmin={false} />);
     fireEvent.click(launcher());
     expect(launcher()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("dialog", { name: APP_TITLE })).toBe(panel());
@@ -48,7 +48,7 @@ describe("ChatWidget", () => {
   });
 
   it("keeps the conversation and the draft through close and reopen", () => {
-    render(<ChatWidget chat={CHAT} feedNotice={null} />);
+    render(<ChatWidget chat={CHAT} feedNotice={null} isAdmin={false} />);
     fireEvent.click(launcher());
     const draft = screen.getByRole("textbox");
     fireEvent.change(draft, { target: { value: "and vitamin D?" } });
@@ -60,7 +60,7 @@ describe("ChatWidget", () => {
   });
 
   it("closes on Escape and hands focus back to the launcher", () => {
-    render(<ChatWidget chat={CHAT} feedNotice={null} />);
+    render(<ChatWidget chat={CHAT} feedNotice={null} isAdmin={false} />);
     fireEvent.click(launcher());
     fireEvent.keyDown(panel(), { key: "Escape" });
     expect(panel().className).toContain("invisible");
@@ -68,7 +68,7 @@ describe("ChatWidget", () => {
   });
 
   it("shows a feed notice inside the panel", () => {
-    render(<ChatWidget chat={CHAT} feedNotice="A note about a feed" />);
+    render(<ChatWidget chat={CHAT} feedNotice="A note about a feed" isAdmin={false} />);
     fireEvent.click(launcher());
     expect(screen.getByTestId("feed-notice")).toHaveTextContent("A note about a feed");
   });

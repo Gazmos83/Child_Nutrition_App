@@ -8,6 +8,7 @@ import { toolSteps } from "@/lib/tool-steps";
 import { AnswerText } from "./answer-text";
 import { Citations } from "./citations";
 import { Disclaimer } from "./disclaimer";
+import { ExternalFoodCard } from "./external-food-card";
 import { GapReportCard } from "./gap-report-card";
 import { GrowthCard } from "./growth-card";
 import { IntentChip } from "./intent-chip";
@@ -16,10 +17,12 @@ import { ToolActivityList } from "./tool-activity";
 
 export function AssistantMessage({
   message,
+  isAdmin,
   onRetry,
   retryDisabled,
 }: {
   message: AssistantMessageData;
+  isAdmin: boolean;
   onRetry: (id: string) => void;
   retryDisabled: boolean;
 }) {
@@ -35,6 +38,9 @@ export function AssistantMessage({
     .filter((t) => t.name === "assess_growth" && t.status === "ok")
     .map((t) => t.result as unknown)
     .find(isGrowthAssessmentResult);
+  const externalLookups = message.tools
+    .map((t) => t.external_lookup)
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
   const streaming = message.status === "streaming";
   const troubled = message.status === "error" || message.status === "interrupted";
 
@@ -66,6 +72,9 @@ export function AssistantMessage({
           </Button>
         </div>
       )}
+      {externalLookups.map((citation, i) => (
+        <ExternalFoodCard key={`${citation.source_key}-${citation.query}-${i}`} citation={citation} isAdmin={isAdmin} />
+      ))}
       <Citations citations={message.citations} messageId={message.id} />
       {(message.text || troubled || message.status === "done") && <Disclaimer text={message.disclaimer} />}
     </article>

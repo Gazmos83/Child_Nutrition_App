@@ -10,7 +10,7 @@ const MESSAGES: ChatMessage[] = [
 ];
 
 function renderList() {
-  return render(<MessageList messages={MESSAGES} onRetry={() => {}} retryDisabled={false} />);
+  return render(<MessageList messages={MESSAGES} isAdmin={false} onRetry={() => {}} retryDisabled={false} />);
 }
 
 function scrollTo(el: HTMLElement, { top, height, client }: { top: number; height: number; client: number }) {
@@ -22,7 +22,7 @@ function scrollTo(el: HTMLElement, { top, height, client }: { top: number; heigh
 
 describe("MessageList", () => {
   it("shows the invitation when there are no messages", () => {
-    render(<MessageList messages={[]} onRetry={() => {}} retryDisabled={false} />);
+    render(<MessageList messages={[]} isAdmin={false} onRetry={() => {}} retryDisabled={false} />);
     expect(screen.getByText(CHAT_EMPTY)).toBeInTheDocument();
   });
 

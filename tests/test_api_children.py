@@ -14,13 +14,15 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.chat import get_service, resolve_chat_request
+from backend.api.deps import get_auth_settings
+from backend.core.config import Settings
 from backend.models import ChildProfile, User
 from backend.models.enums import Sex
 from backend.nutrition.age import birth_date_for, today
 from backend.nutrition.growth import GrowthIndicator, get_growth_table
 from backend.schemas.chat import ChatRequest
 from backend.schemas.child import AGE_OUT_OF_RANGE_DETAIL
-from tests.conftest import sign_in
+from tests.conftest import TEST_SESSION_SECRET, sign_in
 
 pytestmark = pytest.mark.db
 
@@ -720,6 +722,38 @@ class TestChatAuthoritySeam:
     async def test_unauthenticated_chat_is_401(self, api_client: AsyncClient, captured) -> None:
         response = await api_client.post("/api/chat", json={"message": "hi", "stream": False})
         assert response.status_code == 401 and captured == []
+
+    async def test_body_cannot_carry_is_admin(self, auth_client: AsyncClient, captured) -> None:
+        """Hard rule 10: the external-lookup approval affordance's eligibility flag is
+        computed server-side only, exactly like ``child`` -- a client can never grant it
+        to itself by sending the field."""
+        response = await auth_client.post(
+            "/api/chat", json={"message": "hi", "is_admin": True, "stream": False}
+        )
+        assert response.status_code == 422 and captured == []
+
+    async def test_is_admin_reflects_admin_emails(
+        self, api_client: AsyncClient, user: User, captured: list[ChatRequest]
+    ) -> None:
+        app = api_client._transport.app  # type: ignore[attr-defined]
+        settings = Settings(
+            database_url="postgresql://unused:unused@unused/unused",
+            session_secret=TEST_SESSION_SECRET,
+            admin_emails=user.email,
+            _env_file=None,
+        )
+        app.dependency_overrides[get_auth_settings] = lambda: settings
+        sign_in(api_client, user)
+        response = await api_client.post("/api/chat", json={"message": "hi", "stream": False})
+        assert response.status_code == 200
+        assert captured[0].is_admin is True
+
+    async def test_non_admin_is_admin_false(
+        self, auth_client: AsyncClient, captured: list[ChatRequest]
+    ) -> None:
+        response = await auth_client.post("/api/chat", json={"message": "hi", "stream": False})
+        assert response.status_code == 200
+        assert captured[0].is_admin is False
 
 
 # resolve_chat_request is exercised through the routes above; the import documents that.

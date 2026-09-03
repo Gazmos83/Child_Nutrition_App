@@ -22,6 +22,12 @@ import { ALLERGEN_OPTIONS, FOOD_CATEGORY_OPTIONS, type Allergen, type FoodCatego
 interface Props {
   /** The food being edited, or null for a new one. */
   initial: FoodItem | null;
+  /**
+   * A prefilled starting point for a new food (e.g. a live external lookup, hard rule 10),
+   * used instead of an empty form when `initial` is null. Never used to prefill the safety
+   * questions — those stay unanswered like any new food (design Decision 8).
+   */
+  initialForm?: FoodForm;
   busy: boolean;
   /** The server's refusal, shown verbatim (a 409 duplicate id, a 422 rule). */
   serverError: string | null;
@@ -61,8 +67,10 @@ function toggle(list: Allergen[], value: Allergen, on: boolean): Allergen[] {
 }
 
 /** Create or edit one food. Nothing about safety is preselected (design Decision 8). */
-export function FoodForm({ initial, busy, serverError, onSubmit, onCancel }: Props) {
-  const [form, setForm] = useState<FoodForm>(() => (initial ? fromFood(initial) : emptyFoodForm()));
+export function FoodForm({ initial, initialForm, busy, serverError, onSubmit, onCancel }: Props) {
+  const [form, setForm] = useState<FoodForm>(
+    () => initialForm ?? (initial ? fromFood(initial) : emptyFoodForm()),
+  );
   const [errors, setErrors] = useState<FoodFormErrors>({});
   const update = <K extends keyof FoodForm>(key: K, value: FoodForm[K]) => {
     setForm((f) => ({ ...f, [key]: value }));

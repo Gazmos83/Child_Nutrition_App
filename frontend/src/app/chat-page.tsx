@@ -121,7 +121,7 @@ export function ChatPage({ user, onSignOut }: Props) {
           </TabsContent>
         </Tabs>
       </main>
-      <ChatWidget chat={chat} feedNotice={feedNotice} />
+      <ChatWidget chat={chat} feedNotice={feedNotice} isAdmin={user.is_admin} />
     </div>
   );
 }

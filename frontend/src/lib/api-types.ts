@@ -197,6 +197,39 @@ export interface RetrievalMeta {
   top_score: number | null;
 }
 
+// -- external food lookup (backend/schemas/chat.py; CLAUDE.md hard rule 10) ---------------
+
+export type ExternalSource = "usda_fdc" | "myfooddata";
+
+/** Only the macro fields the food table itself requires; null means "not reported". */
+export interface ExternalNutrientValues {
+  calories: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  carbohydrate_g: number | null;
+  iron_mg: number | null;
+  calcium_mg: number | null;
+}
+
+/**
+ * A live, whitelisted third-party nutrient match for a food the internal table missed.
+ * Informational only — never a `FoodItem`, never usable in a meal plan. `admin_approval_eligible`
+ * decides whether the card also offers to add it for real; the write itself is still gated
+ * server-side by `AdminUser`, independent of this flag.
+ */
+export interface ExternalFoodCitation {
+  query: string;
+  matched_name: string;
+  source_key: ExternalSource;
+  source_label: string;
+  source_url: string;
+  retrieved_at: string;
+  serving_description: string | null;
+  nutrients: ExternalNutrientValues;
+  admin_approval_eligible: boolean;
+  disclaimer: string;
+}
+
 export interface ToolActivity {
   name: string;
   status: ToolStatus;
@@ -205,6 +238,7 @@ export interface ToolActivity {
   result: Record<string, unknown> | null;
   error: string | null;
   detail: string | null;
+  external_lookup?: ExternalFoodCitation | null;
 }
 
 export interface ChatResponse {
@@ -299,6 +333,7 @@ export interface DailyTargetsResponse {
   diet_preference: DietPreference;
   doctor_notes_present: boolean;
   preferences_present: boolean;
+  overrides: OverrideOutcome[];
   disclaimer: string;
 }
 

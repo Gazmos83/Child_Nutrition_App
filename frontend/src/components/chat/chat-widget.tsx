@@ -13,6 +13,7 @@ import { APP_TITLE, CHAT_CLOSE_LABEL, CHAT_OPEN_LABEL } from "@/lib/copy";
 interface Props {
   chat: ReturnType<typeof useChat>;
   feedNotice: string | null;
+  isAdmin: boolean;
 }
 
 /**
@@ -20,7 +21,7 @@ interface Props {
  * hidden with visibility (not display or unmount) so the draft text and scroll position
  * survive closing; the messages themselves live in `useChat` up in ChatPage either way.
  */
-export function ChatWidget({ chat, feedNotice }: Props) {
+export function ChatWidget({ chat, feedNotice, isAdmin }: Props) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -82,7 +83,7 @@ export function ChatWidget({ chat, feedNotice }: Props) {
             {feedNotice}
           </p>
         )}
-        <MessageList messages={chat.messages} onRetry={chat.retry} retryDisabled={chat.isPending} />
+        <MessageList messages={chat.messages} isAdmin={isAdmin} onRetry={chat.retry} retryDisabled={chat.isPending} />
         <MessageInput onSend={chat.send} disabled={chat.isPending} />
       </div>
     </>

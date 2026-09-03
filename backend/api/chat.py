@@ -21,7 +21,7 @@ from backend.api.children import (
     recent_feedings,
     to_feeding_entries,
 )
-from backend.api.deps import CurrentUser, DbSession, owned_child
+from backend.api.deps import AuthSettings, CurrentUser, DbSession, is_admin, owned_child
 from backend.api.rate_limit import rate_limited
 from backend.api.sse import sse
 from backend.chat import copy
@@ -45,15 +45,17 @@ def get_service() -> ChatService:
 
 
 async def resolve_chat_request(
-    body: ChatRequestBody, user: CurrentUser, db: DbSession
+    body: ChatRequestBody, user: CurrentUser, db: DbSession, settings: AuthSettings
 ) -> ChatRequest:
-    """The authority seam: fill ``child`` and ``feeding_log`` from the caller's own rows.
+    """The authority seam: fill ``child``, ``feeding_log``, and ``is_admin`` from the
+    caller's own rows and session -- never from the body (hard rules 9 and 10).
 
     ``child_id`` names one of the caller's children (an unowned id is refused exactly like a
     nonexistent one). Omitted, it means the account's only child; with several children it
     is required; with none the request proceeds without child context and the service's
     existing "details go in the side panel" path applies.
     """
+    admin = is_admin(user, settings)
     if body.child_id is not None:
         child = await owned_child(body.child_id, user, db)
     else:
@@ -68,13 +70,14 @@ async def resolve_chat_request(
             )
         child = children[0] if children else None
     if child is None:
-        return ChatRequest(**body.model_dump())
+        return ChatRequest(**body.model_dump(), is_admin=admin)
     request_context.set_child_profile_id(child.id)
     rows = await recent_feedings(db, child, DEFAULT_LOG_DAYS)
     return ChatRequest(
         **body.model_dump(),
         child=child_context_or_422(child),
         feeding_log=to_feeding_entries(rows),
+        is_admin=admin,
     )
 
 

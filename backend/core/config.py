@@ -272,3 +272,75 @@ def get_rag_settings() -> RAGSettings:
     Never raises for missing configuration: every field is optional or defaulted.
     """
     return RAGSettings()
+
+
+class ExternalFoodSettings(BaseSettings):
+    """Live third-party nutrition lookup, used only when the internal food table misses
+    (backend/nutrition/external_lookup.py; CLAUDE.md hard rule 10).
+
+    Off by default: this is the app's only outbound call to a third party besides the LLM
+    provider, so it must be turned on deliberately rather than by simply being importable.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    external_food_lookup_enabled: bool = Field(
+        default=False,
+        description="Whether a chat turn may fetch a missing food from an external source.",
+    )
+    # Comma-separated hostnames, like ALLOWED_ORIGINS/ADMIN_EMAILS. Compared by exact match
+    # only (never a suffix/subdomain match, which would admit "usda.evil.example").
+    external_food_domains: Annotated[list[str], NoDecode] = Field(
+        default_factory=list,
+        description="Hostnames a lookup may call; empty allows none even when enabled.",
+    )
+    external_food_timeout_seconds: float = Field(
+        default=5.0,
+        gt=0,
+        le=15,
+        description="Per-request timeout for an external lookup.",
+    )
+    external_food_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description="How long a fetched (or not-found) result is reused before refetching.",
+    )
+    external_food_cache_max_entries: int = Field(
+        default=256,
+        ge=1,
+        description="Cache bound; the oldest entry is evicted past this.",
+    )
+    usda_fdc_api_key: str | None = Field(
+        default=None,
+        description="api.data.gov key for USDA FoodData Central. Required for that source.",
+    )
+
+    @field_validator("external_food_domains", mode="before")
+    @classmethod
+    def _split_domains(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.split(",")
+        if isinstance(value, list):
+            return [d.strip().lower() for d in value if d and d.strip()]
+        return value
+
+    @field_validator("usda_fdc_api_key")
+    @classmethod
+    def _blank_key_is_absent(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+@lru_cache(maxsize=1)
+def get_external_food_settings() -> ExternalFoodSettings:
+    """Return the process-wide external-lookup settings, constructing them on first use.
+
+    Never raises for missing configuration: disabled and an empty whitelist are valid.
+    """
+    return ExternalFoodSettings()

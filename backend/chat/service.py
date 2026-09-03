@@ -22,6 +22,8 @@ from pydantic import BaseModel, ValidationError
 from backend.chat import copy
 from backend.chat.prompts import ANSWER_WITH_TOOLS_SYSTEM_PROMPT, build_tools_answer_prompt
 from backend.chat.router import PROFILE_FIELDS, decide, resolve_context
+from backend.core.config import get_external_food_settings
+from backend.nutrition.external_lookup import lookup_external_food
 from backend.nutrition.feeding import UnitMismatchError
 from backend.nutrition.foods import FoodNotFoundError
 from backend.nutrition.safety import UnsafePlanError
@@ -31,6 +33,7 @@ from backend.rag.retrievers import _content_text
 from backend.schemas.chat import (
     ChatRequest,
     ChatResponse,
+    ExternalFoodCitation,
     PlannedCall,
     RouteDecision,
     ToolActivity,
@@ -140,6 +143,35 @@ def _error_kind(activity: ToolActivity) -> str | None:
     return "validation"
 
 
+async def _external_citation(food_id: str, request: ChatRequest) -> ExternalFoodCitation | None:
+    """A live external match for a food the internal table missed, or ``None`` (hard rule
+    10). Never raises and never blocks on a slow/failed source for long past its own
+    timeout -- a lookup problem here must not turn a graceful "unknown food" answer into a
+    broken chat turn."""
+    settings = get_external_food_settings()
+    if not settings.external_food_lookup_enabled:
+        return None
+    try:
+        result = await lookup_external_food(food_id, settings)
+    except Exception:
+        logger.exception("external food lookup raised for %r", food_id)
+        return None
+    if result is None:
+        return None
+    return ExternalFoodCitation(
+        query=result.query,
+        matched_name=result.matched_name,
+        source_key=result.source,
+        source_label=result.source_label,
+        source_url=result.source_url,
+        retrieved_at=result.retrieved_at,
+        serving_description=result.serving_description,
+        nutrients=result.nutrients,
+        admin_approval_eligible=request.is_admin,
+        disclaimer=copy.EXTERNAL_FOOD_DISCLAIMER,
+    )
+
+
 async def _invoke(
     name: str,
     args: dict[str, object],
@@ -166,6 +198,7 @@ async def _invoke(
             used_context=used,
             error=copy.unknown_food(exc.food_id, exc.suggestions),
             detail=str(exc),
+            external_lookup=await _external_citation(exc.food_id, request),
         )
     except UnitMismatchError as exc:
         return ToolActivity(
