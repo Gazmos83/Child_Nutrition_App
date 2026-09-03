@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Progress, ProgressIndicator, ProgressTrack } from "@/components/ui/progress";
 import { useDailyTargets } from "@/hooks/use-daily-targets";
-import type { GapFlag, NutrientTargetRow } from "@/lib/api-types";
+import type { GapFlag, NutrientTargetRow, OverrideOutcome } from "@/lib/api-types";
 import * as copy from "@/lib/copy";
 
 const FLAG_CLASS: Record<GapFlag, string> = {
@@ -41,6 +41,18 @@ export function DailyTargets({ childId, dirty }: { childId: string | null; dirty
                   : copy.TARGETS_PREFERENCES_ON_FILE}
             </p>
           )}
+          {query.data.overrides.some((o) => o.source === "doctors_note" && o.conflict) && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm dark:border-blue-900/30 dark:bg-blue-950/20">
+              <p className="mb-2 font-medium text-blue-950 dark:text-blue-100">{copy.TARGETS_OVERRIDES_TITLE}</p>
+              <ul className="space-y-1">
+                {query.data.overrides
+                  .filter((o) => o.source === "doctors_note" && o.conflict && o.nutrient)
+                  .map((override) => (
+                    <OverrideNote key={override.nutrient} override={override} />
+                  ))}
+              </ul>
+            </div>
+          )}
           <ul className="space-y-3">
             {query.data.targets.items.map((row) => (
               <TargetRow key={row.nutrient} row={row} />
@@ -50,6 +62,20 @@ export function DailyTargets({ childId, dirty }: { childId: string | null; dirty
         </>
       )}
     </section>
+  );
+}
+
+function OverrideNote({ override }: { override: OverrideOutcome }) {
+  const unit = override.nutrient === "calories" ? "kcal" : override.nutrient === "protein" ? "g" : "mg";
+  return (
+    <li className="text-xs text-blue-900 dark:text-blue-100" data-testid="override-note">
+      <p>
+        <span className="font-medium capitalize">{override.nutrient}:</span>{" "}
+        {override.applied_value !== null && override.general_value !== null
+          ? copy.overrideApplied(override.nutrient, override.applied_value, override.general_value, unit)
+          : override.detail}
+      </p>
+    </li>
   );
 }
 

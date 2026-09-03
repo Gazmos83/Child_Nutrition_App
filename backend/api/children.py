@@ -29,6 +29,7 @@ from backend.nutrition.feeding import (
 from backend.nutrition.foods import FoodNotFoundError, get_food_table
 from backend.nutrition.gaps import targets_with_intake
 from backend.nutrition.growth import GROWTH_SOURCE, get_growth_table, get_reference_curves
+from backend.rag.llm import get_pipeline
 from backend.rag.prompts import DISCLAIMER
 from backend.schemas.chat import ChildContext
 from backend.schemas.child import (
@@ -51,7 +52,7 @@ from backend.schemas.tools import (
 )
 from backend.tools import nutrient_tools
 from backend.tools.feeding_log import log_feeding
-from backend.tools.targets_resolution import general_targets
+from backend.tools.targets_resolution import resolve_targets
 
 logger = logging.getLogger(__name__)
 
@@ -223,21 +224,33 @@ async def delete_child(child: OwnedChild, db: DbSession) -> None:
     summary="The child's daily reference targets",
 )
 async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
-    """The general reference targets for the stored profile, in display order, with the
-    logged window's intake and flag on each tracked row (chat-ui spec).
+    """The reference targets for the stored profile with doctor's-note overrides applied,
+    in display order, with the logged window's intake and flag on each tracked row (chat-ui
+    spec).
 
-    Deterministic: no language-model call and no doctor's-note extraction (day-9 design
-    Decision 6) -- the note is disclosed and takes effect when meal plans are generated.
-    ``OwnedChild`` resolves the profile only through the signed-in account's ownership, so
-    a non-owner gets the same refusal as a direct profile read (hard rule 9).
+    Calls the language model to extract and apply doctor's notes, matching the chatbot's
+    behavior. If extraction fails or no model is configured, degraded gracefully with the
+    general targets. ``OwnedChild`` resolves the profile only through the signed-in account's
+    ownership, so a non-owner gets the same refusal as a direct profile read (hard rule 9).
     """
-    targets = general_targets(child_context_or_422(child))
+    try:
+        pipeline = get_pipeline()
+        targets, extraction, overrides = await resolve_targets(
+            child_context_or_422(child), pipeline.chat_model
+        )
+    except RuntimeError:
+        # No LLM configured; fall back to general targets with empty overrides.
+        from backend.tools.targets_resolution import general_targets
+
+        targets = general_targets(child_context_or_422(child))
+        overrides = []
+
     table = get_food_table()
     normalised = []
     for row in await recent_feedings(db, child, DEFAULT_LOG_DAYS):
         try:
             normalised.append(normalise_entry(to_feeding_entry(row), table))
-        except FoodNotFoundError, FeedingEntryError:
+        except (FoodNotFoundError, FeedingEntryError):
             # Same stance as the feeding list: a stored id the table no longer knows is
             # logged and skipped rather than failing the whole panel.
             logger.warning("Feeding %s names a food the table no longer has", row.id)
@@ -248,6 +261,7 @@ async def get_targets(child: OwnedChild, db: DbSession) -> DailyTargetsResponse:
         diet_preference=child.diet_preference,
         doctor_notes_present=any(n.kind is NoteKind.DOCTOR for n in child.notes),
         preferences_present=any(n.kind is NoteKind.PREFERENCE for n in child.notes),
+        overrides=overrides,
         disclaimer=DISCLAIMER,
     )
 
@@ -271,7 +285,7 @@ async def list_feedings(
     for row in await recent_feedings(db, child, days):
         try:
             priced.append(log_feeding(to_feeding_entry(row), table))
-        except FoodNotFoundError, FeedingEntryError:
+        except (FoodNotFoundError, FeedingEntryError):
             # The table is versioned and only grows, so this is a stored id the table no
             # longer knows -- surfaced in the log rather than failing the whole list.
             logger.warning("Feeding %s names a food the table no longer has", row.id)

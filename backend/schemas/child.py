@@ -24,6 +24,7 @@ from backend.schemas.tools import (
     GrowthAssessmentResult,
     NoteRow,
     NutrientTargets,
+    OverrideOutcome,
     check_unique_notes,
 )
 
@@ -111,10 +112,9 @@ class ChildProfileResponse(BaseModel):
 class DailyTargetsResponse(BaseModel):
     """The child's daily reference targets, for the side panel (child-profile spec).
 
-    Deterministic: computed from the stored profile and the nutrient registry alone. The
-    note rows are disclosed via ``doctor_notes_present`` and
-    ``preferences_present``, never applied here -- it takes
-    effect when meal plans are generated (day-9 design Decision 6).
+    Applies doctor's note overrides via LLM extraction. The note rows are disclosed via
+    ``doctor_notes_present`` and ``preferences_present``, and their overrides are reported
+    in ``overrides`` so the parent sees which targets were modified.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -123,6 +123,7 @@ class DailyTargetsResponse(BaseModel):
     diet_preference: DietPreference
     doctor_notes_present: bool
     preferences_present: bool
+    overrides: list[OverrideOutcome]
     disclaimer: str
 
 
