@@ -1,406 +1,560 @@
-# Child Nutrition App
+# Little Gourmant
 
-A RAG + tool-calling AI assistant for child nutrition, newborn through ~4 years. It answers nutrition questions from a curated pediatric-guideline corpus and generates nutrient-specific meal plans from a stored child profile: date of birth (age is derived from it in months), weight, gender, allergies, diet preference, and doctor's-note and preference rows.
+A child-nutrition assistant for newborns through roughly four years old. Parents ask
+questions in plain language and get answers grounded in recognised pediatric guidelines,
+plus nutrient-specific meal plans built from their own child's profile — date of birth,
+weight, height, sex, allergies, diet preference, and any doctor's-note or household
+preference rows.
 
-> **Not a medical device.** Every recommendation ships with a disclaimer that this is not medical advice and that a pediatrician should be consulted.
+> **Not a medical device.** Every answer and every plan ships with a disclaimer that this
+> is not medical advice and that a pediatrician should be consulted.
 
-> **Status:** Day 7 of 7 — production hardening and deployment in progress. PostgreSQL schema and migrations, the curated knowledge base with its ingestion pipeline, the basic/advanced RAG pipeline behind `POST /api/ask`, the deterministic nutrient tools (targets, food lookup, infant-safety filter, doctor's-note override, meal-plan generation), the intent router behind `POST /api/chat`, the Next.js chat UI, the feeding log with nutrient-gap detection (reference §9b), and accounts with saved child profiles and a persisted feeding log are implemented. Deployment follows on Day 7. See [`CLAUDE.md`](./CLAUDE.md) for the settled architecture and rules.
+---
 
-## Features
+## What it does
 
-- **Nutrient-specific meal plans** — built from the child's stored profile. All quantities come from lookup-table-driven Python code; the LLM extracts structured inputs but never generates nutrient numbers itself.
-- **Grounded nutrition answers** — retrieval over a curated corpus drawn from recognized pediatric guidelines (WHO Child Growth Standards, AAP, national infant dietary guidelines). Every RAG-backed answer cites its source and publication date.
-- **Deterministic nutrition tools** — BMI, calorie and protein targets, food lookup, per-meal nutrition, daily totals, and remaining targets. Typed inputs, Pydantic-validated, authorization-checked, with structured results and graceful failure handling.
-- **Hard-coded infant-safety filter** — every meal plan passes safety checks that run independently of the RAG/LLM pipeline and cannot be bypassed or overridden by the model: no honey under 12 months, no choking hazards, no unpasteurized products.
-- **Doctor's-note precedence** — notes are rows, each a doctor's instruction or a household preference. When a doctor's row conflicts with a general nutrient target, the row wins and the conflict is surfaced in the UI rather than silently blended away. Foods and food groups a row names to avoid are left out of every plan, listed with the row as the reason; a preference row can only leave foods out, never change a target.
-- **Intent routing** — a lightweight classifier picks the execution path per query, then runs it deterministically.
-- **Meal logging and daily tracking** — log meals and meal items, then read back nutrition summaries and what's still outstanding against the day's targets.
-- **Transparent responses** — streamed answers carrying citations, tool-activity indicators, and conversation history, so it's visible which sources and which tools produced a given reply.
-- **Re-runnable knowledge ingestion** — an idempotent job re-embeds new or changed documents and upserts them into the vector store without a full rebuild.
+| Capability | What the parent gets |
+|---|---|
+| **Grounded answers** | Retrieval over a curated corpus of pediatric guidelines. Every answer cites its source and publication year; when nothing relevant is found the assistant says so instead of guessing. |
+| **Nutrient-specific meal plans** | Plans composed from the child's stored profile against age-appropriate targets, with the doctor's note honoured and every item safety-checked. |
+| **Daily targets** | Reference targets for the child's exact age in months, annotated with how the last two weeks of logged intake compare. |
+| **Feeding log** | Log breast milk, formula, solids and water. Nutrients are priced from the internal food table, never from the model. |
+| **Nutrient-gap detection** | A rolling-window comparison of intake against targets, with a confidence level that grows as more complete days are logged. |
+| **Growth tracking** | Weight and height measurements plotted against WHO Child Growth Standards percentile curves, with z-scores and percentiles across four indicators. |
+| **Transparent responses** | Each reply shows the routing decision, one expandable chip per tool that ran, numbered citations, and the disclaimer. |
+
+### Who it is for
+
+Parents and caregivers of children under about four who want a concrete answer — "how
+much iron does a nine-month-old need?", "what should she eat for the rest of today?" —
+rather than a search-results page. The product deliberately refuses to be a diagnostic
+tool: it computes against published reference values and defers to the child's doctor
+wherever the two disagree.
+
+---
 
 ## How it works
 
-The governing principle is **deterministic code → RAG → tools → lightweight routing**, not agent-everywhere. AI is used where it adds genuine value; anything computable is computed in plain Python.
-
-A router classifies each query and dispatches:
-
-```
-"What is fiber?"                            → RAG
-"What's my child's BMI?"                    → Tool
-"How much protein does my toddler need?"    → Tool + child profile
-"What should my 8-month-old eat this week?"  → RAG + tools + user data
-```
-
-Retrieval runs in two stages: a basic path (embed → vector search → top-K → prompt), and an advanced path adding query analysis and translation, multi-query retrieval, metadata filtering, deduplication, and context construction.
-
-Response shape:
+The governing principle is **deterministic code → retrieval → tools → lightweight
+routing**. The model is used where language understanding genuinely helps; anything
+computable is computed in plain Python.
 
 ```
-User: How much protein does my child still need today?
-AI:   You have approximately 42g remaining today.
-      Sources: • Nutrition guideline
-      Tools used: ✓ Daily nutrition ✓ Protein target calculator
+                    ┌──────────────┐
+   parent message → │    router    │  one model call, tools bound
+                    └──────┬───────┘
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
+           rag            tool         hybrid
+        retrieval    deterministic     both
+             │         functions         │
+             └─────────────┼─────────────┘
+                           ▼
+                 composed answer + citations
+                 + tool activity + disclaimer
 ```
+
+The model's tool calls *are* the routing decision; plain Python then executes them. The
+model's own free text is never returned to the parent — every answer is composed from
+retrieved context blocks and validated tool results.
+
+```
+"What is fiber?"                           → rag
+"What's my child's BMI?"                   → tool
+"How much protein does my toddler need?"   → tool + stored profile
+"What should my 8-month-old eat today?"    → hybrid
+```
+
+**The LLM never produces a nutrient number.** It extracts structured inputs and picks a
+path; every quantity comes from a lookup table or a reference equation in Python.
+
+Retrieval runs one of two strategies. `basic` embeds the question, searches, and keeps
+the top matches. `advanced` (the default) adds age extraction, metadata filtering, query
+translation, multi-query fusion and deduplication. Both share the same answer prompt, so
+they can be compared on retrieval quality alone.
+
+---
+
+## Safety and compliance
+
+These rules are structural, not advisory. They are enforced in code that the model
+cannot reach or override.
+
+1. **Age is stored and reasoned about in months.** The profile holds a birth date; every
+   age the API returns is a whole number of completed months, derived on read.
+   Requirements shift too fast in the first year for years to be a useful unit.
+2. **Allergies and diet preference are controlled vocabularies**, never free text.
+3. **The doctor's note wins.** Notes are rows, each either a doctor's instruction or a
+   household preference. When a doctor's row conflicts with a general target, the row
+   applies and the conflict is surfaced explicitly — never silently blended. A preference
+   row can only exclude foods; it can never move a target.
+4. **A hard-coded infant-safety filter** runs on every plan, independently of the
+   retrieval and model path, with no switch that disables a rule: no honey under twelve
+   months, no choking hazards, no unpasteurised products. It runs on the candidate foods
+   and again on the finished plan.
+5. **Citations are mandatory** on knowledge-backed answers — source title and publication
+   year, drawn from recognised guidelines (WHO, AAP, CDC, USDA/HHS, NIH, FDA/EPA).
+6. **No model-executed SQL.** All data access goes through validated, auth-scoped
+   application code.
+7. **Every input is validated with Pydantic** — API bodies, tool inputs, and the
+   arguments the model proposes for a tool.
+8. **Every meal plan is logged with its full input snapshot** — age, weight, sex,
+   allergies, diet preference, the note rows and what each one did, and the food-table
+   revision used — for auditability.
+9. **Every user-scoped read and write is bound to the authenticated account.** One user
+   can never reach another's child profiles, feeding log or growth log.
+10. **Live external nutrition data is exception-only and gated.** See
+    [External food lookup](#external-food-lookup).
+
+---
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Frontend | Next.js, React, TypeScript, Tailwind, shadcn/ui, TanStack Query |
-| Backend | Python, FastAPI, Pydantic, SQLAlchemy, Alembic |
-| LLM | LangChain via OpenRouter (OpenAI-compatible SDK) |
-| Vector DB | Milvus Lite, behind a vector-store abstraction |
-| App DB | PostgreSQL |
-| Tooling | uv (Python), pnpm (frontend) |
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind 4, shadcn/ui, TanStack Query |
+| Backend | Python 3.14, FastAPI, Pydantic, SQLAlchemy (async), Alembic |
+| Model access | LangChain via OpenRouter — one provider for both the chat and embedding models |
+| Vector store | Milvus Lite, behind an abstraction so the store can be swapped without touching business logic |
+| Application database | PostgreSQL — accounts, child profiles, feedings, growth measurements, food-table revisions |
+| Tooling | uv (Python, `uv.lock` authoritative), pnpm (frontend), Docker Compose (local PostgreSQL only) |
 
-FastAPI owns REST, auth boundaries, streaming, and validation; AI logic stays separate from HTTP concerns. The vector store sits behind an abstraction so moving from Milvus Lite to Standalone/Zilliz doesn't touch business logic.
+PostgreSQL is the authoritative application store. Milvus holds knowledge-base vectors
+only — never primary application data. Growth charts are hand-rolled inline SVG; there is
+no charting dependency.
 
-## Data model constraints
+---
 
-Three constraints are load-bearing and worth knowing before touching the schema:
+## Repository layout
 
-- **Age is stored and reasoned about in months**, not years — nutrient requirements shift fast in the first year.
-- **Allergies and diet preference are enum/controlled-vocabulary fields**, never free text.
-- **PostgreSQL is the authoritative app store** for users, child profiles, meals, daily nutrition, and conversations. Milvus holds knowledge-base vectors only, never primary application data.
-
-## Security
-
-Every user-scoped read and write is bound to the authenticated user's identity — one user must never reach another's child profiles, feeding log, or growth log. Sign-in is email + password (argon2id hashes, `argon2-cffi`); the session is a signed token (HS256, PyJWT, `SESSION_SECRET`) in an `HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site form post carries neither the cookie nor an acceptable content type. `backend/api/deps.py` holds the two dependencies every user-scoped route runs behind: `get_current_user` (401 without a valid session; a deactivated or deleted account is refused on its next request) and `owned_child` (the single place the ownership predicate is written; a non-owner gets the same 404 as a nonexistent id, so probes learn nothing). `tests/test_api_children.py` is the evidence: owner-only listing, byte-identical 404s for non-owner and nonexistent, and a loop over the OpenAPI schema asserting every user-scoped operation returns 401 without a cookie.
-
-`POST /api/chat` no longer accepts the child's details or the feeding log in the body: it takes a `child_id` (optional when the account has one child) and reads both from the account's own rows, so the stored profile is the only authority for the numbers a plan is built from. `POST /api/ask` requires a session too (Day 7) — not because it reads user data (it doesn't; it persists nothing and uses the identity for admission only) but because every answer spends model credit; the evaluation harness registers an account before its first request. `GET /api/foods` and the register/login routes stay public. The `/api/admin/foods` routes need a signed-in account listed in `ADMIN_EMAILS`; any other account gets 403 (`require_admin`, `backend/api/deps.py`).
-
-All API inputs, tool inputs, and LLM-generated tool arguments are validated with Pydantic before use. The LLM never executes arbitrary SQL; all data access goes through validated, auth-scoped application code.
-
-**Abuse ceilings (Day 7).** The model-spending routes (`/api/ask` and `/api/chat`, one shared budget) and the credential routes (register, login) are rate-limited per client address — `RATE_LIMIT_MODEL_PER_MINUTE` (default 30) and `RATE_LIMIT_AUTH_PER_MINUTE` (default 10), and the food-table writes under `/api/admin/foods` by `RATE_LIMIT_ADMIN_PER_MINUTE` (default 30); `0` disables — answering 429 with a `Retry-After` header before any retrieval, model call, or password work (`backend/api/rate_limit.py`, a route dependency). The limiter is in-process, which is exact because the service runs as one instance; behind the hosting proxy the client address comes from `X-Forwarded-For` through uvicorn's `--proxy-headers`, which only the container start script passes. Cross-origin browser access is an explicit allowlist, `ALLOWED_ORIGINS` (comma-separated, default empty, never `*`): the browser reaches the API through the Next.js same-origin rewrite, so nothing is granted unless configured. With `APP_ENV=prod` the application refuses to start without `SESSION_SECRET` and `OPENROUTER_API_KEY` rather than serving 503s.
-
-**Never logged:** passwords, password hashes, session tokens, cookies, request headers, email addresses, the client address, and the text of the parent's message or the assistant's answer (only the message length). Records carry identifiers — `user_id`, `child_profile_id` — never emails. The doctor's note stays in the meal-plan and gap-detection audit snapshots because hard rule 8 requires it; `AUDIT_LOG_PATH` lets those records be kept in their own file. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in with every logger at `DEBUG` and asserts none of that material appears.
-
-Meal-plan recommendations are logged with a full input snapshot (age, weight, gender, allergies, diet preference, the note rows with their kinds, what each row did, rule/source used) for auditability.
-
-## Development
-
-Python dependencies are managed with [uv](https://docs.astral.sh/uv/) (Python 3.14 pinned, `uv.lock` committed and authoritative); frontend dependencies with pnpm.
-
-```bash
-uv sync                  # create/refresh .venv from uv.lock
-uv add <package>         # add a dependency
-uv add --dev <package>   # add a dev-only dependency
-docker compose up -d     # PostgreSQL 17 on 127.0.0.1:5432 (dev + test databases)
-uv run alembic upgrade head   # apply the schema (DATABASE_URL from .env)
-uv run pytest            # offline tests + the PostgreSQL-backed `db` tests
-uv run pytest -m integration  # live OpenRouter/Milvus tests; spends credit
-uv run ruff check .      # lint
-
-pnpm install             # frontend deps (pnpm workspace; `frontend/` is the only package)
-pnpm -C frontend dev     # Next.js dev server on :3000, proxying /api/* to the backend
-pnpm -C frontend lint && pnpm -C frontend typecheck && pnpm -C frontend test
+```
+backend/          FastAPI application
+  api/            routes, dependencies, rate limiting, SSE
+  auth/           password hashing, session tokens
+  chat/           router, service, response composition, copy
+  core/           settings
+  db/ models/     SQLAlchemy session and ORM models
+  knowledge/      corpus loading and chunking
+  nutrition/      pure-Python domain logic (targets, safety, growth, gaps, foods)
+  rag/            retrieval pipeline and vector-store abstraction
+  schemas/        Pydantic request/response and tool models
+  tools/          the deterministic tools exposed to the router
+frontend/         Next.js application (src/app, src/components, src/lib, src/hooks)
+knowledge-base/   curated Markdown corpus + manifest.yaml citation metadata
+nutrition-data/   foods.yaml, who-growth-standards.yaml
+alembic/          database migrations
+evals/            standalone RAGAs evaluation harness (its own uv project)
+scripts/          ingest.py, build_growth_tables.py, start.sh
+tests/            backend test suite
+Dockerfile        API image
+render.yaml       Render blueprint: API service + managed PostgreSQL
 ```
 
-`docker-compose.yml` runs the database only; the backend (`uv run uvicorn backend.main:app --reload`) and the frontend stay on the host. `docker compose down -v` resets it. Migrations live in `alembic/versions/` and are hand-written: the initial one creates the five PostgreSQL enum types before the tables and its `downgrade()` drops them after; the second replaces the typed `age_in_months` with a `birth_date` (backfilled from each profile's creation date minus its age, accurate to within a month) and adds `growth_measurements`, with a `downgrade()` that recomputes the age. `uv run alembic downgrade base && uv run alembic upgrade head` round-trips — `tests/test_migrations.py` checks exactly that, plus the backfill. Tests marked `db` bind to `TEST_DATABASE_URL` (a separate database the compose file creates, so the fixtures can never touch development data); when it is unset they skip, when it is set but unreachable they fail.
+---
 
-Always add dependencies through the package manager (`uv add`, `pnpm add`) and run Python via `uv run`. Never `pip install` into `.venv`, and never hand-edit a lockfile.
+## Getting started
+
+**Prerequisites:** [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io/), Docker
+(for local PostgreSQL), and an [OpenRouter](https://openrouter.ai/keys) API key.
+
+```bash
+git clone <repo> && cd Baby_Nutrient_App
+cp .env.example .env          # then fill in SESSION_SECRET and OPENROUTER_API_KEY
+
+uv sync                       # Python deps from uv.lock
+pnpm install                  # frontend deps
+
+docker compose up -d          # PostgreSQL 17 on 127.0.0.1:5432 (dev + test databases)
+uv run alembic upgrade head   # apply the schema
+uv run scripts/ingest.py      # embed the corpus into milvus.db
+```
+
+Run the two processes in separate terminals:
+
+```bash
+uv run uvicorn backend.main:app --reload --no-access-log   # API on :8000
+pnpm -C frontend dev                                       # UI on :3000
+```
+
+Open <http://localhost:3000>, register an account, and fill in the child profile in the
+**Child** tab. `docker compose down -v` resets the database.
+
+The API writes its own structured access record per request, so run uvicorn with
+`--no-access-log` to avoid a duplicate line.
+
+Always add dependencies through the package manager (`uv add`, `uv add --dev`,
+`pnpm add`) and run Python through `uv run`. Never `pip install` into `.venv`, and never
+hand-edit a lockfile.
 
 ### Configuration
 
-Copy `.env.example` to `.env`. `DATABASE_URL` points at PostgreSQL (the app boots and reports `degraded` on `/health` without it); `TEST_DATABASE_URL` is the database the test suite may create and drop; `SESSION_SECRET` (32+ characters) signs session cookies — without it every authenticated route returns 503 naming it. `LOG_FORMAT` (`json`, the default, or `text`), `LOG_LEVEL` (default `INFO`), and `AUDIT_LOG_PATH` (optional file for the hard-rule-8 audit records) configure logging — see *Logging and monitoring* below. Run uvicorn with `--no-access-log`: the application writes its own access record per request. `OPENROUTER_API_KEY` is needed to embed the corpus and to answer questions — both the chat model and the embedding model are served by OpenRouter (`OPENROUTER_MODEL`, `EMBEDDING_MODEL`). Without the key the app still boots; `POST /api/ask` and `POST /api/chat` return 503 naming the missing setting. `APP_ENV=prod` changes that: the session cookie becomes `Secure`, and a missing `SESSION_SECRET` or `OPENROUTER_API_KEY` stops the process at start with the setting's name. `ALLOWED_ORIGINS`, `RATE_LIMIT_MODEL_PER_MINUTE`, `RATE_LIMIT_AUTH_PER_MINUTE`, and `RATE_LIMIT_ADMIN_PER_MINUTE` are described under *Security*. `ADMIN_EMAILS` (comma-separated, compared lower-cased, default empty) names the accounts that may edit the food table — see *Food table administration*. The frontend reads one server-side variable, `BACKEND_URL` (default `http://localhost:8000`, see `frontend/.env.example`), used by Next.js rewrites so the browser only ever talks to the Next.js origin.
+Everything is read from the environment; `.env.example` documents each setting inline.
 
-### Knowledge base
+| Setting | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection. A bare `postgresql://` URL is normalised to the asyncpg driver automatically. |
+| `TEST_DATABASE_URL` | Separate database the test suite may create and drop. Deliberately not derived from `DATABASE_URL`. |
+| `APP_ENV` | `dev` \| `test` \| `prod`. Outside `dev` the session cookie is `Secure`-only; in `prod` the app refuses to start without `SESSION_SECRET` and `OPENROUTER_API_KEY`. |
+| `SESSION_SECRET` | Signs session cookies, 32+ characters. Rotating it signs everyone out. |
+| `SESSION_TTL_HOURS` | How long a sign-in lasts. Default 168 (seven days). |
+| `OPENROUTER_API_KEY` | Required to embed the corpus and to answer questions. |
+| `OPENROUTER_MODEL` / `EMBEDDING_MODEL` | Chat and embedding model ids. |
+| `MILVUS_DB_PATH` / `CORPUS_DIR` | Vector-store file and corpus directory. |
+| `RAG_MIN_SIMILARITY` | Cosine floor below which passages are discarded. Default `0.45`. |
+| `RAG_CONTEXT_CHAR_BUDGET` | Maximum characters of retrieved context in the answer prompt. |
+| `ADMIN_EMAILS` | Comma-separated accounts allowed to edit the food table. Empty grants nobody the role; there is no route that grants it. |
+| `ALLOWED_ORIGINS` | Credentialed cross-origin allowlist, comma-separated. Never `*`, empty by default. |
+| `RATE_LIMIT_MODEL_PER_MINUTE`, `RATE_LIMIT_AUTH_PER_MINUTE`, `RATE_LIMIT_ADMIN_PER_MINUTE` | Per-client request ceilings. Defaults 30 / 10 / 30; `0` disables. |
+| `LOG_FORMAT` / `LOG_LEVEL` / `AUDIT_LOG_PATH` | See [Logging](#logging-and-monitoring). |
+| `EXTERNAL_FOOD_*`, `USDA_FDC_API_KEY` | See [External food lookup](#external-food-lookup). Off by default. |
+| `BACKEND_URL` | Frontend-side only. Where Next.js rewrites `/api/*`. Default `http://localhost:8000`. |
 
-The corpus lives in `knowledge-base/` as hand-condensed Markdown summaries of recognized pediatric guidelines (WHO, AAP, CDC, USDA/HHS, NIH, FDA/EPA). `knowledge-base/manifest.yaml` carries each document's citation metadata — source title, publication year, topic, authority, and the age range in months it applies to.
+Missing configuration degrades rather than crashes in development: without
+`DATABASE_URL` the app boots and reports `degraded` on `/health`, and without
+`OPENROUTER_API_KEY` the model routes return `503` naming the setting.
 
-```bash
-uv run scripts/ingest.py     # embed new/changed documents into milvus.db (idempotent)
-```
+---
 
-Ingestion is incremental: it hashes every document, compares against what `milvus.db` already holds, and re-embeds only new or changed files, replacing each document's chunks as a unit. Re-running with no changes embeds nothing.
+## API
 
-**To add a source:** drop a `.md` file in `knowledge-base/` (use `## Section` headings — chunks record the nearest heading for citations), add a manifest entry (`file, source, year, topic, authority, age_min_months, age_max_months, url`), and re-run `uv run scripts/ingest.py`. Changing `EMBEDDING_MODEL` requires deleting `milvus.db` and re-ingesting; the store refuses to search a collection built with a different model.
+Everything is mounted under `/api` except `/health`. `GET /api/foods` and the
+register/login routes are public; every other route requires the session cookie, and the
+`/api/admin/*` routes additionally require membership of `ADMIN_EMAILS`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/auth/register` | Create an account and sign in |
+| `POST` | `/api/auth/login` | Sign in |
+| `POST` | `/api/auth/logout` | Sign out |
+| `GET` | `/api/auth/me` | Signed-in account info |
+| `POST` | `/api/ask` | Knowledge-base question answering |
+| `POST` | `/api/chat` | Routed assistant — retrieval, tools, or both |
+| `GET` | `/api/foods` | Public food table, for the picker |
+| `GET` `POST` | `/api/children` | List / create child profiles |
+| `GET` `PUT` `DELETE` | `/api/children/{child_id}` | Read / replace / remove one profile |
+| `GET` | `/api/children/{child_id}/targets` | Daily targets with note overrides and intake comparison |
+| `GET` `POST` | `/api/children/{child_id}/feedings` | Recent feeds (`?days=`, default 14, max 90) / log one |
+| `DELETE` | `/api/children/{child_id}/feedings/{feeding_id}` | Remove a logged feed |
+| `GET` `POST` | `/api/children/{child_id}/growth` | Measurements with WHO assessment / record one |
+| `DELETE` | `/api/children/{child_id}/growth/{measurement_id}` | Remove a measurement |
+| `GET` | `/api/children/{child_id}/growth/curves` | WHO percentile curves for the charts |
+| `GET` `POST` | `/api/admin/foods` | Every food including inactive / create one |
+| `PUT` | `/api/admin/foods/{food_id}` | Edit a food; the id is immutable |
+| `POST` | `/api/admin/foods/{food_id}/deactivate` \| `/activate` | Retire or re-offer a food (idempotent) |
+| `POST` | `/api/admin/foods/import` | Bulk YAML/CSV import, all-or-nothing |
+| `GET` | `/health` | Liveness plus dependency status |
 
 ### Asking a question
 
-```bash
-uv run uvicorn backend.main:app --reload
-```
-
-The endpoint requires a session (Day 7), so sign in once into a cookie jar:
+Sign in once into a cookie jar, then call the endpoint:
 
 ```bash
 curl -s -c jar localhost:8000/api/auth/register -H 'content-type: application/json' \
   -d '{"email": "parent@example.com", "password": "correct horse battery"}'
-```
 
-JSON (used by tests and evaluation):
-
-```bash
 curl -s -b jar localhost:8000/api/ask -H 'content-type: application/json' \
   -d '{"question": "How much iron does a 9-month-old need?", "strategy": "advanced", "stream": false}'
 ```
 
-Server-sent events (used by the UI): `token` events carry answer fragments, one `citations` event carries citations + retrieval metadata + disclaimer, then `done` (or `error`).
+`/api/ask` requires a session because every call spends model credit, not because it
+reads user data — it reads none and persists nothing.
 
-```bash
-curl -N -b jar localhost:8000/api/ask -H 'content-type: application/json' \
-  -d '{"question": "When can babies have honey?"}'
-```
+### Chat
 
-`strategy` is `basic` (single query, top-K) or `advanced` (age extraction → metadata filter → query translation → multi-query fusion → dedup; the default). Both share the same prompt, so Day 6's A/B evaluation compares retrieval alone. Every response carries citations with source and year and a fixed not-medical-advice disclaimer; when nothing in the knowledge base is relevant, the endpoint returns a fixed explanation instead of calling the model.
+`POST /api/chat` takes `message`, `child_id`, `history` (up to twelve turns), `timezone`,
+`strategy` and `stream`. `child_id` may be omitted only when the account has at most one
+child; with more than one it is required. The body rejects unknown fields: the child's
+details and the feeding log **cannot** be supplied by the client. The server loads both
+from the account's own rows, so the stored profile is the only authority for the numbers
+a plan is built from.
 
-Note that LangChain resolves to 1.x and `pymilvus` to 3.x — both past major-version breaks from the 0.x/2.x APIs most tutorials still use. Check the current docs rather than pattern-matching from older examples.
+Any profile- or log-backed argument the model proposes is replaced with the stored value,
+and the tool activity records that it was (`used_context`).
 
-## Deterministic tools (Day 4)
+Streaming responses are server-sent events:
 
-Eleven tools in `backend/tools/`, each taking a Pydantic-validated input and never asking the
-model for a number. `backend/tools/langchain_tools.py::build_tools(chat_model)` exposes
-them as LangChain `StructuredTool`s, which the Day 5 router binds (see below).
+| Event | Carries |
+|---|---|
+| `route` | The intent and the planned capabilities |
+| `tool` | One per invocation: name, status, validated arguments, `used_context`, result or a parent-facing error |
+| `token` | Answer fragments |
+| `final` | Citations with source and year, retrieval statistics, disclaimer, tool summary |
+| `done` | End of stream |
+| `error` | Terminal failure, with the `request_id` |
+
+`"stream": false` returns the same content as one JSON object. A failed tool — unknown
+food, missing height — becomes an error entry and the answer still completes.
+`/api/ask` uses a shorter sequence: `token` fragments, then one `citations` event, then
+`done`.
+
+---
+
+## Deterministic tools
+
+Eleven tools live in `backend/tools/`. Each takes a Pydantic-validated input and never
+asks the model for a number. `build_tools()` exposes them as LangChain structured tools;
+the router binds all eleven plus a `search_guidelines` pseudo-tool that stands for
+"consult the knowledge base". The pseudo-tool is intercepted rather than executed. At
+most four tool calls run per message, in a single round — there is no agent loop.
 
 | Tool | What it does | Source of the numbers |
 |---|---|---|
-| `calculate_bmi` | weight / height²; its note points to `assess_growth` for the percentile | CDC definition |
-| `assess_growth` | z-scores, percentiles, WHO cut-off bands and reference values for weight-for-age, length/height-for-age, weight-for-length/height, and BMI-for-age; indicators the inputs cannot support are skipped with a reason, never failed | `nutrition-data/who-growth-standards.yaml` |
-| `calculate_calorie_target` | Estimated Energy Requirement by age band; height + activity from 36 months | 2005 DRI EER equations |
-| `calculate_protein_target` | g/kg by age band | DRI AI/RDA |
-| `lookup_food` | one food's per-serving nutrients and safety flags by identifier or plain name (amount words are ignored when matching); with a `quantity` and `unit` (g or ml) the result also carries the nutrients for exactly that amount, scaled in code | `nutrition-data/foods.yaml` |
-| `calculate_meal_nutrition` | totals over a list of foods, each measured in table servings or as a quantity with unit; unknown foods are reported, never dropped | `nutrition-data/foods.yaml` |
-| `generate_meal_plan` | targets → doctor's-row overrides → diet filter → note avoidances → infant-safety filter → composition → safety re-check → totals + disclaimer + audit log; optionally steered by a gap report and today's logged feeds (below) | all of the above |
-| `log_feeding` | validates one feed (type from a closed vocabulary, table food, quantity, unit), prices it from the table, assigns an id; stores nothing until Day 6 | `nutrition-data/foods.yaml` |
-| `get_daily_nutrition` | one local day's totals from the feeding log | `nutrition-data/foods.yaml` |
-| `get_remaining_targets` | the day's targets (doctor's rows honoured) minus intake, floored at zero | DRI + food table |
-| `detect_nutrient_gaps` | rolling-window intake vs. targets with confidence that grows with complete days logged | DRI + food table |
+| `calculate_bmi` | Weight over height squared | CDC definition |
+| `assess_growth` | z-scores, percentiles and WHO bands for weight-for-age, length/height-for-age, weight-for-length/height and BMI-for-age. Indicators the inputs cannot support are skipped with a reason, never failed | WHO Child Growth Standards |
+| `calculate_calorie_target` | Estimated Energy Requirement by age band; height and activity from 36 months | 2005 DRI EER equations |
+| `calculate_protein_target` | Grams per kilogram by age band | DRI AI/RDA |
+| `lookup_food` | One food's per-serving nutrients and safety flags, by id or plain name; with a quantity and unit the scaled figures too | `nutrition-data/foods.yaml` |
+| `calculate_meal_nutrition` | Totals over a list of foods. Unknown foods are reported, never dropped | `nutrition-data/foods.yaml` |
+| `generate_meal_plan` | Targets → doctor's-row overrides → diet filter → note avoidances → safety filter → composition → safety re-check → totals, disclaimer and audit record | all of the above |
+| `log_feeding` | Validates one feed, prices it from the food table, assigns an id | `nutrition-data/foods.yaml` |
+| `get_daily_nutrition` | One local day's totals from the feeding log | `nutrition-data/foods.yaml` |
+| `get_remaining_targets` | The day's targets minus intake, floored at zero | DRI + food table |
+| `detect_nutrient_gaps` | Rolling-window intake against targets, with a confidence level | DRI + food table |
 
-`nutrition-data/foods.yaml` is a hand-curated, validated table (~55 infant/toddler foods,
-USDA FoodData Central figures per serving) carrying the "big nine" allergens and the
-choking-hazard / honey / unpasteurised flags the safety filter reads. The whole file is
-rejected if any entry is invalid. The file seeds the database: the served table lives in
-`food_table_revisions` as whole-table snapshots (revision 1 is the file; every
-administrator's change adds the next), and a plan's audit `food_table_version` (`db-<n>`)
-names the exact snapshot it used — see *Food table administration*. The safety filter (`backend/nutrition/safety.py`) has no
-switch that disables a rule and runs on both the candidates and the finished plan.
+### The food table
+
+`nutrition-data/foods.yaml` is a hand-curated table of fifty-seven infant and toddler
+foods with USDA FoodData Central figures per serving, carrying the major allergens and
+the choking-hazard, honey and unpasteurised flags the safety filter reads.
+The whole file is rejected if any entry is invalid.
+
+The file seeds the database rather than being served directly: the live table lives in
+`food_table_revisions` as whole-table snapshots, and every plan's audit record names the
+exact revision it used.
+
+### Growth standards
 
 `nutrition-data/who-growth-standards.yaml` holds the WHO Child Growth Standards (2006)
-LMS parameters per indicator, sex, and completed month (0.1 cm of length/height for
-weight-for-length/height), generated from WHO's published z-score tables with per-file
-URL, sha256, and retrieval date recorded. Rebuild it with
-`uv run --with openpyxl scripts/build_growth_tables.py`; the app reads only the
+LMS parameters per indicator, sex and completed month, generated from WHO's published
+tables with a per-file URL, sha256 and retrieval date recorded. Rebuild with
+`uv run --with openpyxl scripts/build_growth_tables.py`; the application reads only the
 committed YAML and validates it whole at load.
 
-The profile's note rows (`child_notes`: kind `doctor` | `preference`, text) are extracted by
-the chat model in one pass into bounded structures — per row at most one numeric target
-(nutrient ∈ calories/protein/iron, direction, value, unit; doctor rows only, one per
-nutrient) and the plain phrases of foods or food groups to avoid — and applied by plain
-Python: a target wins on conflict and the conflict is an explicit entry in `overrides`; a
-phrase is resolved by code (`backend/nutrition/avoidance.py`: food category first, else every
-table food it names; never a milk feed) and the matched foods are left out before the safety
-filter with the row quoted as the reason. Every row gets an outcome (`note_outcomes`), so a
-phrase the table does not know is shown as not applied rather than dropped; if extraction
-fails, the plan is still generated and every row is flagged. Every `generate_meal_plan` call
-emits one JSON line on the `backend.tools.audit` logger with the full input snapshot,
-including the rows, overrides, avoidances, and outcomes.
+### Doctor's notes
 
-```bash
-uv run pytest tests/test_nutrition_*.py tests/test_tools_*.py tests/test_schemas_tools.py
-```
+Note rows are extracted by the model in one pass into bounded structures — per row at
+most one numeric target (calories, protein or iron; doctor rows only) and the plain
+phrases of foods or food groups to avoid — and applied by plain Python. A target wins on
+conflict and the conflict becomes an explicit entry in `overrides`. A phrase is resolved
+in code to a food category or the specific table foods it names, and those foods are
+excluded before the safety filter runs, with the row quoted as the reason.
 
-## Chat, routing, and the UI (Day 5)
+Every row gets an outcome, so a phrase the table does not recognise is shown as *not
+applied* rather than silently dropped. If extraction fails entirely, the plan is still
+generated and every row is flagged.
 
-`POST /api/chat` is the routed assistant. One model call with the six tools plus a
-`search_guidelines` pseudo-tool bound decides the path — the model's tool calls *are* the
-routing decision — and plain Python executes it: `rag` (knowledge base only, delegating to
-the Day 3 pipeline unchanged), `tool` (deterministic tools only), or `hybrid` (both). The
-model's own free text is never returned; every answer is composed from retrieved context
-blocks and/or validated tool results. At most four tool calls per message, one round, no
-agent loop.
+---
 
-The child's details (age in **months**, weight, sex, optional height, diet preference,
-allergies from the controlled vocabulary, note rows, activity level) come from the side
-panel in the UI and travel in the request body. They are **authoritative**: any
-profile-backed argument the model proposes is replaced by the request's value and the tool
-activity says so (`used_context`). Nothing is persisted and no identity is taken — Day 6
-swaps this seam for auth-scoped profiles.
+## Daily targets, feeding log and gaps
 
-```bash
-curl -N localhost:8000/api/chat -H 'content-type: application/json' -d '{
-  "message": "How much protein does my child need?",
-  "child": {"age_months": 8, "weight_kg": 8.5, "sex": "female", "allergies": ["peanut"],
-            "diet_preference": "omnivore", "activity_level": "low_active"},
-  "history": []
-}'
-```
+`GET /api/children/{child_id}/targets` is the single source of truth for "what does this
+child need in a day". It resolves the general age-band targets, applies the
+doctor's-note overrides, and annotates each tracked nutrient with the fourteen-day
+intake average, the ratio against target, and a below/adequate/above flag. Targets cover
+calories, protein, iron, vitamin D, calcium, vitamin B12 and DHA; which of them are
+*tracked* depends on the child's age and diet preference, and the rest are shown as
+display-only with the reason. It returns the overrides alongside the numbers so the UI
+can show what changed and why. No nutrient number is ever computed in the browser.
 
-Server-sent events, in order: one `route` (intent + planned capabilities), one `tool` per
-invocation (name, status, validated args, `used_context`, result or a parent-facing
-error), `token`s, one `final` (citations with source + year, retrieval statistics,
-disclaimer, tool summary), then `done` — or a terminal `error`. `"stream": false` returns
-the same content as JSON (`answer, intent, tools, citations, retrieval, disclaimer`). A
-failed tool (unknown food, missing height, …) becomes an error entry and the answer still
-completes. Every routing decision is logged on `backend.chat.router` with intent, tools,
-retrieval statistics, and latency.
+The feeding log stores one row per feed: a timezone-aware timestamp, a type from the
+closed vocabulary `breastmilk | formula | solid | water`, a food from the table for
+solids, and a quantity with unit. Breast milk may be logged without a quantity — direct
+breastfeeding has no measure — in which case the entry contributes no nutrients and marks
+its day *incomplete*. Nutrients are recomputed from the committed food table on every
+read and never stored, so a correction to the table propagates to history.
 
-The UI (`frontend/`, Next.js App Router + Tailwind + shadcn/ui + TanStack Query) is one
-screen: the child-details panel and the chat. Each assistant message shows the intent, one
-chip per tool (expandable to arguments and result), a structured meal-plan card when
-`generate_meal_plan` ran — with an unmissable banner per nutrient a doctor's row overrode
-and a "Not applied, and why" list for rows the plan could not act on — the answer with `[n]` citation markers, a numbered Sources list with publication
-year, and the not-medical-advice disclaimer. All parent-facing copy lives in
-`frontend/src/lib/copy.ts` and `backend/chat/copy.py` (warm by default; direct about
-safety and errors).
+`detect_nutrient_gaps` compares intake with the same note-overridden targets the planner
+uses, so a prescribed calorie limit is never reported as a deficit. The window widens with
+the number of *complete* days in the last fourteen: none yields `insufficient_data`, one
+or two gives low confidence and direction only, three to six a three-day window at medium
+confidence, seven or more a seven-day window at high confidence.
 
-```bash
-uv run pytest tests/test_chat_*.py tests/test_api_chat.py tests/test_schemas_chat.py
-pnpm -C frontend test
-```
+A gap report steers `generate_meal_plan`: a `below` flag at medium or high confidence
+makes the composer favour foods dense in that nutrient. Targets are never raised and the
+iron upper limit stays in force. Today's intake is subtracted so a plan covers the rest of
+the day, and when under a tenth of the calorie target remains the plan reports
+`targets_met` instead.
 
-## Feeding log and nutrient gaps (Day 5, second change)
-
-Everything above produces *targets*. The feeding log captures what the child actually had
-(reference §9b): each entry is a time-zone-aware timestamp, a feeding type from the closed
-vocabulary `breastmilk | formula | solid | water`, a food from the table for solids, a
-quantity and unit. Breast milk may be logged without a quantity — direct breastfeeding has
-no measure — and such an entry contributes no nutrients and marks its day *incomplete*. An
-entry's nutrients are `quantity ÷ serving size × per-serving` from `foods.yaml`; the model
-never computes them, and the backend never trusts client-supplied figures.
-
-**The log is client-held until Day 6.** The Feeding-log tab in the side panel posts each
-feed to `POST /api/feedings` (validate, price, assign an id; nothing stored), keeps the
-result in the browser for fourteen days, and sends the entries with every `/api/chat`
-request together with the browser's IANA `timezone`. `GET /api/foods` lists the table for
-the picker. Log-backed tool arguments (`entries`, `logged_today`, `timezone`) are always
-filled from the request, never from the model. Day 6 adds the `feeding_log` table and the
-auth-scoped read/write behind the same handler.
-
-`detect_nutrient_gaps` compares logged intake with the child's targets — the same
-note-overridden targets the planner uses, so a prescribed calorie limit is never reported
-as a deficit — over a window that widens with *complete* days (at least one entry, no
-unmeasured feed) in the last fourteen days, excluding the reference day itself: 0 days →
-`insufficient_data`; 1–2 → `low` confidence, directional only; 3–6 → `medium`, three-day
-window; 7+ → `high`, seven-day window. Per nutrient (calories, protein, iron) the report
-gives the average, target, ratio, and a flag (`below` < 0.80, `above` > 1.20, else
-`adequate`), with the target's source and age band.
-
-`generate_meal_plan` accepts the report and today's entries. A `below` flag at `medium` or
-`high` confidence makes the composer favour foods dense in that nutrient — targets are
-never raised and the iron upper limit stays in force; a `low` flag changes nothing. Today's
-intake is subtracted so the plan covers the rest of the day (`already_logged` is reported),
-and when under ten percent of the calorie target remains the outcome is `targets_met`. With
-no report and no entries the plan is byte-identical to the Day 4 planner (regression-tested
-against `tests/fixtures/meal_plans_before_change_2.json`). When a plan is requested and
-the request carries a log, the chat service runs gap detection first and hands the report
-to the planner. The audit line gains the gap report, the logged entries, and the
-adjustments; gap detection emits its own `nutrient_gaps_audit` line.
-
-```bash
-uv run pytest tests/test_nutrition_feeding.py tests/test_nutrition_gaps.py \
-  tests/test_tools_feeding_log.py tests/test_tools_nutrient_gaps.py tests/test_api_feedings.py
-```
+---
 
 ## Growth tracking
 
-The Day 6 growth assessment placed one snapshot on the WHO 2006 standards. Growth tracking
-makes the trend visible. The profile stores a **date of birth** instead of a typed age;
-every age the API returns or reasons with is still a whole number of completed months
-(hard rule 1), derived on read — as of today for the profile (`age_months` in
-`GET /api/children/{id}`), as of the measurement day for a growth row. `POST`/`PUT
-/api/children` take `birth_date` and refuse `age_months`; a date in the future or more than
-60 months back is a 422.
+The profile stores a date of birth, so every age is derived on read — as of today for the
+profile, as of the measurement day for a growth row. A birth date in the future or more
+than sixty months back is rejected.
 
-The growth log is one row per child per calendar day — `measured_on`, `weight_kg`, optional
-`height_cm` — stored raw under `/api/children/{id}/growth` (`GET` newest first, `POST`,
-`DELETE /{measurement_id}`), all behind the owner check like the feeding log. Every read
-recomputes each row's age on that day and its WHO assessment through the same
-`assess_growth` arithmetic the chat uses; nothing derived is stored. Posting the newest
-measurement by date also sets the profile's weight and (when supplied) height in the same
-transaction, so daily targets and meal plans use the freshest numbers; a measurement without
-height never clears the profile's height, editing the profile never creates a row, and
-deleting a row leaves the profile as it is. A second measurement for the same day is a 409;
-one dated before the birth date is a 422 naming it. The UI's fourth tab, **Growth**, has the
-measurement form, the list with one percentile row per indicator (the growth card's own
-row), and the same direct-voice WHO note.
+The growth log holds one row per child per calendar day: the date, the weight, and an
+optional height. Every read recomputes each row's age and its WHO
+assessment through the same arithmetic the chat uses; nothing derived is stored. Posting
+the newest measurement by date also updates the profile's weight and height in the same
+transaction, so targets and plans use the freshest numbers. A second measurement for the
+same day is a conflict; one dated before the birth date is rejected.
 
-**Charts.** `GET /api/children/{id}/growth/curves` returns, for the child's sex, the WHO
-10th–90th percentile curves at every tenth percentile per indicator — months 0–60 for the
-age-based ones, every whole centimetre of the length (under 24 months) or height (from 24)
-table for weight-for-length/height — computed by the inverse of the same LMS arithmetic and
-cached per sex and table. Each measurement also carries `age_months_exact` (two decimals)
-so points within one completed month spread along the age axis; the assessment still uses
-completed months. The Growth tab draws four inline-SVG line charts above the list: thin
-muted percentile curves with the 50th emphasised, the child's measurements as an accent
-line with markers, direct labels on the 10th/50th/90th, and a hover/focus tooltip per
-marker. No charting dependency.
+The curves endpoint returns, for the child's sex, WHO percentile curves at every tenth
+percentile from the 10th to the 90th, for each of the four indicators — months 0–60 for
+the age-based ones, and every whole centimetre of the length or height table for
+weight-for-length/height — computed by inverting the same LMS arithmetic and cached.
+Measurements also carry a two-decimal exact age so points within one completed month
+spread along the axis, while the assessment itself still uses completed months.
 
-```bash
-uv run pytest tests/test_nutrition_age.py tests/test_nutrition_growth.py tests/test_api_children.py -k "Growth or Profiles or Curves"
-pnpm -C frontend test -- growth
-```
+---
 
 ## Food table administration
 
-The food table is data, not code: `nutrition-data/foods.yaml` seeds revision 1 of
-`food_table_revisions` (migration `d4a9b3c4e004`), and the application serves the latest
-revision from the database at start (`APP_ENV=prod` refuses to start if it cannot; elsewhere
-it warns and serves the committed file). Every write — create, edit, deactivate, reactivate,
-import — loads the latest snapshot, applies the change in memory, validates the whole table
-with the same model that validates the file, and inserts the next revision with the actor and
-a summary; two concurrent writers cannot both win (409). The served table is swapped
-in-process on each write, so the picker, the lookup tools, and the planner see the change
-immediately, and a plan's `food_table_version` (`db-<n>`) names the snapshot it used.
+The food table is data, not code. Accounts listed in `ADMIN_EMAILS` see a **Food table**
+link in the app header and can reach `/admin/foods`; everyone else gets a refusal there
+and `403` from the routes.
 
-Accounts listed in `ADMIN_EMAILS` see a **Food table** link in the app header and the page
-`/admin/foods`; everyone else gets a refusal there and 403 from the routes. The routes, all
-under `/api/admin/foods`: `GET` (every food, active and inactive, with the revision), `POST`
-(create; 409 on a duplicate id), `PUT /{food_id}` (edit; the id is immutable), `POST
-/{food_id}/deactivate` and `/activate` (idempotent), and `POST /import` with a JSON body
-`{format: yaml|csv, content, mode: upsert|create_only, dry_run}` that reports
-`created`/`updated`/`unchanged` ids and per-row errors (`row`, `id`, `field`, `message`);
-with `dry_run` nothing is written, and a file with any bad row writes nothing either.
+Every write — create, edit, deactivate, reactivate, import — loads the latest snapshot,
+applies the change in memory, validates the whole table with the same model that
+validates the YAML file, and inserts the next revision with the actor and a summary. Two
+concurrent writers cannot both win. The served table is swapped in-process on each write,
+so the picker, the lookup tools and the planner see the change immediately.
 
-Foods are never deleted. A deactivated food leaves the picker, name resolution, and every
-new plan, but stays retrievable by id so feeds already logged with it keep their nutrients.
-Breast milk and iron-fortified formula cannot be deactivated or moved out of `milk_feed`.
-Every entry needs an explicit `source` and explicit answers to the three safety questions —
-the form preselects nothing — and `min_age_months` is 0 only for milk feeds and at least 6
-for everything else.
+Bulk import takes YAML or CSV with an `upsert` or `create_only` mode and a dry-run flag.
+It reports created, updated and unchanged ids plus per-row errors; a file with any bad
+row writes nothing.
 
-## Evaluation (Day 6)
+Foods are never deleted. A deactivated food leaves the picker, name resolution and every
+new plan, but stays retrievable by id so feeds already logged against it keep their
+nutrients. Breast milk and iron-fortified formula cannot be deactivated. Every entry needs
+an explicit source and explicit answers to the three safety questions — the form
+preselects nothing — and a minimum age of zero is allowed only for milk feeds.
 
-`evals/` is a **separate uv project** (RAGAs 0.4 needs LangChain 0.3, the app runs 1.x) that
-evaluates the running service as a black box over HTTP — see [`evals/README.md`](./evals/README.md).
-It runs a reviewed 54-case test set (`evals/cases.yaml`; seven categories: basic and advanced
-knowledge-base questions, tool, hybrid, user-data, out-of-domain, adversarial) through both
-retrieval strategies and scores three ways: deterministic retrieval/routing/safety checks,
-RAGAs generation metrics (faithfulness, answer relevancy, context precision, context recall),
-and a per-category breakdown. `tests/test_eval_cases.py` in the main suite keeps the case file
-valid without the evals environment.
+---
+
+## External food lookup
+
+When a parent asks about a food the internal table does not have, the assistant may fetch
+it live from a whitelisted source. This is **disabled by default** and is deliberately
+constrained:
+
+- **Whitelist by exact hostname** (`EXTERNAL_FOOD_DOMAINS`), never a URL the code
+  assembles. USDA FoodData Central is tried first, then MyFoodData. An empty whitelist
+  allows nothing.
+- **Triggered only on an internal-table miss**, inside the chat request, with a timeout
+  and a bounded cache. A failure of any kind — disabled, unconfigured, not whitelisted,
+  not found, network error — returns nothing rather than raising.
+- **Parsed by deterministic code.** The model never generates or restates a number from
+  the response.
+- **Visibly distinct from a guideline citation.** It renders as a separately styled card
+  with the source, a link, the retrieval timestamp and its own disclaimer — third-party
+  nutrition data is not a pediatric guideline.
+- **Never usable in a meal plan.** The fetched data carries no allergen, choking-hazard,
+  honey, pasteurisation or minimum-age metadata, so it cannot pass the safety filter.
+
+An administrator viewing such a card additionally gets an inline action to add the food
+for real. It opens the normal food form prefilled with the fetched figures; the admin must
+supply every missing safety field themselves — these are never fetched and never inferred
+— and the write goes through the existing `/api/admin/foods` pipeline unchanged, with the
+same validation, versioning and authorisation. There is no parallel write path.
+
+No other outbound third-party call is permitted anywhere in the request path.
+
+---
+
+## The interface
+
+The signed-in app is one screen: a four-tab side panel and a chat widget.
+
+- **Child** — the profile form (birth date, sex, weight, height, activity level,
+  allergens, diet preference) and the note rows, plus any "couldn't apply" outcomes from
+  the most recent plan.
+- **Feeding log** — today's summary, the log-a-feed form with a food picker, and entries
+  grouped by local day.
+- **Daily targets** — the resolved targets, an overrides callout naming each nutrient a
+  doctor's row changed and what it changed from, and a progress bar per tracked nutrient.
+- **Growth** — the measurement form, four inline-SVG percentile charts, and one indicator
+  row per WHO assessment.
+
+Chat is a floating panel launched from the corner. It stays mounted while hidden, so a
+half-typed question and the scroll position survive being closed. Each assistant message
+shows the intent, one chip per tool (expandable to its arguments and result), a structured
+meal-plan card when a plan was generated — with a banner per nutrient a doctor's row
+overrode — the answer with numbered citation markers, the sources list with publication
+years, and the disclaimer.
+
+Public pages at `/`, `/about`, `/recipes` and `/contact` carry the marketing copy. All
+parent-facing wording lives in `frontend/src/lib/copy.ts` and `backend/chat/copy.py`: warm
+by default, direct about safety and errors.
+
+The browser only ever talks to the Next.js origin. `/api/*` is rewritten server-side to
+`BACKEND_URL`, so the session cookie stays same-origin.
+
+---
+
+## Knowledge base
+
+The corpus lives in `knowledge-base/` as hand-condensed Markdown summaries of recognised
+pediatric guidelines. `manifest.yaml` carries each document's citation metadata: source
+title, publication year, topic, authority, applicable age range in months, and URL.
 
 ```bash
-uv run --project evals python -m harness.run --skip-judge        # deterministic layers only, no spend
-uv run --project evals python -m harness.run --label baseline    # full A/B with the RAGAs judge
+uv run scripts/ingest.py    # embed new or changed documents (idempotent)
 ```
 
-**Baseline (2026-08-28, [`evals/reports/2026-08-28-baseline.md`](./evals/reports/2026-08-28-baseline.md)):**
-`basic` and `advanced` tie on every deterministic check — 100% retrieval hit and citation
-provenance, 100% correct no-answer on out-of-domain and adversarial probes — and sit within noise
-on generation (faithfulness 0.853 vs 0.867, context precision 0.919 vs 0.891, context recall
-0.943 vs 0.923; 28 judged cases each), with `advanced` ~1.3 s slower at the median. Three
-findings, not test-set errors: the vegan-diet answer omits B12, "what's in X plus Y" never
-reaches `calculate_meal_nutrition`, and one food-table question routed to the knowledge base
-in one of four runs. Prompts and corpus were frozen for this baseline; acting on the findings is
-a Day 7 decision.
+Ingestion is incremental. It hashes every document, compares against what the vector
+store already holds, and re-embeds only what changed, replacing each document's chunks as
+a unit. Re-running with no changes embeds nothing.
 
-## Logging and monitoring (Day 6)
+**To add a source:** drop a `.md` file in `knowledge-base/` using `## Section` headings —
+chunks record the nearest heading for citations — add a manifest entry, and re-run the
+script. Changing `EMBEDDING_MODEL` requires deleting the vector store and re-ingesting;
+it refuses to search a collection built with a different model.
 
-Structured logs are the MVP observability deliverable (reference §14); no dashboard. Every record is one line — a JSON object by default (`LOG_FORMAT=json`), or readable text — and every record emitted while handling a request carries the same three correlation fields: `request_id`, `user_id` (from the session), and `child_profile_id` (from the account's stored profile the request resolved). Nothing in `backend/tools/` or `backend/nutrition/` knows about any of this: the values live in `contextvars` set by the middleware and the auth dependencies, and a logging filter stamps them onto each record.
+---
 
-Record types, by logger:
+## Security
+
+Sign-in is email and password, hashed with argon2id. The session is a signed token in an
+`HttpOnly`, `SameSite=Lax` cookie, so the browser never handles a token and a cross-site
+form post carries neither the cookie nor an acceptable content type.
+
+`backend/api/deps.py` holds the two dependencies every user-scoped route runs behind:
+`get_current_user`, which returns `401` without a valid session and refuses a deactivated
+account on its next request, and `owned_child`, the single place the ownership predicate
+is written. A non-owner gets the same `404` as a nonexistent id, so probing learns
+nothing. `require_admin` gates the admin routes on `ADMIN_EMAILS`.
+
+`tests/test_api_children.py` is the evidence: owner-only listing, byte-identical `404`s
+for non-owner and nonexistent ids, and a loop over the OpenAPI schema asserting every
+user-scoped operation returns `401` without a cookie.
+
+**Abuse ceilings.** The model-spending routes share one budget, the credential routes
+another, and the food-table writes a third. Each answers `429` with a `Retry-After`
+header before any retrieval, model call or password hashing happens. The limiter is
+in-process, which is exact because the service runs as a single instance. Cross-origin
+browser access is an explicit allowlist and is empty by default.
+
+**Never logged:** passwords, password hashes, session tokens, cookies, request headers,
+email addresses, the client address, and the text of either the parent's message or the
+assistant's answer — only the message length. Records carry `user_id` and
+`child_profile_id`, never emails. The doctor's note stays in the meal-plan audit snapshot
+because auditability requires it, and `AUDIT_LOG_PATH` lets those records be kept
+separately. `tests/test_api_auth.py::TestNothingSensitiveIsLogged` registers and signs in
+with every logger at `DEBUG` and asserts none of that material appears.
+
+---
+
+## Logging and monitoring
+
+Every record is one line — a JSON object by default, or readable text. Every record
+emitted while handling a request carries the same three correlation fields: `request_id`,
+`user_id` and `child_profile_id`. Nothing in `backend/tools/` or `backend/nutrition/`
+knows about any of this: the values live in context variables set by the middleware and
+the auth dependencies, and a logging filter stamps them onto each record.
 
 | Logger | One record per | Fields |
 |---|---|---|
-| `backend.api.access` | request (at `DEBUG` for `/health`) | `method`, `route` (template, e.g. `/api/children/{child_id}`), `status`, `latency_ms`, `user_id` |
-| `backend.chat.router` | chat message | intent, planned/executed capabilities with outcomes, retrieval stats, `message_chars`, `latency_ms` |
-| `backend.chat.tools` | tool invocation | `tool`, `status`, `latency_ms`, `used_context` (which args came from the profile/log), `error_kind` |
-| `backend.rag.pipeline` | knowledge-base retrieval | `strategy`, `queries`, `retrieved`, `kept`, `top_score`, `latency_ms` |
-| `backend.tools.audit` | meal plan / gap detection (hard rule 8) | the full input snapshot as JSON in the message; correlation fields on the record |
-| `backend.api.errors` | unhandled exception | traceback; the client gets `500 {"detail", "request_id"}` and never a traceback |
+| `backend.api.access` | request | `method`, `route` template, `status`, `latency_ms`, `user_id` |
+| `backend.chat.router` | chat message | intent, planned and executed capabilities with outcomes, retrieval stats, `message_chars`, `latency_ms` |
+| `backend.chat.tools` | tool invocation | `tool`, `status`, `latency_ms`, `used_context`, `error_kind` |
+| `backend.rag.pipeline` | retrieval | `strategy`, `queries`, `retrieved`, `kept`, `top_score`, `latency_ms` |
+| `backend.tools.audit` | meal plan / gap detection | the full input snapshot as JSON |
+| `backend.api.errors` | unhandled exception | traceback; the client gets `500` with a `request_id` and never a traceback |
 
-Every response carries `X-Request-ID` (a well-formed incoming one is honoured, so a proxy's id threads through); a streamed `error` event on `/api/chat` or `/api/ask` carries `request_id` too. To follow one request end to end:
+Every response carries `X-Request-ID`, honouring a well-formed incoming one so a proxy's
+id threads through. To follow one request end to end:
 
 ```bash
 uv run uvicorn backend.main:app --port 8000 --no-access-log > app.log
@@ -408,9 +562,137 @@ curl -si localhost:8000/api/foods | grep -i x-request-id
 grep '"request_id": "<the id>"' app.log
 ```
 
-Set `AUDIT_LOG_PATH=audit.jsonl` to write the audit records to their own file (and not to the main log) when they need longer retention than the rest.
+---
 
-## Project docs
+## Testing
 
-- [`CLAUDE.md`](./CLAUDE.md) — working context for AI coding assistants: stack, architecture principle, hard rules, scope discipline.
-- `Nutrition_App_Full_Reference.md` — the long-form spec: full rationale, RAG strategy, evaluation design, and production migration path.
+```bash
+uv run pytest                    # backend suite; excludes integration tests
+uv run pytest -m integration     # live OpenRouter and vector-store tests; spends credit
+uv run ruff check . && uv run ruff format --check backend tests scripts
+pnpm -C frontend lint && pnpm -C frontend typecheck && pnpm -C frontend test
+```
+
+Two markers matter. `integration` needs live external services and real credit, and is
+excluded by default. `db` needs the Docker Compose PostgreSQL through
+`TEST_DATABASE_URL` — a separate database the fixtures create and drop, so they can never
+touch development data. When it is unset those tests skip; when it is set but unreachable
+they fail.
+
+Migrations are hand-written and round-trip: `uv run alembic downgrade base && uv run
+alembic upgrade head` is exercised by `tests/test_migrations.py`, including the backfill
+that derives each profile's birth date.
+
+CI runs on every push and pull request to `main`: lint, format check and the backend suite
+with a dummy database URL (so `db` tests skip and nothing is spent), and lint, typecheck,
+tests and a production build for the frontend.
+
+---
+
+## Deployment
+
+The API ships as a Docker image, the frontend as a separate Next.js project, and the
+database is managed. There is no orchestration layer: one API instance, by design.
+
+### The API image
+
+`Dockerfile` builds the API only. uv installs dependencies from the committed lockfile at
+build time and the runtime never calls it. The image carries the backend, the migrations,
+the ingestion script, the knowledge base and the nutrition data, and runs as a non-root
+user. `.dockerignore` keeps the frontend, tests, evals, local tooling, `.env` files and
+any local vector store out of it.
+
+```bash
+docker build -t nutrition-api .
+docker run --rm -p 8000:8000 --env-file .env nutrition-api
+```
+
+### Start sequence
+
+`scripts/start.sh` runs three steps, and a failure in either preparatory step stops the
+container before it serves a single request:
+
+1. `alembic upgrade head` — bring the schema to head.
+2. `python scripts/ingest.py` — embed anything new or changed in the corpus.
+3. `exec uvicorn backend.main:app` — with the hosting proxy trusted for the client
+   address and uvicorn's own access log off.
+
+Trusting `X-Forwarded-For` is what lets the rate limiter key on the real client address,
+and it is only safe when a proxy is the sole peer that can reach the container. **Never
+expose this image directly on a public interface.**
+
+### Render blueprint
+
+`render.yaml` declares one Docker web service (`nutrition-api`) and one managed
+PostgreSQL database (`nutrition-db`), auto-deploying from `main` and health-checked at
+`/health`.
+
+`numInstances: 1` is deliberate, not a placeholder: the rate limiter is in-process, and
+the start script migrates before serving. Scaling out would need a shared limiter and the
+migration lifted out of the container.
+
+`SESSION_SECRET` is generated on first deploy. `OPENROUTER_API_KEY` and `ADMIN_EMAILS` are
+marked `sync: false` — entered in the dashboard, never committed. `ALLOWED_ORIGINS` stays
+empty because the browser reaches the API through the frontend's same-origin rewrite, so
+no cross-origin grant is needed.
+
+**Persistent disk.** `MILVUS_DB_PATH` points at `/data`, but the disk block is commented
+out because Render offers disks on paid plans only. Without it the twenty-document corpus
+is re-embedded on every start — quick, but it spends embedding credit each time.
+Uncomment the block to keep the vector store across deploys.
+
+### Frontend
+
+A separate Vercel project with root directory `frontend/` and one environment variable,
+`BACKEND_URL`, pointing at the API service. Vercel rewrites `/api/*` server-side, so the
+browser only ever talks to the frontend origin and the session cookie stays same-origin.
+
+### Before the first deploy
+
+With `APP_ENV=prod` the application refuses to start without `SESSION_SECRET` or
+`OPENROUTER_API_KEY`, failing loudly at boot rather than serving `503`s. Set both, plus
+`ADMIN_EMAILS` if anyone needs the food-table role, and `BACKEND_URL` on Vercel.
+
+---
+
+## Evaluation
+
+`evals/` is a **separate uv project** — the evaluation library pins an older LangChain
+than the application runs — that treats the running service as a black box over HTTP. See
+[`evals/README.md`](./evals/README.md).
+
+It runs a reviewed 55-case test set across seven categories (basic and advanced
+knowledge-base questions, tool, hybrid, user-data, out-of-domain and adversarial) through
+both retrieval strategies, and scores three ways: deterministic retrieval, routing and
+safety checks; RAGAs generation metrics (faithfulness, answer relevancy, context
+precision, context recall); and a per-category breakdown.
+
+```bash
+uv run --project evals python -m harness.run --skip-judge     # deterministic layers only, no spend
+uv run --project evals python -m harness.run --label baseline # full A/B with the judge
+```
+
+The recorded baseline in [`evals/reports/`](./evals/reports/) found `basic` and `advanced`
+tied on every deterministic check — full retrieval hit rate and citation provenance, and
+correct refusal on every out-of-domain and adversarial probe — and within noise of each
+other on the generation metrics, with `advanced` slightly slower. `tests/test_eval_cases.py`
+in the main suite keeps the case file valid without needing the evals environment.
+
+---
+
+## Notes for contributors
+
+- LangChain resolves to 1.x and `pymilvus` to 3.x. Both are past major-version breaks from
+  the APIs most tutorials still show — check the current documentation rather than
+  pattern-matching from older examples.
+- Keep AI logic out of HTTP concerns. FastAPI owns routing, auth boundaries, streaming and
+  validation; `backend/nutrition/` is pure Python with no model or database calls.
+- If you add a nutrient number anywhere, it belongs in a lookup table or a documented
+  reference equation — never in a prompt.
+
+## Further reading
+
+- [`CLAUDE.md`](./CLAUDE.md) — working context for AI coding assistants: stack,
+  architecture principle, hard rules.
+- `Nutrition_App_Full_Reference.md` — the long-form specification: full rationale, RAG
+  strategy, evaluation design, and the production migration path.
